@@ -517,6 +517,15 @@ const S={
   screen:'home', session:null, curId:null, choices:[], phase:'idle', picked:-1,
   dexFilter:'all', lastResult:null
 };
+const SAMPLE='abandon - 버리다\nachieve - 성취하다\nabundant - 풍부한\naccurate - 정확한\nadapt - 적응하다\nadmire - 감탄하다\nforbid - 금지하다\ncourage - 용기\ndelicate - 섬세한\nenthusiasm - 열정\nexpand - 확장하다\nfragile - 연약한\nhesitate - 머뭇거리다\nnegotiate - 협상하다\novercome - 극복하다\npersuade - 설득하다\nrecover - 회복하다\nsacrifice - 희생하다\ntemporary - 일시적인\nwitness - 목격하다';
+// 첫 방문(저장 데이터 없음)일 때만 샘플 20개 자동 등록. 기존/초기화 사용자는 건드리지 않음.
+if(!saved){
+  parseText(SAMPLE).forEach(p=>{
+    const k=p.w.toLowerCase();
+    S.words.push({id:k,w:p.w,m:p.m,g:0,wrong:0,cap:false,due:today(),created:today()});
+  });
+  persist();
+}
 const timers=[];
 function wait(fn,ms){timers.push(setTimeout(fn,ms));}
 function persist(){try{localStorage.setItem(LSKEY,JSON.stringify({words:S.words,meta:S.meta}));}catch(e){}}
@@ -708,7 +717,7 @@ $('parsebtn').addEventListener('click',()=>{
   $('samplebtn').style.display=S.words.length===0?'block':'none';
 });
 $('samplebtn').addEventListener('click',()=>{
-  $('regtext').value='abandon - 버리다\nachieve - 성취하다\nabundant - 풍부한\naccurate - 정확한\nadapt - 적응하다\nadmire - 감탄하다\nforbid - 금지하다\ncourage - 용기\ndelicate - 섬세한\nenthusiasm - 열정\nexpand - 확장하다\nfragile - 연약한\nhesitate - 머뭇거리다\nnegotiate - 협상하다\novercome - 극복하다\npersuade - 설득하다\nrecover - 회복하다\nsacrifice - 희생하다\ntemporary - 일시적인\nwitness - 목격하다';
+  $('regtext').value=SAMPLE;
   $('parsebtn').click();
 });
 $('exportbtn').addEventListener('click',()=>{
