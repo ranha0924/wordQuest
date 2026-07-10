@@ -5,46 +5,49 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>단어 도감 · WORD QUEST</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <style>
-/* ===== themes (default: 촛불 지하묘지 crypt) ===== */
+/* ===== themes (default: NES) — flat retro console palettes ===== */
 :root{
-  --bg:#0f0b13;--night:#20172a;--ink:#080510;
-  --win:#3a2340;--gold:#e8b968;--gold-dk:#8f6a34;--steel:#4b3555;
-  --text:#ece3d0;--dim:#9d8ba6;--line:#33253c;
-  --hp:#e0605f;--mp:#b07ad8;--ok:#6fae8f;
-  --banner:#b34430;--arena1:#241830;--arena2:#150e1f;
-  --hp1:#f06a6a;--hp2:#c02828;--mp1:#c79ae8;--mp2:#7a3fb0;
-  --sub:#c9b3d0;--track:#150e1f;--star:#e0894a;--dexborder:#33253c;--namedim:#7a6a82;
-  --flee:#6a5a72;--foot:#4a3a52;--copy:#d18a9e;
-  --tl1:#fff0a0;--tl2:#ffc63a;--tl3:#f0881c;--tl4:#d05a0a;
-  --frame-gold:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%233a2340'/><g fill='%23080510'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23e8b968'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
-  --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%2320172a'/><g fill='%23080510'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%234b3555'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
+  --bg:#0f0f23;--night:#181830;--ink:#000000;
+  --win:#10104a;--gold:#fcbc3c;--gold-dk:#ac7c00;--steel:#f8f8f8;
+  --text:#f8f8f8;--dim:#9098c0;--line:#38386a;
+  --hp:#d82800;--mp:#0058f8;--ok:#00a800;
+  --banner:#d82800;--arena1:#101038;--arena2:#08081c;
+  --hp1:#d82800;--hp2:#d82800;--mp1:#0058f8;--mp2:#0058f8;
+  --sub:#a0a8d0;--track:#0a0a1a;--star:#fcbc3c;--dexborder:#38386a;--namedim:#7078a0;
+  --flee:#7078a0;--foot:#404878;--copy:#fc7460;
+  --tl1:#fcbc3c;--tl2:#fcbc3c;--tl3:#fcbc3c;--tl4:#fcbc3c;
+  --frame-gold:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%2310104a'/><g fill='%23000000'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23fcbc3c'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
+  --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%23181830'/><g fill='%23000000'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23f8f8f8'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
 }
-[data-theme="bestiary"]{
-  --bg:#0d0b08;--night:#1e1811;--ink:#080604;
-  --win:#2c2116;--gold:#c9a24a;--gold-dk:#7a5e28;--steel:#5a4630;
-  --text:#e7dcc4;--dim:#9c8a6c;--line:#2e2416;
-  --hp:#b0453a;--mp:#c98a4a;--ok:#7a9a5a;
-  --banner:#8c2f2a;--arena1:#241c12;--arena2:#14100a;
-  --hp1:#c25a4a;--hp2:#8c2f2a;--mp1:#d9b878;--mp2:#8a6a2a;
-  --sub:#c9b896;--track:#14100a;--star:#b0453a;--dexborder:#3a2e1a;--namedim:#7a6a4c;
-  --flee:#6a5a3e;--foot:#4a3e28;--copy:#b08a5a;
-  --tl1:#f0dca0;--tl2:#d9bd6a;--tl3:#a9822e;--tl4:#6e5420;
-  --frame-gold:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%232c2116'/><g fill='%23080604'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23c9a24a'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
-  --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%231e1811'/><g fill='%23080604'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%235a4630'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
+[data-theme="gb"]{
+  --bg:#0f380f;--night:#0f380f;--ink:#0f380f;
+  --win:#306230;--gold:#9bbc0f;--gold-dk:#306230;--steel:#9bbc0f;
+  --text:#9bbc0f;--dim:#8bac0f;--line:#306230;
+  --hp:#8bac0f;--mp:#8bac0f;--ok:#9bbc0f;
+  --banner:#306230;--arena1:#306230;--arena2:#0f380f;
+  --hp1:#9bbc0f;--hp2:#8bac0f;--mp1:#8bac0f;--mp2:#306230;
+  --sub:#8bac0f;--track:#0f380f;--star:#9bbc0f;--dexborder:#306230;--namedim:#6a8a0a;
+  --flee:#8bac0f;--foot:#306230;--copy:#9bbc0f;
+  --tl1:#9bbc0f;--tl2:#9bbc0f;--tl3:#9bbc0f;--tl4:#9bbc0f;
+  --frame-gold:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%23306230'/><g fill='%230f380f'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%239bbc0f'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
+  --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%230f380f'/><g fill='%230f380f'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%238bac0f'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
 }
-[data-theme="dusk"]{
-  --bg:#0e1615;--night:#16211f;--ink:#070d0c;
-  --win:#1d3733;--gold:#d9b25a;--gold-dk:#8a6f2e;--steel:#325049;
-  --text:#f0e9d8;--dim:#83998f;--line:#213230;
-  --hp:#e0795f;--mp:#57b0a0;--ok:#8ac06a;
-  --banner:#d0614a;--arena1:#16292a;--arena2:#0e1c1d;
-  --hp1:#e0795f;--hp2:#b0402c;--mp1:#7ad0c0;--mp2:#2a8a7a;
-  --sub:#a9c0b0;--track:#0e1c1d;--star:#e5896b;--dexborder:#213230;--namedim:#6a8078;
-  --flee:#567a70;--foot:#3a4e48;--copy:#d08a7a;
-  --tl1:#fff0c0;--tl2:#f0c95a;--tl3:#e0955a;--tl4:#c05a3a;
-  --frame-gold:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%231d3733'/><g fill='%23070d0c'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23d9b25a'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
-  --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%2316211f'/><g fill='%23070d0c'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23325049'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
+[data-theme="arcade"]{
+  --bg:#080808;--night:#101010;--ink:#000000;
+  --win:#201000;--gold:#ffb000;--gold-dk:#a06000;--steel:#ffb000;
+  --text:#ffd000;--dim:#a07000;--line:#402800;
+  --hp:#ff2020;--mp:#00b0ff;--ok:#38ff38;
+  --banner:#c01800;--arena1:#180800;--arena2:#080400;
+  --hp1:#ff2020;--hp2:#ff2020;--mp1:#00b0ff;--mp2:#00b0ff;
+  --sub:#c09030;--track:#100800;--star:#ffd000;--dexborder:#402800;--namedim:#906000;
+  --flee:#906000;--foot:#503000;--copy:#ff8020;
+  --tl1:#ffd000;--tl2:#ffd000;--tl3:#ffd000;--tl4:#ffd000;
+  --frame-gold:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%23201000'/><g fill='%23000000'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23ffb000'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
+  --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%23100800'/><g fill='%23000000'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23ffb000'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
 }
 html,body{margin:0;padding:0;background:var(--bg);}
 body{font-family:'Galmuri11','Galmuri9',monospace;color:var(--text);-webkit-font-smoothing:none;}
@@ -352,6 +355,61 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
   .scr-head-t{font-size:44px;}
   .scr-head-b{font-size:14px;padding:5px 20px;}
 }
+
+/* ================= RETRO PIXEL OVERRIDES ================= */
+/* no rounded corners, ever */
+*{border-radius:0!important;}
+/* Press Start 2P for latin/number display; Korean falls back to Galmuri automatically */
+.tl-en,.pressstart,.hpline .lb,.bar .bl,.pcombo,.rescell .num,.ts-cell b,.dexhero-top .pct,.regdetect b,.dexcard .gt,.foot .en{
+  font-family:'Press Start 2P','Galmuri11',monospace;}
+/* Press Start 2P runs ~1.8x wide — shrink to fit layouts */
+.tl-en{font-size:13px;letter-spacing:4px;}
+.ts-cell b{font-size:12px;gap:3px;line-height:1.2;}
+.rescell .num{font-size:18px;}
+.dexhero-top .pct{font-size:18px;}
+.regdetect b{font-size:14px;}
+.hpline .lb,.bar .bl{font-size:8px;}
+.pcombo{font-size:9px;}
+.dexcard .gt{font-size:8px;}
+@media (min-width:760px){.tl-en{font-size:16px;letter-spacing:6px;}.ts-cell b{font-size:13px;}.rescell .num{font-size:22px;}}
+/* kill soft shadows / gradients / blur that read as "AI web app" */
+.tl-main,.scr-head-t{background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;-webkit-text-fill-color:var(--gold)!important;color:var(--gold)!important;
+  filter:drop-shadow(2px 0 0 #000) drop-shadow(-2px 0 0 #000) drop-shadow(0 2px 0 #000) drop-shadow(0 -2px 0 #000) drop-shadow(3px 3px 0 #000)!important;}
+.vig{display:none!important;}
+.startbtn{animation:wqBlink 1s steps(1) infinite!important;box-shadow:0 0 0 2px var(--ink)!important;}
+.monbox img{filter:none!important;}
+.qpips i.cur{box-shadow:0 0 0 1px var(--ink)!important;}
+.progbar i,.dexcard .gauge i,.bar .tr i,.hpbar i{background:var(--gold)!important;}
+/* block/segmented gauges (■■■□□) via hard segment dividers */
+.hpbar,.bar .tr,.progbar,.dexcard .gauge{position:relative;}
+.hpbar::after,.bar .tr::after,.dexcard .gauge::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent 5px,var(--ink) 5px,var(--ink) 7px);}
+.progbar::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:repeating-linear-gradient(90deg,transparent 0,transparent 10px,var(--ink) 10px,var(--ink) 12px);}
+/* HP/MP/EXP bar fills: red/blue/green solid already via vars */
+#hero-hp,#mon-hp{background:var(--hp)!important;}
+#hero-mp,#exp-bar{background:var(--mp)!important;}
+/* NES-style buttons: hard press, hover invert */
+.parsebtn,.bigbtn{box-shadow:4px 4px 0 var(--ink);transition:none;}
+.parsebtn:active,.bigbtn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink);}
+.navbtn:hover,.subbtn:hover,.mutebtn:hover,.fchip:hover{background:var(--gold)!important;color:var(--ink)!important;}
+.navbtn:hover *,.subbtn:hover *,.mutebtn:hover *{color:var(--ink)!important;}
+/* menu cursor ▶ (blinking) */
+.mrow .star{font-size:14px;}
+/* pixel scrollbar */
+*{scrollbar-width:auto;scrollbar-color:var(--steel) var(--ink);}
+::-webkit-scrollbar{width:14px;height:14px;}
+::-webkit-scrollbar-track{background:var(--ink);}
+::-webkit-scrollbar-thumb{background:var(--steel);border:3px solid var(--ink);}
+::-webkit-scrollbar-thumb:hover{background:var(--gold);}
+/* PRESS START blink */
+.pressstart{font-size:10px;letter-spacing:2px;color:var(--gold);text-align:center;margin-top:10px;animation:wqStart 1.1s steps(1) infinite;text-shadow:2px 2px 0 #000;}
+/* pixel-perfect: no sub-pixel text smoothing */
+body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeSpeed;}
+/* idle 2-frame bounce (hard steps) */
+@keyframes wqBounce{0%,49%{transform:translateY(0)}50%,100%{transform:translateY(-3px)}}
+.party img,.dexcard img{animation:wqBounce .7s steps(1) infinite;}
+
 @media (prefers-reduced-motion:reduce){
   .startbtn,.pressstart,.torch,.rtag,.msgbox .cur,.arena.spawn::after,.mrow .star,#enterbtn .star{animation:none!important;}
   *{transition-duration:.001ms!important;}
@@ -380,10 +438,11 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
         <div class="tl-en">WORD QUEST</div>
         <div class="tl-banner">틀린 단어는 보스가 된다<span class="tl-tm">™</span></div>
       </div>
+      <div class="pressstart">- PRESS START -</div>
       <div class="titlemenu">
-        <button class="mrow" id="enterbtn"><span class="star">★</span><span class="mlabel">던전 입장</span><span class="sub" id="h-sub"></span></button>
-        <button class="mrow" data-go="reg"><span class="star">★</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
-        <button class="mrow" data-go="dex"><span class="star">★</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
+        <button class="mrow" id="enterbtn"><span class="star">▶</span><span class="mlabel">던전 입장</span><span class="sub" id="h-sub"></span></button>
+        <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
+        <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
       </div>
       <div class="homemsg" id="h-msg" style="display:none;"></div>
       <div class="titlestatus">
@@ -408,8 +467,8 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
         <div class="torch" style="right:10%;margin-right:-24px;animation:wqTorch 1.9s .4s infinite;"></div>
         <div class="vig"></div>
         <div class="monhp">
-          <div class="hpline"><span class="lb">HP:</span><span class="hpbar"><i id="mon-hp" style="background:linear-gradient(var(--hp1),var(--hp2));width:100%;"></i></span><span class="lb" id="mon-hp-t">3/3</span></div>
-          <div class="hpline"><span class="lb">EXP:</span><span class="hpbar"><i id="exp-bar" style="background:linear-gradient(var(--mp1),var(--mp2));width:0%;"></i></span><span class="lb" id="exp-t">0</span></div>
+          <div class="hpline"><span class="lb">HP:</span><span class="hpbar"><i id="mon-hp" style="background:var(--hp);width:100%;"></i></span><span class="lb" id="mon-hp-t">3/3</span></div>
+          <div class="hpline"><span class="lb">EXP:</span><span class="hpbar"><i id="exp-bar" style="background:var(--mp);width:0%;"></i></span><span class="lb" id="exp-t">0</span></div>
         </div>
         <div class="monhead" style="margin-top:34px;">
           <span class="rtag" id="b-rtag"></span>
@@ -426,8 +485,8 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
         <img id="heroface" src="" alt="hero">
         <div class="pbars">
           <div class="pname">영웅</div>
-          <div class="bar"><span class="bl" style="color:var(--hp1);">HP</span><span class="tr"><i id="hero-hp" style="background:linear-gradient(var(--hp1),var(--hp2));width:100%;"></i></span></div>
-          <div class="bar"><span class="bl" style="color:var(--mp1);">MP</span><span class="tr"><i id="hero-mp" style="background:linear-gradient(var(--mp1),var(--mp2));width:0%;"></i></span></div>
+          <div class="bar"><span class="bl" style="color:var(--hp1);">HP</span><span class="tr"><i id="hero-hp" style="background:var(--hp);width:100%;"></i></span></div>
+          <div class="bar"><span class="bl" style="color:var(--mp1);">MP</span><span class="tr"><i id="hero-mp" style="background:var(--mp);width:0%;"></i></span></div>
         </div>
         <div class="pcombo" id="b-combo"></div>
       </div>
@@ -743,7 +802,7 @@ $('importfile').addEventListener('change',e=>{
       persist();
       regMsg('백업에서 몬스터 '+data.words.length+'마리를 되살렸다!');
       $('regcount').textContent='서식 중 '+S.words.length+'마리';
-      sfx('capture');renderMute();applyTheme(S.meta.theme||'crypt');
+      sfx('capture');renderMute();applyTheme(S.meta.theme||'nes');
     }catch(err){regMsg('두루마리가 훼손되어 읽을 수 없다… (올바른 백업 파일이 아님)');}
   };
   reader.readAsText(f);
@@ -802,7 +861,27 @@ function makeChoices(w){
   return all;
 }
 
-function setMsg(m){$('b-msg').textContent=m;}
+let _twTimer=null;
+function setMsg(m){
+  const el=$('b-msg');
+  if(_twTimer){clearInterval(_twTimer);_twTimer=null;}
+  m=String(m||'');
+  const rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(rm){el.textContent=m;return;}
+  el.textContent='';
+  let i=0;
+  _twTimer=setInterval(()=>{
+    i++;el.textContent=m.slice(0,i);
+    if(i>=m.length){clearInterval(_twTimer);_twTimer=null;}
+  },26);
+}
+function countUp(id,to){
+  const el=$(id);if(!el)return;to=(+to)||0;
+  const rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  if(rm||to<=0){el.textContent=String(to);return;}
+  let n=0;const step=Math.max(1,Math.ceil(to/12));
+  const t=setInterval(()=>{n+=step;if(n>=to){n=to;clearInterval(t);}el.textContent=String(n);},55);
+}
 function renderRemain(s){
   const n=s.q.length,el=$('b-remain');
   let pips='';
@@ -968,9 +1047,9 @@ function endBattle(){
   const lr=S.lastResult;
   $('r-title').textContent=lr.ko?'용사, 쓰러지다…':'던전 탐사 완료!';
   $('r-sub').textContent=lr.ko?'하지만 경험은 남는다. 다시 도전하라!':'몬스터들은 잊혀질 때쯤 다시 돌아온다.';
-  $('r-win').textContent=lr.win;$('r-hurt').textContent=lr.hurt;$('r-cap').textContent=lr.cap;
-  $('r-combo').textContent=lr.combo;$('r-next').textContent=lr.next;
+  $('r-next').textContent=lr.next;
   show('result');
+  countUp('r-win',lr.win);countUp('r-hurt',lr.hurt);countUp('r-cap',lr.cap);countUp('r-combo',lr.combo);
 }
 
 /* ================= dex ================= */
@@ -1148,18 +1227,18 @@ renderMute();
 
 /* ================= theme ================= */
 const THEMES=[
-  {k:'crypt',   name:'지하묘지', c:['#3a2340','#e8b968','#b34430']},
-  {k:'bestiary',name:'가죽도감', c:['#2c2116','#c9a24a','#8c2f2a']},
-  {k:'dusk',    name:'황혼',    c:['#1d3733','#d9b25a','#d0614a']}
+  {k:'nes',    name:'NES',     c:['#10104a','#fcbc3c','#d82800']},
+  {k:'gb',     name:'게임보이', c:['#0f380f','#9bbc0f','#8bac0f']},
+  {k:'arcade', name:'아케이드', c:['#201000','#ffb000','#ff2020']}
 ];
-function themeName(k){const t=THEMES.find(x=>x.k===k);return t?t.name:'지하묘지';}
+function themeName(k){const t=THEMES.find(x=>x.k===k);return t?t.name:'NES';}
 function renderThemeBtn(){
-  const cur=S.meta.theme||'crypt';
+  const cur=S.meta.theme||'nes';
   const ic='<svg class="ic" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="2" width="12" height="12" fill="currentColor" opacity=".3"/><rect x="2" y="2" width="6" height="12" fill="currentColor"/><rect x="2" y="2" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
   $('themebtn').innerHTML=ic+themeName(cur);
 }
 function renderThemePick(){
-  const cur=S.meta.theme||'crypt';
+  const cur=S.meta.theme||'nes';
   const el=$('themepick');if(!el)return;
   el.innerHTML='';
   THEMES.forEach(t=>{
@@ -1173,18 +1252,18 @@ function renderThemePick(){
   });
 }
 function applyTheme(k){
-  if(!THEMES.some(x=>x.k===k))k='crypt';
+  if(!THEMES.some(x=>x.k===k))k='nes';
   document.documentElement.setAttribute('data-theme',k);
   S.meta.theme=k;persist();
   renderThemePick();renderThemeBtn();
 }
 $('themebtn').addEventListener('click',()=>{
-  const cur=S.meta.theme||'crypt';
+  const cur=S.meta.theme||'nes';
   const i=THEMES.findIndex(x=>x.k===cur);
   applyTheme(THEMES[(i+1)%THEMES.length].k);
   sfx('select');
 });
-applyTheme(S.meta.theme||'crypt');
+applyTheme(S.meta.theme||'nes');
 
 drawDungeon();
 // AI 배경/초상화 로드 (실패 시 절차 생성 폴백)
