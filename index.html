@@ -861,20 +861,7 @@ function makeChoices(w){
   return all;
 }
 
-let _twTimer=null;
-function setMsg(m){
-  const el=$('b-msg');
-  if(_twTimer){clearInterval(_twTimer);_twTimer=null;}
-  m=String(m||'');
-  const rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
-  if(rm){el.textContent=m;return;}
-  el.textContent='';
-  let i=0;
-  _twTimer=setInterval(()=>{
-    i++;el.textContent=m.slice(0,i);
-    if(i>=m.length){clearInterval(_twTimer);_twTimer=null;}
-  },26);
-}
+function setMsg(m){$('b-msg').textContent=m;} // 타자기 효과는 하단 MutationObserver가 담당
 function countUp(id,to){
   const el=$(id);if(!el)return;to=(+to)||0;
   const rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
