@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>단어 도감 — 오답 몬스터 채집기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F5F0; --card:#FFFFFF; --line:#E7E2D8; --line2:#D8D2C4;
+  --ink:#26231D; --sub:#6E675B; --faint:#9C9484;
+  --accent:#33635C; --accent-soft:#E4EDEA;
+  --warm:#C2703E; --warm-soft:#F6E9DF;
+  --bad:#B4534E; --bad-soft:#F5E5E3;
+  --c-common:#A8A29E; --c-rare:#5B8DB8; --c-epic:#8B72BE; --c-legend:#B08A2E;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Noto Sans KR',sans-serif;color:var(--ink);background:var(--paper);
+  min-height:100vh;line-height:1.55;
+}
+#app{max-width:720px;margin:0 auto;padding:28px 20px 72px}
+/* ---------- header ---------- */
+header{display:flex;align-items:baseline;justify-content:space-between;padding-bottom:18px;margin-bottom:26px;
+  border-bottom:1px solid var(--line2)}
+.logo{font-family:'Gowun Batang',serif;font-weight:700;font-size:23px;letter-spacing:-.3px;cursor:pointer}
+.logo em{font-style:normal;color:var(--accent)}
+.logo small{display:block;font-family:'Noto Sans KR';font-weight:400;font-size:11.5px;color:var(--faint);letter-spacing:3px;margin-top:2px}
+.iconbtn{background:none;border:1px solid var(--line2);color:var(--sub);border-radius:10px;padding:7px 11px;
+  font-size:14px;cursor:pointer;transition:.2s}
+.iconbtn:hover{border-color:var(--ink);color:var(--ink)}
+section{display:none;animation:fade .35s ease}
+section.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+/* ---------- cards & buttons ---------- */
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px;
+  box-shadow:0 1px 2px rgba(30,25,10,.03),0 10px 30px rgba(30,25,10,.04)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;
+  font-family:'Noto Sans KR';font-weight:700;border-radius:12px;padding:15px 22px;font-size:15.5px;transition:.18s;position:relative}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--ink);color:#FDFCFA}
+.btn-primary:hover{background:#3B372E}
+.btn-accent{background:var(--accent);color:#FDFCFA}
+.btn-accent:hover{background:#2A544E}
+.btn-line{background:transparent;color:var(--ink);border:1px solid var(--line2)}
+.btn-line:hover{border-color:var(--ink)}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:9px 15px;font-size:13px;border-radius:10px;font-weight:500}
+/* ---------- home ---------- */
+.hero{text-align:center;padding:30px 22px 26px;margin-bottom:14px}
+.hero .heromon{width:132px;height:140px;margin:0 auto 6px;animation:bob 4s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.hero h1{font-family:'Gowun Batang',serif;font-size:23px;font-weight:700;letter-spacing:-.3px;margin-bottom:8px}
+.hero p{color:var(--sub);font-size:13.5px;line-height:1.75}
+.hero p b{color:var(--accent);font-weight:700}
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.stat{padding:15px 6px;text-align:center}
+.stat b{display:block;font-family:'Gowun Batang',serif;font-size:24px;font-weight:700;letter-spacing:-.5px}
+.stat span{font-size:11px;color:var(--faint);letter-spacing:.5px}
+.stat.s2 b{color:var(--accent)} .stat.s3 b{color:var(--warm)}
+.homebtns{display:flex;flex-direction:column;gap:10px}
+.duebadge{background:var(--warm);color:#fff;border-radius:999px;padding:1px 10px;font-size:12.5px;font-weight:700}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.streak{margin-top:16px;text-align:center;color:var(--sub);font-size:13px}
+.streak b{color:var(--warm)}
+/* ---------- add ---------- */
+.add-hint{font-size:12.5px;color:var(--sub);line-height:1.9;margin:8px 0 14px}
+.add-hint code{background:var(--paper);border:1px solid var(--line);padding:1px 8px;border-radius:6px;color:var(--accent);font-size:12px}
+textarea{width:100%;min-height:150px;background:var(--paper);border:1px solid var(--line2);
+  border-radius:12px;color:var(--ink);padding:14px;font-size:14.5px;font-family:'Noto Sans KR';resize:vertical}
+textarea:focus{outline:none;border-color:var(--accent)}
+textarea::placeholder{color:var(--faint)}
+.addbtns{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.wordlist{margin-top:16px;display:flex;flex-direction:column;gap:0;max-height:320px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.wrow{display:flex;align-items:center;gap:12px;padding:11px 16px;font-size:13.5px;border-bottom:1px solid var(--line)}
+.wrow:last-child{border-bottom:none}
+.wrow .en{font-weight:700;min-width:110px}
+.wrow .ko{color:var(--sub);flex:1}
+.wrow .lv{font-size:11px;font-weight:700;letter-spacing:.5px}
+.wrow button{background:none;border:none;color:var(--faint);cursor:pointer;font-size:14px;padding:2px 4px}
+.wrow button:hover{color:var(--bad)}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:var(--ink);color:#FDFCFA;
+  padding:11px 22px;border-radius:999px;font-size:13.5px;font-weight:500;z-index:60;opacity:0;pointer-events:none;
+  transition:.3s;box-shadow:0 8px 24px rgba(30,25,10,.18)}
+.toast.show{opacity:1;bottom:44px}
+h2.title{font-family:'Gowun Batang',serif;font-size:19px;font-weight:700;margin-bottom:4px}
+.back{color:var(--faint);font-size:13px;cursor:pointer;margin-bottom:14px;display:inline-block}
+.back:hover{color:var(--ink)}
+/* ---------- battle ---------- */
+.hud{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:12.5px;color:var(--faint)}
+.combo{font-family:'Gowun Batang',serif;font-weight:700;font-size:16px;color:var(--warm)}
+.combo.hot{animation:pop .3s ease}
+@keyframes pop{40%{transform:scale(1.3)}}
+.qbar{height:4px;border-radius:99px;background:var(--line);overflow:hidden;margin-bottom:20px}
+.qbar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .4s}
+.stage{text-align:center;padding:22px 18px 24px;position:relative}
+.rarity-tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:2.5px;border-radius:999px;
+  padding:3px 13px;margin-bottom:4px;border:1px solid}
+.monwrap{width:164px;height:172px;margin:4px auto;animation:bob 3.6s ease-in-out infinite}
+.monwrap.hit{animation:hitfx .5s ease}
+@keyframes hitfx{0%{filter:brightness(1.6)}30%{transform:scale(.92) rotate(4deg)}100%{transform:none}}
+.monname{font-size:12px;letter-spacing:2px;color:var(--faint);margin-top:-2px}
+.qword{font-family:'Gowun Batang',serif;font-size:36px;font-weight:700;letter-spacing:-.5px;margin:10px 0 2px}
+.qsub{font-size:12.5px;color:var(--faint);margin-bottom:14px}
+.pips{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
+.pip{width:24px;height:6px;border-radius:99px;background:var(--line)}
+.pip.on{background:var(--accent)}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.choice{background:var(--card);border:1px solid var(--line2);border-radius:12px;color:var(--ink);
+  font-family:'Noto Sans KR';font-weight:500;font-size:15.5px;padding:16px 10px;cursor:pointer;transition:.15s}
+.choice:hover{border-color:var(--ink);transform:translateY(-1px)}
+.choice.correct{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.choice.wrong{background:var(--bad);border-color:var(--bad);color:#fff}
+.choice[disabled]{cursor:default}
+.shake{animation:shake .4s}
+@keyframes shake{20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.feedback{min-height:24px;margin-top:14px;font-weight:500;font-size:14px}
+.feedback .good{color:var(--accent)}
+.feedback .bad{color:var(--bad)}
+/* capture overlay */
+#capture-fx{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+  background:rgba(247,245,240,.88);backdrop-filter:blur(6px)}
+#capture-fx.show{display:flex;animation:fade .3s}
+.capcard{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:36px 40px;text-align:center;
+  box-shadow:0 20px 60px rgba(30,25,10,.12)}
+.capcard .capmon{width:170px;height:178px;margin:0 auto;animation:capIn .8s ease}
+@keyframes capIn{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+.capcard h3{font-family:'Gowun Batang',serif;font-size:24px;font-weight:700;margin-top:6px}
+.capcard h3 em{font-style:normal;color:var(--warm)}
+.capcard p{color:var(--sub);margin:8px 0 20px;font-size:14px}
+.capcard p b{color:var(--ink)}
+/* result */
+.resultgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+/* ---------- dex ---------- */
+.dexgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px;margin-top:14px}
+.dexcard{border-radius:14px;padding:16px 8px 13px;text-align:center;border:1px solid var(--line);
+  background:var(--card);transition:.2s;position:relative}
+.dexcard:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(30,25,10,.06)}
+.dexcard .dm{width:78px;height:84px;margin:0 auto}
+.dexcard .den{font-weight:700;font-size:14px;margin-top:6px}
+.dexcard .dko{font-size:12px;color:var(--sub);min-height:17px}
+.dexcard .dr{font-size:9.5px;font-weight:700;letter-spacing:2px;margin-top:6px}
+.dexcard.uncaught{background:var(--paper)}
+.dexcard.uncaught .dm{filter:grayscale(1) opacity(.35)}
+.dexcard.uncaught .dko{visibility:hidden}
+.dexcard.legend{border-color:#D8C48E}
+.dexfilter{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.chip{border-radius:999px;padding:6px 15px;font-size:12.5px;cursor:pointer;border:1px solid var(--line2);
+  background:transparent;color:var(--sub);font-weight:500;transition:.15s}
+.chip.on{color:#fff;background:var(--ink);border-color:var(--ink)}
+/* particles */
+.particle{position:fixed;width:7px;height:7px;border-radius:2px;pointer-events:none;z-index:55}
+.empty{color:var(--faint);text-align:center;padding:34px 10px;font-size:13.5px;line-height:1.9}
+@media (max-width:480px){
+  .statgrid{grid-template-columns:repeat(2,1fr)}
+  .qword{font-size:29px}
+  .capcard{padding:28px 22px;margin:0 16px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo" onclick="go('home')">단어 <em>도감</em><small>WORD BESTIARY</small></div>
+    <button class="iconbtn" id="mutebtn" onclick="toggleMute()">🔊</button>
+  </header>
+
+  <!-- HOME -->
+  <section id="screen-home">
+    <div class="card hero">
+      <div class="heromon" id="heromon"></div>
+      <h1>틀린 단어가 몬스터가 됩니다</h1>
+      <p>틀릴수록 등급이 오르는 몬스터를, 복습으로 다시 만나 채집하세요.<br>
+      며칠 간격으로 <b>세 번 연속</b> 맞히면 도감에 등록됩니다.</p>
+    </div>
+    <div class="statgrid">
+      <div class="card stat"><b id="st-total">0</b><span>등록된 몬스터</span></div>
+      <div class="card stat s2"><b id="st-caught">0</b><span>채집 완료</span></div>
+      <div class="card stat s3"><b id="st-combo">0</b><span>최고 연속 정답</span></div>
+      <div class="card stat"><b id="st-rate">0%</b><span>도감 완성률</span></div>
+    </div>
+    <div class="homebtns">
+      <button class="btn btn-primary" id="huntbtn" onclick="startBattle()">오늘의 채집 시작 <span class="duebadge" id="duebadge">0</span></button>
+      <div class="row2">
+        <button class="btn btn-accent" onclick="go('add')">단어 등록</button>
+        <button class="btn btn-line" onclick="go('dex')">도감 보기</button>
+      </div>
+    </div>
+    <div class="streak" id="streakline"></div>
+  </section>
+
+  <!-- ADD -->
+  <section id="screen-add">
+    <span class="back" onclick="go('home')">← 홈으로</span>
+    <div class="card">
+      <h2 class="title">단어 등록</h2>
+      <div class="add-hint">
+        한 줄에 하나씩, 이런 형식이면 모두 인식됩니다 —
+        <code>abandon - 버리다</code> <code>abandon: 버리다</code> <code>abandon, 버리다</code> <code>탭 구분</code><br>
+        학교 단어시험 범위를 통째로 붙여넣어도 됩니다.
+      </div>
+      <textarea id="wordinput" placeholder="abandon - 버리다&#10;significant - 중요한&#10;evaluate - 평가하다"></textarea>
+      <div class="addbtns">
+        <button class="btn btn-primary btn-sm" onclick="addWords()">등록하기</button>
+        <button class="btn btn-line btn-sm" onclick="loadSample()">예시 단어 12개</button>
+        <button class="btn btn-line btn-sm" onclick="exportData()">백업 내보내기</button>
+        <button class="btn btn-line btn-sm" onclick="importData()">백업 가져오기</button>
+      </div>
+    </div>
+    <div class="wordlist" id="wordlist"></div>
+  </section>
+
+  <!-- BATTLE -->
+  <section id="screen-battle">
+    <div class="hud">
+      <span id="qcount">1 / 10</span>
+      <span class="combo" id="combodisp">연속 0</span>
+    </div>
+    <div class="qbar"><i id="qbarfill" style="width:0%"></i></div>
+    <div class="card stage" id="stage">
+      <div class="rarity-tag" id="raritytag">COMMON</div>
+      <div class="monwrap" id="monwrap"></div>
+      <div class="monname" id="monname"></div>
+      <div class="qword" id="qword">word</div>
+      <div class="qsub">이 단어의 뜻을 골라 주세요</div>
+      <div class="pips" id="pips"></div>
+      <div class="choices" id="choices"></div>
+      <div class="feedback" id="feedback"></div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="screen-result">
+    <div class="card" style="text-align:center;padding:34px 22px">
+      <h2 class="title" style="font-size:23px">오늘의 채집 완료</h2>
+      <div class="resultgrid">
+        <div class="card stat s2"><b id="r-hit">0</b><span>정답</span></div>
+        <div class="card stat"><b id="r-miss">0</b><span>오답</span></div>
+        <div class="card stat s3"><b id="r-cap">0</b><span>채집</span></div>
+      </div>
+      <p style="color:var(--sub);font-size:13.5px;line-height:1.8" id="r-msg"></p>
+      <div style="margin-top:20px;display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-primary btn-sm" onclick="go('dex')">도감 보기</button>
+        <button class="btn btn-line btn-sm" onclick="go('home')">홈으로</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DEX -->
+  <section id="screen-dex">
+    <span class="back" onclick="go('home')">← 홈으로</span>
+    <div class="card">
+      <h2 class="title">몬스터 도감 <span id="dexprog" style="font-size:13px;color:var(--faint);font-family:'Noto Sans KR';font-weight:400"></span></h2>
+      <div class="dexfilter" id="dexfilter">
+        <span class="chip on" data-f="all">전체</span>
+        <span class="chip" data-f="caught">채집</span>
+        <span class="chip" data-f="uncaught">미채집</span>
+        <span class="chip" data-f="LEGENDARY">전설만</span>
+      </div>
+    </div>
+    <div class="dexgrid" id="dexgrid"></div>
+  </section>
+</div>
+
+<!-- capture overlay -->
+<div id="capture-fx">
+  <div class="capcard">
+    <div class="capmon" id="capmon"></div>
+    <h3><em>채집 완료</em></h3>
+    <p><b id="capword"></b><br>도감에 등록되었습니다</p>
+    <button class="btn btn-primary" onclick="closeCapture()">계속하기</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 저장 ================= */
+const KEY='vocamon_save_v1';
+const DAY=86400000;
+const INTERVALS=[DAY,3*DAY];      // 정답 1회 → 1일 뒤, 2회 → 3일 뒤
+const CAPTURE_LEVEL=3;            // 간격을 두고 3연속 정답 = 채집
+let state=load();
+function load(){
+  try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.words)return s;}catch(e){}
+  return {words:[],maxCombo:0,streak:0,lastDay:null,muted:false};
+}
+function save(){localStorage.setItem(KEY,JSON.stringify(state));}
+
+/* ================= 유틸 ================= */
+function hashStr(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=(h<<13)|(h>>>19);}return h>>>0;}
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
+function shuffle(arr){for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}return arr;}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function todayKey(){const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._tm);t._tm=setTimeout(()=>t.classList.remove('show'),2200);}
+
+/* ================= 사운드 (은은하게) ================= */
+let actx=null;
+function beep(freq,dur,type,delay,vol){
+  if(state.muted)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type=type||'sine';o.frequency.value=freq;
+    const t0=actx.currentTime+(delay||0);
+    g.gain.setValueAtTime(vol||0.06,t0);
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    o.connect(g);g.connect(actx.destination);o.start(t0);o.stop(t0+dur+0.02);
+  }catch(e){}
+}
+const sndOk=()=>{beep(660,.09,'sine');beep(880,.12,'sine',.08);};
+const sndNo=()=>{beep(220,.2,'sine',0,.05);};
+const sndCap=()=>{[523,659,784,1047].forEach((f,i)=>beep(f,.14,'sine',i*.1,.07));};
+function toggleMute(){state.muted=!state.muted;save();document.getElementById('mutebtn').textContent=state.muted?'🔇':'🔊';}
+
+/* ================= 등급 ================= */
+const RARITY=[
+  {min:0,name:'COMMON',ko:'일반',color:'var(--c-common)'},
+  {min:1,name:'RARE',ko:'희귀',color:'var(--c-rare)'},
+  {min:3,name:'EPIC',ko:'영웅',color:'var(--c-epic)'},
+  {min:5,name:'LEGENDARY',ko:'전설',color:'var(--c-legend)'},
+];
+function rarityOf(w){let r=RARITY[0];for(const x of RARITY){if(w.misses>=x.min)r=x;}return r;}
+
+/* ================= 몬스터 SVG (파스텔 톤) ================= */
+function monsterSVG(word){
+  const rnd=mulberry32(hashStr(word.toLowerCase()));
+  const hue=Math.floor(rnd()*360);
+  const c1=`hsl(${hue},42%,78%)`,c2=`hsl(${hue},30%,42%)`,c3=`hsl(${(hue+40)%360},45%,68%)`;
+  const ink='#3A362E';
+  const cx=100,cy=108,n=7+Math.floor(rnd()*4);
+  const pts=[];
+  for(let i=0;i<n;i++){const a=i/n*Math.PI*2-Math.PI/2;const r=50+rnd()*26;pts.push([cx+Math.cos(a)*r,cy+Math.sin(a)*r*0.92]);}
+  const mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2];
+  let m0=mid(pts[n-1],pts[0]),d=`M ${m0[0].toFixed(1)} ${m0[1].toFixed(1)} `;
+  for(let i=0;i<n;i++){const nm=mid(pts[i],pts[(i+1)%n]);d+=`Q ${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} ${nm[0].toFixed(1)} ${nm[1].toFixed(1)} `;}
+  d+='Z';
+  let inner='';
+  if(rnd()>0.45){
+    const hh=14+rnd()*16;
+    inner+=`<polygon points="72,54 64,${(54-hh).toFixed(0)} 86,50" fill="${c3}" stroke="${c2}" stroke-width="2"/>`;
+    inner+=`<polygon points="128,54 136,${(54-hh).toFixed(0)} 114,50" fill="${c3}" stroke="${c2}" stroke-width="2"/>`;
+  }
+  inner+=`<path d="${d}" fill="${c1}" stroke="${c2}" stroke-width="2.5"/>`;
+  const spots=Math.floor(rnd()*4);
+  for(let i=0;i<spots;i++){
+    inner+=`<circle cx="${(70+rnd()*60).toFixed(0)}" cy="${(115+rnd()*35).toFixed(0)}" r="${(4+rnd()*7).toFixed(0)}" fill="${c3}" opacity=".6"/>`;
+  }
+  const roll=rnd();
+  const nEyes=roll<0.45?2:(roll<0.8?1:3);
+  const eyeY=88+rnd()*8,er=8+rnd()*5;
+  const exs=nEyes===1?[100]:nEyes===2?[83,117]:[75,100,125];
+  for(const ex of exs){
+    inner+=`<circle cx="${ex}" cy="${eyeY.toFixed(0)}" r="${er.toFixed(1)}" fill="#FFFDF8" stroke="${c2}" stroke-width="1.5"/>`;
+    inner+=`<circle cx="${ex}" cy="${eyeY.toFixed(0)}" r="${(er*0.42).toFixed(1)}" fill="${ink}"/>`;
+    inner+=`<circle cx="${(ex+er*0.18).toFixed(1)}" cy="${(eyeY-er*0.2).toFixed(1)}" r="${(er*0.14).toFixed(1)}" fill="#fff"/>`;
+  }
+  const mw=rnd()*20-10;
+  if(rnd()>0.5){
+    inner+=`<path d="M 84 ${132+mw*0.2} Q 100 ${(144+mw).toFixed(0)} 116 ${132+mw*0.2}" fill="none" stroke="${ink}" stroke-width="3" stroke-linecap="round"/>`;
+  }else{
+    inner+=`<path d="M 82 134 Q 100 ${(146+mw).toFixed(0)} 118 134 Z" fill="${ink}" opacity=".85"/>`;
+    inner+=`<polygon points="89,135 94,142 99,135" fill="#FFFDF8"/><polygon points="102,135 107,142 112,135" fill="#FFFDF8"/>`;
+  }
+  return `<svg viewBox="0 0 200 215" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
+}
+
+/* ================= 화면 전환 ================= */
+function go(name){
+  document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  if(name==='home')renderHome();
+  if(name==='add')renderWordList();
+  if(name==='dex')renderDex();
+  window.scrollTo({top:0});
+}
+
+/* ================= 홈 ================= */
+function dueWords(){const now=Date.now();return state.words.filter(w=>!w.captured&&w.due<=now);}
+function renderHome(){
+  const total=state.words.length,caught=state.words.filter(w=>w.captured).length;
+  document.getElementById('st-total').textContent=total;
+  document.getElementById('st-caught').textContent=caught;
+  document.getElementById('st-combo').textContent=state.maxCombo;
+  document.getElementById('st-rate').textContent=total?Math.round(caught/total*100)+'%':'0%';
+  const due=dueWords().length;
+  document.getElementById('duebadge').textContent=due;
+  document.getElementById('huntbtn').disabled=(due===0);
+  const sl=document.getElementById('streakline');
+  if(due===0&&total>0){
+    const next=state.words.filter(w=>!w.captured).map(w=>w.due).sort((a,b)=>a-b)[0];
+    sl.innerHTML=next?('오늘 복습 완료. 다음 몬스터 출현: <b>'+new Date(next).toLocaleDateString('ko-KR',{month:'short',day:'numeric'})+'</b>'+(state.streak>1?' · <b>'+state.streak+'일 연속</b> 학습 중':'')):'모든 몬스터 채집 완료! 새 단어를 등록해 보세요.';
+  }else{
+    sl.innerHTML=state.streak>1?'<b>'+state.streak+'일 연속</b> 학습 중':'';
+  }
+  document.getElementById('heromon').innerHTML=monsterSVG(total?state.words[total-1].en:'bestiary');
+}
+
+/* ================= 단어 등록 ================= */
+const SAMPLE=`abandon - 버리다, 포기하다
+significant - 중요한, 상당한
+evaluate - 평가하다
+phenomenon - 현상
+inevitable - 피할 수 없는
+sufficient - 충분한
+demonstrate - 증명하다, 보여주다
+perspective - 관점, 시각
+encounter - 마주치다
+adapt - 적응하다
+notorious - 악명 높은
+analyze - 분석하다`;
+function loadSample(){document.getElementById('wordinput').value=SAMPLE;toast('예시 단어를 불러왔어요. [등록하기]를 누르세요.');}
+function parseLine(line){
+  line=line.trim();if(!line)return null;
+  let m=line.match(/^(.+?)(?:\t+| - |: |, |—|–)\s*(.+)$/);
+  if(!m)m=line.match(/^([A-Za-z][A-Za-z .'-]*)\s+(.+)$/);
+  if(!m)return null;
+  const en=m[1].trim(),ko=m[2].trim();
+  if(!en||!ko)return null;
+  return {en,ko};
+}
+function addWords(){
+  const txt=document.getElementById('wordinput').value;
+  const lines=txt.split('\n');let added=0,skipped=0;
+  for(const line of lines){
+    const p=parseLine(line);if(!p){if(line.trim())skipped++;continue;}
+    if(state.words.some(w=>w.en.toLowerCase()===p.en.toLowerCase())){skipped++;continue;}
+    state.words.push({id:Date.now()+'_'+Math.random().toString(36).slice(2,7),en:p.en,ko:p.ko,level:0,due:Date.now(),misses:0,captured:false});
+    added++;
+  }
+  save();renderWordList();
+  document.getElementById('wordinput').value='';
+  toast(added?`몬스터 ${added}마리 등록!`+(skipped?` (${skipped}개 건너뜀)`:''):'등록할 단어를 찾지 못했어요. 형식을 확인해 주세요.');
+}
+function delWord(id){state.words=state.words.filter(w=>w.id!==id);save();renderWordList();}
+function renderWordList(){
+  const el=document.getElementById('wordlist');
+  if(!state.words.length){el.innerHTML='<div class="empty">아직 등록된 몬스터가 없어요.<br>단어를 붙여넣고 등록해 보세요.</div>';return;}
+  el.innerHTML=[...state.words].reverse().map(w=>{
+    const r=rarityOf(w);
+    return `<div class="wrow"><span class="en">${esc(w.en)}</span><span class="ko">${esc(w.ko)}</span>
+    <span class="lv" style="color:${r.color}">${w.captured?'채집 완료':r.ko+' · 게이지 '+w.level+'/3'}</span>
+    <button onclick="delWord('${w.id}')" title="삭제">✕</button></div>`;
+  }).join('');
+}
+function exportData(){
+  document.getElementById('wordinput').value=JSON.stringify(state.words);
+  toast('백업 데이터를 입력창에 넣었어요. 전체 복사해서 보관하세요.');
+}
+function importData(){
+  try{
+    const arr=JSON.parse(document.getElementById('wordinput').value);
+    if(!Array.isArray(arr))throw 0;
+    state.words=arr;save();renderWordList();document.getElementById('wordinput').value='';
+    toast('백업 복원 완료 ('+arr.length+'단어)');
+  }catch(e){toast('백업 데이터 형식이 아니에요.');}
+}
+
+/* ================= 채집(퀴즈) ================= */
+const DISTRACTORS=['향상시키다','유지하다','명백한','고대의','설득하다','우연의','풍부한','거절하다','일시적인','기여하다','정교한','목격하다','타당한','수확하다','불규칙한','번영하다','겸손한','추론하다','장애물','열망하다'];
+let queue=[],qTotal=0,combo=0,sess={hit:0,miss:0,cap:0},current=null,answered=false;
+function startBattle(){
+  queue=shuffle(dueWords());
+  if(!queue.length){toast('지금은 복습할 몬스터가 없어요.');return;}
+  qTotal=queue.length;combo=0;sess={hit:0,miss:0,cap:0};
+  const tk=todayKey();
+  if(state.lastDay!==tk){
+    const y=new Date(Date.now()-DAY);
+    const yk=y.getFullYear()+'-'+(y.getMonth()+1)+'-'+y.getDate();
+    state.streak=(state.lastDay===yk)?(state.streak||0)+1:1;
+    state.lastDay=tk;save();
+  }
+  go('battle');nextEncounter();
+}
+function nextEncounter(){
+  if(!queue.length){endSession();return;}
+  current=queue[0];answered=false;
+  const r=rarityOf(current);
+  const done=qTotal-queue.length;
+  document.getElementById('qcount').textContent=(done+1)+' / '+qTotal;
+  document.getElementById('qbarfill').style.width=(done/qTotal*100)+'%';
+  document.getElementById('combodisp').textContent='연속 '+combo;
+  const tag=document.getElementById('raritytag');
+  tag.textContent=r.name;tag.style.color=r.color;tag.style.borderColor=r.color;
+  const mw=document.getElementById('monwrap');
+  mw.classList.remove('hit');
+  mw.innerHTML=monsterSVG(current.en);
+  document.getElementById('monname').textContent=current.en.toUpperCase().slice(0,12);
+  document.getElementById('qword').textContent=current.en;
+  document.getElementById('pips').innerHTML=[0,1,2].map(i=>`<div class="pip ${i<current.level?'on':''}"></div>`).join('');
+  document.getElementById('feedback').innerHTML='';
+  const others=[...new Set(state.words.filter(w=>w.id!==current.id).map(w=>w.ko))].filter(k=>k!==current.ko);
+  shuffle(others);
+  let wrongs=others.slice(0,3);
+  const pool=DISTRACTORS.filter(x=>x!==current.ko&&!wrongs.includes(x));
+  shuffle(pool);
+  while(wrongs.length<3&&pool.length)wrongs.push(pool.pop());
+  const opts=shuffle([current.ko,...wrongs]);
+  document.getElementById('choices').innerHTML=opts.map(o=>`<button class="choice" data-ko="${esc(o)}">${esc(o)}</button>`).join('');
+  document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>answer(b)));
+}
+function answer(btn){
+  if(answered)return;answered=true;
+  const ok=btn.dataset.ko===current.ko;
+  document.querySelectorAll('.choice').forEach(b=>{
+    b.disabled=true;
+    if(b.dataset.ko===current.ko)b.classList.add('correct');
+  });
+  const fb=document.getElementById('feedback');
+  queue.shift();
+  if(ok){
+    sndOk();combo++;sess.hit++;
+    if(combo>state.maxCombo)state.maxCombo=combo;
+    const cd=document.getElementById('combodisp');
+    cd.textContent='연속 '+combo;cd.classList.remove('hot');void cd.offsetWidth;cd.classList.add('hot');
+    document.getElementById('monwrap').classList.add('hit');
+    burst();
+    current.level++;
+    if(current.level>=CAPTURE_LEVEL){
+      current.captured=true;current.capturedAt=Date.now();sess.cap++;
+      save();
+      setTimeout(()=>showCapture(current),600);
+      return;
+    }else{
+      current.due=Date.now()+INTERVALS[current.level-1];
+      fb.innerHTML='<span class="good">정답. '+(current.level===1?'내일':'3일 뒤')+' 다시 나타납니다 · 게이지 '+current.level+'/3</span>';
+    }
+  }else{
+    sndNo();combo=0;sess.miss++;
+    btn.classList.add('wrong');
+    const st=document.getElementById('stage');
+    st.classList.remove('shake');void st.offsetWidth;st.classList.add('shake');
+    document.getElementById('combodisp').textContent='연속 0';
+    current.misses++;current.level=0;current.due=Date.now();
+    const r=rarityOf(current);
+    fb.innerHTML='<span class="bad">오답 — 정답은 「'+esc(current.ko)+'」 · 몬스터가 강해졌습니다 ('+r.ko+')</span>';
+    queue.push(current);
+    qTotal++;
+  }
+  save();
+  setTimeout(nextEncounter, ok?1300:2200);
+}
+function burst(){
+  const rect=document.getElementById('monwrap').getBoundingClientRect();
+  const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+  const colors=['#33635C','#C2703E','#8B72BE','#5B8DB8','#D8C48E'];
+  for(let i=0;i<16;i++){
+    const p=document.createElement('div');p.className='particle';
+    p.style.background=colors[i%colors.length];
+    p.style.left=cx+'px';p.style.top=cy+'px';
+    p.style.transform='rotate('+Math.random()*90+'deg)';
+    document.body.appendChild(p);
+    const a=Math.random()*Math.PI*2,v=50+Math.random()*100;
+    p.animate([
+      {transform:'translate(0,0) scale(1)',opacity:1},
+      {transform:`translate(${Math.cos(a)*v}px,${Math.sin(a)*v-30}px) scale(0)`,opacity:0}
+    ],{duration:650+Math.random()*350,easing:'cubic-bezier(.1,.7,.3,1)'}).onfinish=()=>p.remove();
+  }
+}
+function showCapture(w){
+  sndCap();
+  document.getElementById('capmon').innerHTML=monsterSVG(w.en);
+  const r=rarityOf(w);
+  document.getElementById('capword').textContent=w.en+' — '+w.ko+' · '+r.ko+' 등급';
+  document.getElementById('capture-fx').classList.add('show');
+}
+function closeCapture(){
+  document.getElementById('capture-fx').classList.remove('show');
+  nextEncounter();
+}
+function endSession(){
+  document.getElementById('r-hit').textContent=sess.hit;
+  document.getElementById('r-miss').textContent=sess.miss;
+  document.getElementById('r-cap').textContent=sess.cap;
+  const msgs=[];
+  if(sess.cap>0)msgs.push('오늘 '+sess.cap+'마리 채집 완료!');
+  if(sess.miss===0&&sess.hit>0)msgs.push('전부 정답. 완벽한 복습이었어요.');
+  msgs.push('정답인 몬스터는 1일 → 3일 간격으로 다시 나타납니다.<br>잊어버릴 때쯤 다시 맞혀야 오래 기억에 남아요.');
+  document.getElementById('r-msg').innerHTML=msgs.join('<br>');
+  go('result');
+  document.getElementById('screen-result').classList.add('active');
+}
+
+/* ================= 도감 ================= */
+let dexF='all';
+document.getElementById('dexfilter').addEventListener('click',e=>{
+  const c=e.target.closest('.chip');if(!c)return;
+  dexF=c.dataset.f;
+  document.querySelectorAll('#dexfilter .chip').forEach(x=>x.classList.toggle('on',x===c));
+  renderDex();
+});
+function renderDex(){
+  const total=state.words.length,caught=state.words.filter(w=>w.captured).length;
+  document.getElementById('dexprog').textContent=`${caught} / ${total}`;
+  let list=[...state.words];
+  if(dexF==='caught')list=list.filter(w=>w.captured);
+  if(dexF==='uncaught')list=list.filter(w=>!w.captured);
+  if(dexF==='LEGENDARY')list=list.filter(w=>rarityOf(w).name==='LEGENDARY');
+  list.sort((a,b)=>(b.captured?1:0)-(a.captured?1:0)||b.misses-a.misses);
+  const grid=document.getElementById('dexgrid');
+  if(!list.length){grid.innerHTML='<div class="empty" style="grid-column:1/-1">여기엔 아직 몬스터가 없어요.</div>';return;}
+  grid.innerHTML=list.map(w=>{
+    const r=rarityOf(w);
+    return `<div class="dexcard ${w.captured?'':'uncaught'} ${r.name==='LEGENDARY'?'legend':''}">
+      <div class="dm">${monsterSVG(w.en)}</div>
+      <div class="den">${w.captured?esc(w.en):'???'}</div>
+      <div class="dko">${esc(w.ko)}</div>
+      <div class="dr" style="color:${r.color}">${r.name}${w.captured?'':' · '+w.level+'/3'}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ================= 시작 ================= */
+document.getElementById('mutebtn').textContent=state.muted?'🔇':'🔊';
+go('home');
+</script>
+</body>
+</html>
