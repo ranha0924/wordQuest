@@ -92,7 +92,7 @@ a{color:var(--gold);text-decoration:none;}
 @keyframes wqGlow{0%,100%{box-shadow:0 0 0 2px var(--ink)}50%{box-shadow:0 0 0 2px var(--ink),0 0 10px rgba(232,193,90,.4)}}
 
 /* ===== layout ===== */
-.wq-root{min-height:100vh;background:#07070d;display:flex;justify-content:center;align-items:flex-start;position:relative;padding:18px 14px;
+.wq-root{min-height:100vh;background:#07070d;display:flex;justify-content:center;align-items:stretch;position:relative;padding:18px 14px;
   background-image:
     repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0,rgba(255,255,255,.014) 1px,transparent 1px,transparent 3px),
     repeating-linear-gradient(90deg,rgba(255,255,255,.010) 0,rgba(255,255,255,.010) 1px,transparent 1px,transparent 3px),
@@ -178,6 +178,8 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .ts-cell .ic-fire{margin-left:1px;}
 .themelabel{margin-top:22px;text-align:center;font-family:'Galmuri9',monospace;font-size:9px;letter-spacing:4px;color:var(--dim);text-shadow:1px 1px 0 #000;}
 .themepick{display:flex;gap:14px;justify-content:center;margin-top:9px;}
+/* 테마는 아케이드로 고정 — 전환 UI 숨김 (되돌리려면 이 한 줄만 제거) */
+#themebtn,.themelabel,.themepick{display:none!important;}
 .themesw{display:flex;flex-direction:column;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:3px;opacity:.45;transition:opacity .1s steps(2),transform .08s steps(2);}
 .themesw:hover{opacity:.8;}
 .themesw:active{transform:translateY(1px);}
@@ -836,7 +838,7 @@ $('importfile').addEventListener('change',e=>{
       persist();
       regMsg('백업에서 몬스터 '+data.words.length+'마리를 되살렸다!');
       $('regcount').textContent='서식 중 '+S.words.length+'마리';
-      sfx('capture');renderMute();applyTheme(S.meta.theme||'nes');
+      sfx('capture');renderMute();applyTheme('arcade');
     }catch(err){regMsg('두루마리가 훼손되어 읽을 수 없다… (올바른 백업 파일이 아님)');}
   };
   reader.readAsText(f);
@@ -1254,12 +1256,12 @@ const THEMES=[
 ];
 function themeName(k){const t=THEMES.find(x=>x.k===k);return t?t.name:'NES';}
 function renderThemeBtn(){
-  const cur=S.meta.theme||'nes';
+  const cur='arcade';
   const ic='<svg class="ic" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="2" width="12" height="12" fill="currentColor" opacity=".3"/><rect x="2" y="2" width="6" height="12" fill="currentColor"/><rect x="2" y="2" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1"/></svg>';
   $('themebtn').innerHTML=ic+themeName(cur);
 }
 function renderThemePick(){
-  const cur=S.meta.theme||'nes';
+  const cur='arcade';
   const el=$('themepick');if(!el)return;
   el.innerHTML='';
   THEMES.forEach(t=>{
@@ -1273,18 +1275,18 @@ function renderThemePick(){
   });
 }
 function applyTheme(k){
-  if(!THEMES.some(x=>x.k===k))k='nes';
+  if(!THEMES.some(x=>x.k===k))k='arcade';
   document.documentElement.setAttribute('data-theme',k);
   S.meta.theme=k;persist();
   renderThemePick();renderThemeBtn();
 }
 $('themebtn').addEventListener('click',()=>{
-  const cur=S.meta.theme||'nes';
+  const cur='arcade';
   const i=THEMES.findIndex(x=>x.k===cur);
   applyTheme(THEMES[(i+1)%THEMES.length].k);
   sfx('select');
 });
-applyTheme(S.meta.theme||'nes');
+applyTheme('arcade');
 
 drawDungeon();
 // AI 배경/초상화 로드 (실패 시 절차 생성 폴백)
