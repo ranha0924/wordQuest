@@ -188,7 +188,8 @@
 
 ### 4.11 PWA (설치형 · 오프라인 셸)
 - **목적**: 홈화면 설치 + 네트워크 없이도 앱 로드(오프라인 셸). 기존 오프라인 우선(localStorage) 위에 **셸 자체를 캐시**해 완전 오프라인화. 향후 웹푸시(①의 대안 채널) 토대.
-- **구성**: `manifest.webmanifest`(name·standalone·portrait·`theme_color #101010`/`background_color #080808`·아이콘 3종) + `sw.js`(서비스 워커). `index.html` `<head>`에 manifest·theme-color·apple-touch 메타, 본문 끝에 SW 등록(보안 컨텍스트에서만; `file://`·미지원 시 조용히 무시).
+- **구성**: `manifest.webmanifest`(name·standalone·portrait·`theme_color #101010`/`background_color #080808`·아이콘 3종) + `sw.js`(서비스 워커). `index.html` `<head>`에 manifest·theme-color·apple-touch 메타, 본문 끝에 SW 등록 + **설치 버튼 로직**(보안 컨텍스트에서만; `file://`·미지원 시 조용히 무시).
+- **설치 버튼**: 홈 하단 `#pwa-install`("홈 화면에 앱 설치"). `beforeinstallprompt`를 잡아 기본 배너를 막고 버튼 노출 → 클릭 시 `deferred.prompt()`. `appinstalled`·이미 `display-mode: standalone`이면 숨김. iOS Safari는 이 이벤트 미지원 → 버튼 안 뜸(공유→홈추가는 수동, 향후 힌트 여지).
 - **캐시 전략(`sw.js`)**:
   - **내비게이션**: 네트워크 우선 → 실패 시 캐시된 `index.html`(온라인이면 항상 최신 HTML, 오프라인이면 셸 부팅).
   - **자산(동일 출처 + 정적 CDN 허용목록: googleapis 폰트·gstatic·jsdelivr)**: **stale-while-revalidate** — 캐시 즉시 응답 + 백그라운드 갱신. 배포 후 1회 리로드로 최신화. 폰트/CSS까지 캐시돼 오프라인에서도 레트로 렌더 유지.

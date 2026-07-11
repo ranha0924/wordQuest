@@ -525,6 +525,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="ts-cell"><b id="h-best">0</b><span>최고 콤보</span></div>
         <span style="display:none;"><span id="h-bar"></span><span id="h-c0"></span><span id="h-c1"></span><span id="h-c2"></span><span id="h-c3"></span></span>
       </div>
+      <button class="navbtn" id="pwa-install" style="display:none;margin-top:2px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2H9V7H12L8 11L4 7H7Z M3 12H13V14H3Z"/></svg>홈 화면에 앱 설치</button>
       <div class="themelabel">테마</div>
       <div class="themepick" id="themepick" role="group" aria-label="테마 선택"></div>
       <div class="titlecopy">ⓒ 2026 WORDQUEST</div>
@@ -1732,13 +1733,32 @@ document.addEventListener('visibilitychange',()=>{
 })();
 </script>
 <script type="module" src="cloud.js"></script>
-<!-- PWA: 서비스 워커 등록(보안 컨텍스트에서만 동작 · file://·미지원 시 조용히 무시) -->
+<!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
-if('serviceWorker' in navigator){
-  addEventListener('load',function(){
-    navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('[pwa] SW 등록 실패',e);});
-  });
-}
+(function(){
+  'use strict';
+  if('serviceWorker' in navigator){
+    addEventListener('load',function(){
+      navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('[pwa] SW 등록 실패',e);});
+    });
+  }
+  // 설치 프롬프트: beforeinstallprompt 를 잡아뒀다가 사용자가 버튼을 누를 때 띄운다(Android/데스크톱 Chromium).
+  var deferred=null;
+  var btn=document.getElementById('pwa-install');
+  function standalone(){ return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
+  function show(){ if(btn&&!standalone()) btn.style.display=''; }
+  function hide(){ if(btn) btn.style.display='none'; }
+  addEventListener('beforeinstallprompt',function(e){ e.preventDefault(); deferred=e; show(); });
+  addEventListener('appinstalled',function(){ deferred=null; hide(); });
+  if(btn){
+    btn.addEventListener('click',function(){
+      if(!deferred) return;
+      deferred.prompt();
+      var p=deferred.userChoice; deferred=null; hide();
+      if(p&&p.then) p.catch(function(){});
+    });
+  }
+})();
 </script>
 </body>
 </html>
