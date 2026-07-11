@@ -17,6 +17,10 @@
   | `index.html` | 앱 전체 — 스타일(CSS) + 마크업 + 로직(JS)이 한 파일에. |
   | `words.js` | **단어은행 데이터**(602개). `window.WORDBANK` 배열. 로직과 분리됨. |
   | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 26종(투명 PNG) + `bg.png`·`hero.png`. 외부 CDN 의존 없음. |
+  | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
+  | `firebase-config.js` | Firebase 웹 config(사용자가 값 채움). 비어 있으면 로컬 전용. |
+  | `firestore.rules` | Firestore 보안 규칙(본인 문서만 접근). |
+  | `docs/` | `cloud-sync-design.md`(설계), `firebase-setup.md`(셋업 가이드). |
   | `워드퀘스트-기획서.md` | 최초 기획서 v1(게임 디자인 원안). |
   | `vocamon.html` | 예전 별도 프로토타입. 현행 앱과 무관(정리 대상). |
   | `HANDOFF.md` | 이 문서. |
