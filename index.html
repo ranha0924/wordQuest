@@ -804,10 +804,23 @@ function monAsset(w){
   return set[hash(w.w.toLowerCase())%set.length];
 }
 // 에셋 로드 실패 시 절차 생성 스프라이트로 폴백 (오프라인에서도 동작)
-function setMonImg(img,w){
-  img.onerror=function(){img.onerror=null;img.style.imageRendering='pixelated';img.src=sprite(w.w);};
+// onReady: 새 이미지가 실제로 디코드 완료됐을 때 1회 호출. #b-spr 은 하나의 <img>를
+//          재사용하므로, 준비 전에 노출하면 이전 몬스터 프레임이 잠깐 보이는 깜빡임이 생긴다.
+function setMonImg(img,w,onReady){
+  var fired=false;
+  function done(){if(fired)return;fired=true;if(onReady)onReady();}
+  img.onerror=function(){
+    img.onerror=null;
+    img.style.imageRendering='pixelated';
+    img.onload=function(){img.onload=null;done();};
+    img.src=sprite(w.w);        // 절차 생성 폴백(data URL)
+    if(img.complete)done();     // data URL이 동기 완료된 경우
+  };
+  img.onload=function(){img.onload=null;done();};
   img.style.imageRendering='auto';
   img.src=monAsset(w);
+  if(img.complete)done();       // 캐시/동일 URL로 즉시 완료 시 onload가 안 오므로 직접 처리
+  wait(done,1500);              // 안전장치: 로드 이벤트가 끝내 안 와도 스프라이트가 영영 숨지 않도록
 }
 
 /* ================= sound ================= */
@@ -1183,10 +1196,13 @@ function nextMon(){
   $('b-name').textContent=showName?name:'？？？몬';$('b-name').style.color=r.col;
   $('b-speak').style.display=showName?'inline-flex':'none'; // 이름 가린 모드는 답 후 공개
   const img=$('b-spr');
-  setMonImg(img,w);
-  img.style.animation='none';void img.offsetWidth;
-  img.style.animation='wqAppear .7s ease-out';
-  img.style.opacity='1';
+  img.style.animation='none';        // 이전 등장 애니메이션 취소
+  img.style.opacity='0';             // 새 이미지 준비 전까지 숨김(이전 몬스터 깜빡임 방지)
+  setMonImg(img,w,function(){         // 디코드 완료 후에만 등장 연출 + 노출
+    img.style.animation='none';void img.offsetWidth;
+    img.style.animation='wqAppear .7s ease-out';
+    img.style.opacity='1';
+  });
   renderMonHP(w);renderParty();
   renderRemain(s);
   $('choices').innerHTML='';
