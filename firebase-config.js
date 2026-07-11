@@ -10,10 +10,10 @@
    ※ 이 값들은 클라이언트에 노출돼도 되는 공개 식별자입니다(비밀키 아님).
    ================================================================ */
 window.FIREBASE_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyBeJFT8TIhx3vxuKdruF6G4G5ZNfHoJpX8",
+  authDomain: "wordquest-a250d.firebaseapp.com",
+  projectId: "wordquest-a250d",
+  storageBucket: "wordquest-a250d.firebasestorage.app",
+  messagingSenderId: "363343730753",
+  appId: "1:363343730753:web:8d580304c92874405e0ec0"
 };
