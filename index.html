@@ -341,6 +341,16 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
 .resnext{border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);padding:15px;text-align:center;font-size:13px;color:var(--text);line-height:1.7;}
 .resnext .cmb{color:var(--gold);font-size:17px;}
 .resnext .nx{display:block;font-family:'Galmuri9',monospace;color:var(--dim);font-size:11px;margin-top:8px;}
+/* result: 약점 분석 */
+.resweak{border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);padding:13px 14px;}
+.rw-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;color:var(--gold);text-shadow:1px 1px 0 var(--ink);padding-bottom:9px;margin-bottom:9px;border-bottom:2px solid var(--line);}
+.rw-acc{font-family:'Galmuri9',monospace;font-size:11px;color:var(--text);}
+.rw-list{display:flex;flex-direction:column;gap:6px;}
+.rw-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+.rw-row .rw-w{color:var(--text);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rw-row .rw-m{color:var(--dim);font-family:'Galmuri9',monospace;font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rw-row .rw-s{color:var(--hp);font-family:'Galmuri9',monospace;font-size:10px;flex-shrink:0;}
+.rw-tip{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);margin-top:9px;line-height:1.6;}
 
 /* ===== screen title card (Famicom, matches home) ===== */
 .scr-head{text-align:center;margin:2px 0 6px;user-select:none;}
@@ -602,6 +612,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="rescell"><svg class="ic-r" viewBox="0 0 16 16" fill="var(--gold)" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 1L10 6H15L11 9L12 14L8 11L4 14L5 9L1 6H6Z"/></svg><div class="num" style="color:var(--gold);" id="r-cap">0</div><div class="lbl">포획</div></div>
       </div>
       <div class="resnext">이번 최고 콤보 <span class="cmb" id="r-combo">0</span>연속<span class="nx" id="r-next"></span></div>
+      <div class="resweak" id="r-weak" style="display:none;"></div>
       <button class="goldbox bigbtn" style="font-size:16px;padding:16px;min-height:54px;" data-go="home">▶ 마을로 돌아간다</button>
     </div>
 
@@ -628,7 +639,7 @@ const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundan
    빈칸 모드/예문은 여기 있는 단어에 대해서만 동작하고, 사용자가 붙여넣은 단어가
    철자로 일치하면 자동으로 예문이 연결된다. 아래 배열에 항목만 추가하면 확장된다. */
 const WORDBANK=[
-  {w:'abandon',pos:'v',m:'버리다; 포기하다',ex:'They had to abandon the old house.'},
+  {w:'abandon',pos:'v',m:'버리다; 포기하다',ex:'They had to abandon the old house.',ex2:'Never abandon hope.'},
   {w:'achieve',pos:'v',m:'성취하다',ex:'You can achieve your dreams with effort.'},
   {w:'abundant',pos:'a',m:'풍부한',ex:'The region has abundant natural resources.'},
   {w:'accurate',pos:'a',m:'정확한',ex:'We need an accurate measurement.'},
@@ -638,29 +649,29 @@ const WORDBANK=[
   {w:'courage',pos:'n',m:'용기',ex:'It takes courage to tell the truth.'},
   {w:'delicate',pos:'a',m:'섬세한',ex:'The old vase is very delicate.'},
   {w:'enthusiasm',pos:'n',m:'열정',ex:'She spoke with great enthusiasm.'},
-  {w:'expand',pos:'v',m:'확장하다; 팽창하다',ex:'The company plans to expand its business.'},
+  {w:'expand',pos:'v',m:'확장하다; 팽창하다',ex:'The company plans to expand its business.',ex2:'Metals expand when they are heated.'},
   {w:'fragile',pos:'a',m:'연약한',ex:'Please be careful; the box is fragile.'},
   {w:'hesitate',pos:'v',m:'머뭇거리다',ex:"Don't hesitate to ask for help."},
   {w:'negotiate',pos:'v',m:'협상하다',ex:'The two sides will negotiate a deal.'},
   {w:'overcome',pos:'v',m:'극복하다',ex:'He worked hard to overcome his fear.'},
   {w:'persuade',pos:'v',m:'설득하다',ex:'I tried to persuade him to stay.'},
-  {w:'recover',pos:'v',m:'회복하다; 되찾다',ex:'It took her a week to recover from the flu.'},
+  {w:'recover',pos:'v',m:'회복하다; 되찾다',ex:'It took her a week to recover from the flu.',ex2:'The police helped him recover his stolen bike.'},
   {w:'sacrifice',pos:'v',m:'희생하다',ex:'Parents often sacrifice a lot for their children.'},
   {w:'temporary',pos:'a',m:'일시적인',ex:'This is only a temporary solution.'},
-  {w:'witness',pos:'v',m:'목격하다; 증인',ex:'Did anyone witness the accident?'},
+  {w:'witness',pos:'v',m:'목격하다; 증인',ex:'Did anyone witness the accident?',ex2:'The witness described the suspect to the police.'},
   {w:'ancient',pos:'a',m:'고대의',ex:'They discovered an ancient temple.'},
-  {w:'appreciate',pos:'v',m:'감사하다; 진가를 알다',ex:'I appreciate your help.'},
+  {w:'appreciate',pos:'v',m:'감사하다; 진가를 알다',ex:'I appreciate your help.',ex2:'Few people appreciate good art.'},
   {w:'assume',pos:'v',m:'가정하다',ex:"Let's not assume the worst."},
   {w:'avoid',pos:'v',m:'피하다',ex:'Try to avoid junk food.'},
-  {w:'benefit',pos:'n',m:'이익; 이롭게 하다',ex:'The main benefit is a lower cost.'},
+  {w:'benefit',pos:'n',m:'이익; 이롭게 하다',ex:'The main benefit is a lower cost.',ex2:'The new law will benefit small farms.'},
   {w:'consider',pos:'v',m:'고려하다',ex:'Please consider my suggestion.'},
-  {w:'constant',pos:'a',m:'끊임없는; 상수',ex:'The baby needs constant care.'},
+  {w:'constant',pos:'a',m:'끊임없는; 상수',ex:'The baby needs constant care.',ex2:'In this formula, c is a constant.'},
   {w:'contribute',pos:'v',m:'기여하다',ex:'Everyone should contribute to the team.'},
   {w:'convince',pos:'v',m:'확신시키다',ex:'She managed to convince us.'},
-  {w:'decline',pos:'v',m:'감소하다; 거절하다',ex:'Sales began to decline last year.'},
+  {w:'decline',pos:'v',m:'감소하다; 거절하다',ex:'Sales began to decline last year.',ex2:'She had to decline the invitation.'},
   {w:'dedicate',pos:'v',m:'헌신하다',ex:'He decided to dedicate his life to science.'},
   {w:'defeat',pos:'v',m:'패배시키다',ex:'Our team hopes to defeat the champions.'},
-  {w:'demand',pos:'v',m:'요구하다; 수요',ex:'The workers demand higher pay.'},
+  {w:'demand',pos:'v',m:'요구하다; 수요',ex:'The workers demand higher pay.',ex2:'There is high demand for clean energy.'},
   {w:'deny',pos:'v',m:'부인하다',ex:'He did not deny the mistake.'},
   {w:'distinguish',pos:'v',m:'구별하다',ex:'It is hard to distinguish the twins.'},
   {w:'efficient',pos:'a',m:'효율적인',ex:'We need a more efficient system.'},
@@ -674,13 +685,13 @@ const WORDBANK=[
   {w:'generate',pos:'v',m:'발생시키다',ex:'The plant can generate electricity.'},
   {w:'genuine',pos:'a',m:'진짜의',ex:'This is a genuine diamond.'},
   {w:'gradual',pos:'a',m:'점진적인',ex:'There was a gradual change in the weather.'},
-  {w:'humble',pos:'a',m:'겸손한; 초라한',ex:'Despite his fame, he stayed humble.'},
+  {w:'humble',pos:'a',m:'겸손한; 초라한',ex:'Despite his fame, he stayed humble.',ex2:'They lived in a humble little house.'},
   {w:'ignore',pos:'v',m:'무시하다',ex:'Do not ignore the warning signs.'},
   {w:'imitate',pos:'v',m:'모방하다',ex:'Children often imitate adults.'},
   {w:'indicate',pos:'v',m:'나타내다',ex:'The results indicate a problem.'},
   {w:'inevitable',pos:'a',m:'불가피한',ex:'Change is inevitable.'},
-  {w:'interpret',pos:'v',m:'해석하다; 통역하다',ex:'How do you interpret this poem?'},
-  {w:'maintain',pos:'v',m:'유지하다; 주장하다',ex:'It is important to maintain good health.'},
+  {w:'interpret',pos:'v',m:'해석하다; 통역하다',ex:'How do you interpret this poem?',ex2:'She will interpret for the foreign visitors.'},
+  {w:'maintain',pos:'v',m:'유지하다; 주장하다',ex:'It is important to maintain good health.',ex2:'He continued to maintain that he was innocent.'},
   {w:'obvious',pos:'a',m:'명백한',ex:'The answer is obvious.'},
   {w:'participate',pos:'v',m:'참여하다',ex:'Everyone can participate in the event.'},
   {w:'postpone',pos:'v',m:'연기하다',ex:'We had to postpone the meeting.'},
@@ -689,12 +700,20 @@ const WORDBANK=[
   {w:'reject',pos:'v',m:'거절하다',ex:'They may reject the offer.'},
   {w:'reluctant',pos:'a',m:'꺼리는',ex:'She was reluctant to leave.'},
   {w:'remove',pos:'v',m:'제거하다',ex:'Please remove your shoes.'},
-  {w:'reveal',pos:'v',m:'드러내다; 폭로하다',ex:'The report will reveal the truth.'},
+  {w:'reveal',pos:'v',m:'드러내다; 폭로하다',ex:'The report will reveal the truth.',ex2:'The reporter promised to reveal the scandal.'},
   {w:'significant',pos:'a',m:'중요한',ex:'This is a significant discovery.'}
 ];
 const BANK={};
 WORDBANK.forEach(e=>{BANK[e.w.toLowerCase()]=e;});
 function bankEx(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.ex:null;}
+// 다의어: 예문(ex/ex2)을 각 뜻(;로 구분)에 매핑 → 센스별로 구분해 학습
+function bankSenses(w){
+  const e=BANK[(w.w||'').toLowerCase()];if(!e)return [];
+  const senses=(w.m||'').split(';').map(s=>s.trim()).filter(Boolean);
+  const out=[{ex:e.ex,sense:senses[0]||w.m}];
+  if(e.ex2)out.push({ex:e.ex2,sense:senses[1]||senses[0]||w.m});
+  return out;
+}
 
 /* ================= SRS (간격반복) 파라미터 =================
    stage: 정착 단계(0..MASTER_MAX). 정답 시 +1, 오답 시 0으로 초기화.
@@ -717,7 +736,7 @@ function engSim(a,b){a=(a||'').toLowerCase();b=(b||'').toLowerCase();let pre=0;w
 if(!saved){
   parseText(SAMPLE).forEach(p=>{
     const k=p.w.toLowerCase();
-    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,cap:false,due:today(),created:today()});
+    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,seen:0,cap:false,due:today(),created:today()});
   });
   persist();
 }
@@ -728,6 +747,8 @@ function migrateWords(){
   S.words.forEach(w=>{
     if(w.stage===undefined){w.stage=w.cap?CAPTURE_STAGE:(w.g||0);changed=true;}
     if(w.wrong===undefined){w.wrong=0;changed=true;}
+    // 정답률 추적용 시도횟수. 옛 데이터는 최소 오답 수만큼은 시도했다고 간주
+    if(w.seen===undefined){w.seen=Math.max(w.wrong||0,(w.cap?CAPTURE_STAGE:(w.stage||0)));changed=true;}
     // 예전엔 포획 시 due=null(영원히 안 나옴) → 부드럽게 복습에 재편입
     if(w.cap&&(w.due===null||w.due===undefined)){w.due=addDays(today(),7);changed=true;}
     if('g' in w){delete w.g;changed=true;}
@@ -934,7 +955,7 @@ $('parsebtn').addEventListener('click',()=>{
     const k=p.w.toLowerCase();
     if(existing.has(k)){dup++;return;}
     existing.add(k);
-    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,cap:false,due:today(),created:today()});
+    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,seen:0,cap:false,due:today(),created:today()});
     added++;
   });
   persist();
@@ -1032,9 +1053,9 @@ function clozeText(w,ex){
   const re=new RegExp('\\b'+w.w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
   return ex.replace(re,'______');
 }
-function askText(w,mode){
+function askText(w,mode,pick){
   if(mode==='k2e')return '「'+w.m+'」 …영어로 쓰면?';
-  if(mode==='cloze')return '빈칸에 알맞은 단어는?  '+clozeText(w,bankEx(w))+'  (뜻: '+w.m+')';
+  if(mode==='cloze'){const p=pick||bankSenses(w)[0]||{ex:bankEx(w),sense:w.m};return '빈칸에 알맞은 단어는?  '+clozeText(w,p.ex)+'  (뜻: '+p.sense+')';}
   return '「'+w.w+'」 …이 단어의 뜻은?';
 }
 // 정답이 영어 단어(k2e·cloze)인지 한국어 뜻(e2k)인지에 따라 보기 풀을 다르게 뽑는다.
@@ -1134,9 +1155,11 @@ function nextMon(){
   const r=rarity(w);
   const name=w.w.toUpperCase()+'몬';
   const mode=pickMode(w);
+  // cloze는 다의어면 이번 턴의 센스(예문+뜻)를 하나 골라 고정
+  const pick=mode==='cloze'?(shuffle(bankSenses(w).slice())[0]||null):null;
   // k2e·cloze는 정답이 영어 단어라 몬스터 이름(=영어 단어)이 스포일러 → 답할 때까지 가림
   const showName=(mode==='e2k');
-  S.curId=w.id;S.mode=mode;S.choices=makeChoices(w,mode);S.picked=-1;S.phase='appear';
+  S.curId=w.id;S.mode=mode;S.clozePick=pick;S.choices=makeChoices(w,mode);S.picked=-1;S.phase='appear';
   $('b-rtag').textContent=r.label;
   $('b-rtag').style.color=r.col;$('b-rtag').style.borderColor=r.col;
   $('b-rtag').style.animation=r.key==='legend'?'wqSpark 1.2s infinite':'none';
@@ -1155,7 +1178,7 @@ function nextMon(){
   wait(()=>{
     if(S.phase!=='appear')return;
     S.phase='ask';
-    setMsg(askText(w,mode));
+    setMsg(askText(w,mode,pick));
     renderChoices();
   },1000);
 }
@@ -1167,6 +1190,7 @@ function answer(i){
   const name=w.w.toUpperCase()+'몬';
   const c=S.choices[i];
   const t=today();
+  w.seen=(w.seen||0)+1; // 정답률 추적: 시도 횟수
   S.picked=i;S.phase='resolve';
   revealChoices();
   $('b-name').textContent=name;$('b-name').style.color=rarity(w).col; // 가렸던 이름 공개
@@ -1246,8 +1270,31 @@ function endBattle(){
   $('r-title').textContent=lr.ko?'용사, 쓰러지다…':'던전 탐사 완료!';
   $('r-sub').textContent=lr.ko?'하지만 경험은 남는다. 다시 도전하라!':'몬스터들은 잊혀질 때쯤 다시 돌아온다.';
   $('r-next').textContent=lr.next;
+  renderWeak();
   show('result');
   countUp('r-win',lr.win);countUp('r-hurt',lr.hurt);countUp('r-cap',lr.cap);countUp('r-combo',lr.combo);
+}
+function acc(w){return w.seen?Math.round((w.seen-w.wrong)/w.seen*100):null;}
+// 결과 화면 약점 분석: 오답 많고 정답률 낮은 취약 단어 TOP3 + 전체 정답률
+function renderWeak(){
+  const el=$('r-weak');
+  const seenAll=S.words.filter(w=>w.seen>0);
+  const totSeen=seenAll.reduce((a,w)=>a+w.seen,0);
+  const totWrong=seenAll.reduce((a,w)=>a+w.wrong,0);
+  const overall=totSeen?Math.round((totSeen-totWrong)/totSeen*100):null;
+  const weak=S.words.filter(w=>w.wrong>0)
+    .sort((a,b)=>(b.wrong-a.wrong)||((acc(a)??100)-(acc(b)??100))).slice(0,3);
+  if(!weak.length&&overall===null){el.style.display='none';return;}
+  let html='<div class="rw-h">약점 분석'+(overall!==null?'<span class="rw-acc">전체 정답률 '+overall+'%</span>':'')+'</div>';
+  if(weak.length){
+    html+='<div class="rw-list">'+weak.map(w=>
+      '<div class="rw-row"><span class="rw-w">'+esc(w.w)+'</span><span class="rw-m">'+esc(firstSense(w.m))+'</span>'
+      +'<span class="rw-s">오답 '+w.wrong+'회'+(acc(w)!==null?' · '+acc(w)+'%':'')+'</span></div>').join('')
+      +'</div><div class="rw-tip">이 단어들이 잊혀질 때쯤 다시 출현한다.</div>';
+  }else{
+    html+='<div class="rw-tip">아직 틀린 단어가 없다. 완벽하다!</div>';
+  }
+  el.innerHTML=html;el.style.display='block';
 }
 
 /* ================= dex ================= */
@@ -1291,8 +1338,8 @@ function renderDex(){
     d.style.borderColor=w.cap?r.col:'var(--dexborder)';
     if(w.cap&&r.key==='legend')d.style.animation='wqSpark 1.6s infinite';
     const dueNow=w.due&&w.due<=today();
-    const st=w.stage||0;
-    const capStatus=dueNow?'복습 대기':(w.wrong?'오답 '+w.wrong+'회':'정착 '+st+'/'+MASTER_MAX);
+    const st=w.stage||0;const a=acc(w);
+    const capStatus=dueNow?'복습 대기':((w.wrong?'오답 '+w.wrong+'회':'정착 '+st+'/'+MASTER_MAX)+(a!==null?' · '+a+'%':''));
     const bottom=w.cap
       ? '<div class="sb">'+esc(w.m)+'</div><div class="rl" style="color:'+(dueNow?'var(--hp)':r.col)+'">'+capStatus+'</div>'
       : '<div class="gauge"><i style="width:'+Math.round(Math.min(st,CAPTURE_STAGE)/CAPTURE_STAGE*100)+'%"></i></div><div class="gt">포획까지 '+Math.min(st,CAPTURE_STAGE)+'/'+CAPTURE_STAGE+'</div>';
