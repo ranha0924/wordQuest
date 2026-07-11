@@ -615,14 +615,109 @@ const S={
   dexFilter:'all', lastResult:null
 };
 const SAMPLE='abandon - 버리다\nachieve - 성취하다\nabundant - 풍부한\naccurate - 정확한\nadapt - 적응하다\nadmire - 감탄하다\nforbid - 금지하다\ncourage - 용기\ndelicate - 섬세한\nenthusiasm - 열정\nexpand - 확장하다\nfragile - 연약한\nhesitate - 머뭇거리다\nnegotiate - 협상하다\novercome - 극복하다\npersuade - 설득하다\nrecover - 회복하다\nsacrifice - 희생하다\ntemporary - 일시적인\nwitness - 목격하다';
+/* ================= 교과서 단어은행 (예문 내장) =================
+   고1 수준 상용어 + 문맥 예문. 예문은 대상 단어를 원형 그대로 포함 → 빈칸(cloze) 출제용.
+   빈칸 모드/예문은 여기 있는 단어에 대해서만 동작하고, 사용자가 붙여넣은 단어가
+   철자로 일치하면 자동으로 예문이 연결된다. 아래 배열에 항목만 추가하면 확장된다. */
+const WORDBANK=[
+  {w:'abandon',pos:'v',m:'버리다',ex:'They had to abandon the old house.'},
+  {w:'achieve',pos:'v',m:'성취하다',ex:'You can achieve your dreams with effort.'},
+  {w:'abundant',pos:'a',m:'풍부한',ex:'The region has abundant natural resources.'},
+  {w:'accurate',pos:'a',m:'정확한',ex:'We need an accurate measurement.'},
+  {w:'adapt',pos:'v',m:'적응하다',ex:'Animals must adapt to their environment.'},
+  {w:'admire',pos:'v',m:'감탄하다',ex:'I really admire her courage.'},
+  {w:'forbid',pos:'v',m:'금지하다',ex:'The rules forbid running near the pool.'},
+  {w:'courage',pos:'n',m:'용기',ex:'It takes courage to tell the truth.'},
+  {w:'delicate',pos:'a',m:'섬세한',ex:'The old vase is very delicate.'},
+  {w:'enthusiasm',pos:'n',m:'열정',ex:'She spoke with great enthusiasm.'},
+  {w:'expand',pos:'v',m:'확장하다',ex:'The company plans to expand its business.'},
+  {w:'fragile',pos:'a',m:'연약한',ex:'Please be careful; the box is fragile.'},
+  {w:'hesitate',pos:'v',m:'머뭇거리다',ex:"Don't hesitate to ask for help."},
+  {w:'negotiate',pos:'v',m:'협상하다',ex:'The two sides will negotiate a deal.'},
+  {w:'overcome',pos:'v',m:'극복하다',ex:'He worked hard to overcome his fear.'},
+  {w:'persuade',pos:'v',m:'설득하다',ex:'I tried to persuade him to stay.'},
+  {w:'recover',pos:'v',m:'회복하다',ex:'It took her a week to recover from the flu.'},
+  {w:'sacrifice',pos:'v',m:'희생하다',ex:'Parents often sacrifice a lot for their children.'},
+  {w:'temporary',pos:'a',m:'일시적인',ex:'This is only a temporary solution.'},
+  {w:'witness',pos:'v',m:'목격하다',ex:'Did anyone witness the accident?'},
+  {w:'ancient',pos:'a',m:'고대의',ex:'They discovered an ancient temple.'},
+  {w:'appreciate',pos:'v',m:'감사하다',ex:'I appreciate your help.'},
+  {w:'assume',pos:'v',m:'가정하다',ex:"Let's not assume the worst."},
+  {w:'avoid',pos:'v',m:'피하다',ex:'Try to avoid junk food.'},
+  {w:'benefit',pos:'n',m:'이익',ex:'The main benefit is a lower cost.'},
+  {w:'consider',pos:'v',m:'고려하다',ex:'Please consider my suggestion.'},
+  {w:'constant',pos:'a',m:'끊임없는',ex:'The baby needs constant care.'},
+  {w:'contribute',pos:'v',m:'기여하다',ex:'Everyone should contribute to the team.'},
+  {w:'convince',pos:'v',m:'확신시키다',ex:'She managed to convince us.'},
+  {w:'decline',pos:'v',m:'감소하다',ex:'Sales began to decline last year.'},
+  {w:'dedicate',pos:'v',m:'헌신하다',ex:'He decided to dedicate his life to science.'},
+  {w:'defeat',pos:'v',m:'패배시키다',ex:'Our team hopes to defeat the champions.'},
+  {w:'demand',pos:'v',m:'요구하다',ex:'The workers demand higher pay.'},
+  {w:'deny',pos:'v',m:'부인하다',ex:'He did not deny the mistake.'},
+  {w:'distinguish',pos:'v',m:'구별하다',ex:'It is hard to distinguish the twins.'},
+  {w:'efficient',pos:'a',m:'효율적인',ex:'We need a more efficient system.'},
+  {w:'eliminate',pos:'v',m:'제거하다',ex:'We must eliminate the errors.'},
+  {w:'emphasize',pos:'v',m:'강조하다',ex:'Teachers often emphasize practice.'},
+  {w:'encounter',pos:'v',m:'마주치다',ex:'You may encounter problems at first.'},
+  {w:'ensure',pos:'v',m:'보장하다',ex:'Please ensure the door is locked.'},
+  {w:'essential',pos:'a',m:'필수적인',ex:'Water is essential for life.'},
+  {w:'estimate',pos:'v',m:'추정하다',ex:'Experts estimate the cost at five hundred dollars.'},
+  {w:'exhaust',pos:'v',m:'지치게 하다',ex:'The long trip will exhaust the children.'},
+  {w:'generate',pos:'v',m:'발생시키다',ex:'The plant can generate electricity.'},
+  {w:'genuine',pos:'a',m:'진짜의',ex:'This is a genuine diamond.'},
+  {w:'gradual',pos:'a',m:'점진적인',ex:'There was a gradual change in the weather.'},
+  {w:'humble',pos:'a',m:'겸손한',ex:'Despite his fame, he stayed humble.'},
+  {w:'ignore',pos:'v',m:'무시하다',ex:'Do not ignore the warning signs.'},
+  {w:'imitate',pos:'v',m:'모방하다',ex:'Children often imitate adults.'},
+  {w:'indicate',pos:'v',m:'나타내다',ex:'The results indicate a problem.'},
+  {w:'inevitable',pos:'a',m:'불가피한',ex:'Change is inevitable.'},
+  {w:'interpret',pos:'v',m:'해석하다',ex:'How do you interpret this poem?'},
+  {w:'maintain',pos:'v',m:'유지하다',ex:'It is important to maintain good health.'},
+  {w:'obvious',pos:'a',m:'명백한',ex:'The answer is obvious.'},
+  {w:'participate',pos:'v',m:'참여하다',ex:'Everyone can participate in the event.'},
+  {w:'postpone',pos:'v',m:'연기하다',ex:'We had to postpone the meeting.'},
+  {w:'pretend',pos:'v',m:'~인 척하다',ex:'He likes to pretend to be a hero.'},
+  {w:'prevent',pos:'v',m:'예방하다',ex:'Vaccines help prevent disease.'},
+  {w:'reject',pos:'v',m:'거절하다',ex:'They may reject the offer.'},
+  {w:'reluctant',pos:'a',m:'꺼리는',ex:'She was reluctant to leave.'},
+  {w:'remove',pos:'v',m:'제거하다',ex:'Please remove your shoes.'},
+  {w:'reveal',pos:'v',m:'드러내다',ex:'The report will reveal the truth.'},
+  {w:'significant',pos:'a',m:'중요한',ex:'This is a significant discovery.'}
+];
+const BANK={};
+WORDBANK.forEach(e=>{BANK[e.w.toLowerCase()]=e;});
+function bankEx(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.ex:null;}
+
+/* ================= SRS (간격반복) 파라미터 =================
+   stage: 정착 단계(0..MASTER_MAX). 정답 시 +1, 오답 시 0으로 초기화.
+   LADDER[stage] = 다음 복습까지 일수. CAPTURE_STAGE 도달 시 도감 등록(포획),
+   그 이후에도 사다리를 계속 타며 복습이 이어진다. */
+const MASTER_MAX=6, CAPTURE_STAGE=3;
+const LADDER=[0,1,3,7,16,35,75]; // days until next review, indexed by resulting stage
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
+
 // 첫 방문(저장 데이터 없음)일 때만 샘플 20개 자동 등록. 기존/초기화 사용자는 건드리지 않음.
 if(!saved){
   parseText(SAMPLE).forEach(p=>{
     const k=p.w.toLowerCase();
-    S.words.push({id:k,w:p.w,m:p.m,g:0,wrong:0,cap:false,due:today(),created:today()});
+    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,cap:false,due:today(),created:today()});
   });
   persist();
 }
+// 마이그레이션: 옛 데이터(g/영구졸업)를 stage 기반 + 복습 지속 모델로 변환.
+// 최초 로드와 백업 가져오기 후 모두 실행된다.
+function migrateWords(){
+  let changed=false;
+  S.words.forEach(w=>{
+    if(w.stage===undefined){w.stage=w.cap?CAPTURE_STAGE:(w.g||0);changed=true;}
+    if(w.wrong===undefined){w.wrong=0;changed=true;}
+    // 예전엔 포획 시 due=null(영원히 안 나옴) → 부드럽게 복습에 재편입
+    if(w.cap&&(w.due===null||w.due===undefined)){w.due=addDays(today(),7);changed=true;}
+    if('g' in w){delete w.g;changed=true;}
+  });
+  if(changed)persist();
+}
+migrateWords();
 const timers=[];
 function wait(fn,ms){timers.push(setTimeout(fn,ms));}
 function persist(){try{localStorage.setItem(LSKEY,JSON.stringify({words:S.words,meta:S.meta}));}catch(e){}}
@@ -744,7 +839,8 @@ function show(name){
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{sfx('select');show(b.dataset.go);}));
 
 /* ================= home ================= */
-function dueIds(){const t=today();return S.words.filter(w=>!w.cap&&(!w.due||w.due<=t)).map(w=>w.id);}
+// 오늘 복습 대상: due가 도래한 모든 단어 (포획된 단어도 복습을 위해 다시 출현)
+function dueIds(){const t=today();return S.words.filter(w=>!w.due||w.due<=t).map(w=>w.id);}
 function byId(id){return S.words.find(w=>w.id===id);}
 function renderHome(){
   const total=S.words.length,cap=S.words.filter(w=>w.cap).length;
@@ -767,6 +863,8 @@ function homeMsg(m){$('h-msg').textContent=m;$('h-msg').style.display='block';}
 
 /* ================= register ================= */
 const FALLBACK=['버리다','성취하다','풍부한','정확한','적응하다','감탄하다','금지하다','괴롭히다','계산하다','용기','섬세한','열정','확장하다','연약한','머뭇거리다','거대한','판단하다','유지하다','협상하다','극복하다','설득하다','회복하다','희생하다','일시적인','목격하다','산만하게 하다','고백하다','분위기'];
+// 영어 보기(k2e·cloze)용 폴백 — 등록 단어가 4개 미만일 때 오답 보기를 채운다
+const FALLBACK_EN=['abandon','achieve','accurate','adapt','admire','courage','expand','fragile','hesitate','maintain','overcome','persuade','recover','reveal','ignore','prevent','remove','consider','avoid','ancient','genuine','humble','obvious','essential'];
 function parseText(text){
   const out=[];
   text.split(/\r?\n/).forEach(line=>{
@@ -804,7 +902,7 @@ $('parsebtn').addEventListener('click',()=>{
     const k=p.w.toLowerCase();
     if(existing.has(k)){dup++;return;}
     existing.add(k);
-    S.words.push({id:k,w:p.w,m:p.m,g:0,wrong:0,cap:false,due:today(),created:today()});
+    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,cap:false,due:today(),created:today()});
     added++;
   });
   persist();
@@ -837,6 +935,7 @@ $('importfile').addEventListener('change',e=>{
       if(!Array.isArray(data.words))throw new Error('bad');
       S.words=data.words;
       S.meta=Object.assign({lastDay:null,streak:0,bestCombo:0,muted:false,theme:S.meta.theme},data.meta||{});
+      migrateWords();
       persist();
       regMsg('백업에서 몬스터 '+data.words.length+'마리를 되살렸다!');
       $('regcount').textContent='서식 중 '+S.words.length+'마리';
@@ -884,19 +983,42 @@ window.addEventListener('keydown',e=>{
   }
 });
 
-function makeChoices(w){
-  const others=S.words.filter(x=>x.id!==w.id&&x.m!==w.m).map(x=>x.m);
-  for(let i=others.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=others[i];others[i]=others[j];others[j]=t;}
-  const pool=[];const seen=new Set([w.m]);
-  others.forEach(m=>{if(pool.length<3&&!seen.has(m)){seen.add(m);pool.push(m);}});
-  const fb=FALLBACK.slice();
-  for(let i=fb.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=fb[i];fb[i]=fb[j];fb[j]=t;}
+/* ===== 출제 모드 =====
+   e2k  : 영어 → 한국어 뜻 (재인, 가장 쉬움)      · stage 0~1
+   k2e  : 한국어 뜻 → 영어 단어 (역방향 인출)       · stage 2
+   cloze: 예문 빈칸에 영어 단어 채우기 (문맥 인출)   · stage 3+ (예문 있을 때)
+   단계가 오를수록 어려워져 "재인만으로 포획되는" 문제를 막는다. */
+function pickMode(w){
+  const st=w.stage||0;
+  if(st>=CAPTURE_STAGE&&bankEx(w))return 'cloze';
+  if(st>=2)return 'k2e';
+  return 'e2k';
+}
+function clozeText(w,ex){
+  const re=new RegExp('\\b'+w.w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
+  return ex.replace(re,'______');
+}
+function askText(w,mode){
+  if(mode==='k2e')return '「'+w.m+'」 …영어로 쓰면?';
+  if(mode==='cloze')return '빈칸에 알맞은 단어는?  '+clozeText(w,bankEx(w))+'  (뜻: '+w.m+')';
+  return '「'+w.w+'」 …이 단어의 뜻은?';
+}
+// 정답이 영어 단어(k2e·cloze)인지 한국어 뜻(e2k)인지에 따라 보기 풀을 다르게 뽑는다.
+// x.m!==w.m 필터로 같은 뜻을 가진 단어는 오답 보기에서 제외(중복정답 방지).
+function makeChoices(w,mode){
+  const wantEng=(mode==='k2e'||mode==='cloze');
+  const correct=wantEng?w.w:w.m;
+  const cl=correct.toLowerCase();
+  const others=S.words.filter(x=>x.id!==w.id&&x.m!==w.m).map(x=>wantEng?x.w:x.m);
+  shuffle(others);
+  const pool=[];const seen=new Set([cl]);
+  others.forEach(v=>{const vl=v.toLowerCase();if(pool.length<3&&!seen.has(vl)){seen.add(vl);pool.push(v);}});
+  const fb=shuffle((wantEng?FALLBACK_EN:FALLBACK).slice());
   let fi=0;
-  while(pool.length<3&&fi<fb.length){const m=fb[fi++];if(!seen.has(m)){seen.add(m);pool.push(m);}}
-  const all=pool.map(m=>({t:m,ok:false}));
-  all.push({t:w.m,ok:true});
-  for(let i=all.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=all[i];all[i]=all[j];all[j]=t;}
-  return all;
+  while(pool.length<3&&fi<fb.length){const v=fb[fi++];const vl=v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(v);}}
+  const all=pool.map(v=>({t:v,ok:false}));
+  all.push({t:correct,ok:true});
+  return shuffle(all);
 }
 
 function setMsg(m){$('b-msg').textContent=m;} // 타자기 효과는 하단 MutationObserver가 담당
@@ -925,9 +1047,10 @@ function renderParty(){
   $('b-combo').style.color='var(--gold)';
 }
 function renderMonHP(w){
-  const hp=3-w.g;
-  $('mon-hp').style.width=Math.round(hp/3*100)+'%';
-  $('mon-hp-t').textContent=hp+'/3';
+  // HP바 = 남은 야생성(정착도의 역) — 맞힐수록 줄어들고, 완전 정착(stage MASTER_MAX)에서 0
+  const st=w.stage||0,rem=MASTER_MAX-st;
+  $('mon-hp').style.width=Math.round(rem/MASTER_MAX*100)+'%';
+  $('mon-hp-t').textContent=rem+'/'+MASTER_MAX;
   const exp=S.meta.exp||0;
   $('exp-bar').style.width=(exp%100)+'%';
   $('exp-t').textContent=exp;
@@ -971,11 +1094,14 @@ function nextMon(){
   const w=byId(s.q[0]);
   const r=rarity(w);
   const name=w.w.toUpperCase()+'몬';
-  S.curId=w.id;S.choices=makeChoices(w);S.picked=-1;S.phase='appear';
+  const mode=pickMode(w);
+  // k2e·cloze는 정답이 영어 단어라 몬스터 이름(=영어 단어)이 스포일러 → 답할 때까지 가림
+  const showName=(mode==='e2k');
+  S.curId=w.id;S.mode=mode;S.choices=makeChoices(w,mode);S.picked=-1;S.phase='appear';
   $('b-rtag').textContent=r.label;
   $('b-rtag').style.color=r.col;$('b-rtag').style.borderColor=r.col;
   $('b-rtag').style.animation=r.key==='legend'?'wqSpark 1.2s infinite':'none';
-  $('b-name').textContent=name;$('b-name').style.color=r.col;
+  $('b-name').textContent=showName?name:'？？？몬';$('b-name').style.color=r.col;
   const img=$('b-spr');
   setMonImg(img,w);
   img.style.animation='none';void img.offsetWidth;
@@ -984,12 +1110,12 @@ function nextMon(){
   renderMonHP(w);renderParty();
   renderRemain(s);
   $('choices').innerHTML='';
-  setMsg('야생의 '+name+'이 나타났다!');
+  setMsg(showName?('야생의 '+name+'이 나타났다!'):'야생의 몬스터가 나타났다!');
   sfx('appear');
   wait(()=>{
     if(S.phase!=='appear')return;
     S.phase='ask';
-    setMsg('「'+w.w+'」 …이 단어의 뜻은?');
+    setMsg(askText(w,mode));
     renderChoices();
   },1000);
 }
@@ -1003,18 +1129,23 @@ function answer(i){
   const t=today();
   S.picked=i;S.phase='resolve';
   revealChoices();
+  $('b-name').textContent=name;$('b-name').style.color=rarity(w).col; // 가렸던 이름 공개
   const img=$('b-spr');
 
   if(c.ok){
     s.combo++;s.best=Math.max(s.best,s.combo);s.win++;
     if(s.combo>(S.meta.bestCombo||0))S.meta.bestCombo=s.combo;
     S.meta.exp=(S.meta.exp||0)+10;
-    w.g=Math.min(3,w.g+1);
+    const wasCap=w.cap;
+    w.stage=Math.min(MASTER_MAX,(w.stage||0)+1);
+    const gap=LADDER[w.stage];
+    w.due=addDays(t,gap);
     s.q=s.q.slice(1);
-    if(w.g>=3){
-      w.cap=true;w.capAt=t;w.due=null;s.cap++;
+    if(!wasCap&&w.stage>=CAPTURE_STAGE){
+      // 최초 포획: 도감 등록 (이후에도 복습은 계속 이어진다)
+      w.cap=true;w.capAt=t;s.cap++;
       S.meta.exp+=40;
-      setMsg('포획 성공! '+name+'이 도감에 등록되었다!'+(rarity(w).key==='legend'?' 전설의 사냥꾼이여…!':''));
+      setMsg('포획 성공! '+name+'이 도감에 등록되었다! (다음 복습: '+gap+'일 뒤)'+(rarity(w).key==='legend'?' 전설의 사냥꾼이여…!':''));
       sfx('capture');
       img.style.animation='none';void img.offsetWidth;
       img.style.animation='wqCapture 1.4s forwards';
@@ -1022,9 +1153,10 @@ function answer(i){
       renderMonHP(w);renderParty();persist();
       wait(()=>nextMon(),2100);
     }else{
-      const gap=w.g===1?1:3;
-      w.due=addDays(t,gap);
-      setMsg('명중! '+name+'은 상처를 입고 도주했다. (다음 출현: '+gap+'일 뒤, 게이지 '+w.g+'/3)');
+      const msg=wasCap
+        ? '복습 성공! '+name+'은 흡족해하며 돌아갔다. (다음 복습: '+gap+'일 뒤, 정착 '+w.stage+'/'+MASTER_MAX+')'
+        : '명중! '+name+'은 상처를 입고 도주했다. (다음 출현: '+gap+'일 뒤, 포획까지 '+w.stage+'/'+CAPTURE_STAGE+')';
+      setMsg(msg);
       sfx('correct');
       img.style.animation='none';void img.offsetWidth;
       img.style.animation='wqCorrectHit .55s ease-out';
@@ -1034,10 +1166,10 @@ function answer(i){
     }
   }else{
     s.combo=0;s.hurt++;s.hearts--;
-    w.wrong++;w.g=0;w.due=t;
+    w.wrong++;w.stage=0;w.due=t;
     s.q=s.q.slice(1);s.q.push(w.id);
     const r=rarity(w);
-    let m='으악! 정답은 「'+w.m+'」… '+name+'의 반격! (게이지 초기화';
+    let m='으악! 정답은 「'+w.w+' = '+w.m+'」… '+name+'의 반격! (정착 초기화';
     m+=(w.wrong===1||w.wrong===3||w.wrong===5)?(', '+r.short+' 등급으로 강화!)'):')';
     setMsg(m);
     sfx('wrong');
@@ -1061,7 +1193,7 @@ function answer(i){
 function endBattle(){
   const s=S.session||{win:0,hurt:0,cap:0,best:0,hearts:1,q:[]};
   const t=today(),tomorrow=addDays(t,1);
-  const laterDue=S.words.filter(w=>!w.cap&&w.due&&w.due<=tomorrow&&w.due>t).length;
+  const laterDue=S.words.filter(w=>w.due&&w.due<=tomorrow&&w.due>t).length;
   const remainNow=s.q.length;
   let next;
   if(remainNow)next='아직 던전에 몬스터 '+remainNow+'마리가 남아 있다. 재입장 가능!';
@@ -1117,9 +1249,12 @@ function renderDex(){
     d.className='dexcard'+(w.cap?'':' uncap');
     d.style.borderColor=w.cap?r.col:'var(--dexborder)';
     if(w.cap&&r.key==='legend')d.style.animation='wqSpark 1.6s infinite';
+    const dueNow=w.due&&w.due<=today();
+    const st=w.stage||0;
+    const capStatus=dueNow?'복습 대기':(w.wrong?'오답 '+w.wrong+'회':'정착 '+st+'/'+MASTER_MAX);
     const bottom=w.cap
-      ? '<div class="sb">'+esc(w.m)+'</div><div class="rl" style="color:'+r.col+'">'+(w.wrong?'오답 '+w.wrong+'회':'포획 완료')+'</div>'
-      : '<div class="gauge"><i style="width:'+Math.round(w.g/3*100)+'%"></i></div><div class="gt">포획 게이지 '+w.g+'/3</div>';
+      ? '<div class="sb">'+esc(w.m)+'</div><div class="rl" style="color:'+(dueNow?'var(--hp)':r.col)+'">'+capStatus+'</div>'
+      : '<div class="gauge"><i style="width:'+Math.round(Math.min(st,CAPTURE_STAGE)/CAPTURE_STAGE*100)+'%"></i></div><div class="gt">포획까지 '+Math.min(st,CAPTURE_STAGE)+'/'+CAPTURE_STAGE+'</div>';
     d.innerHTML=(w.cap?'<div class="rtag2" style="background:'+r.col+'">'+r.short+'</div>':'')
       +'<img alt="" style="filter:'+(w.cap?'none':'brightness(0) opacity(.75)')+'">'
       +'<div class="nm" style="color:'+(w.cap?'var(--text)':'var(--namedim)')+'">'+(w.cap?esc(w.w.toUpperCase())+'몬':'???')+'</div>'
