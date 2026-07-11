@@ -247,6 +247,18 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .choice.no .arrow{opacity:1;color:var(--hp);animation:none;}
 .choice.dim{color:var(--dim);background:var(--win);box-shadow:none;}
 .choice:disabled{cursor:default;}
+/* 타이핑 철자 입력 (k2e·cloze) */
+.spellbox{padding:10px;border:8px solid transparent;border-image:var(--frame-gold) 3 fill;background:var(--win);flex-direction:column;gap:7px;}
+.spellhint{font-family:'Press Start 2P','Galmuri11',monospace;font-size:15px;letter-spacing:3px;color:var(--gold);text-align:center;text-shadow:2px 2px 0 var(--ink);word-break:break-all;line-height:1.4;}
+.spellcount{font-family:'Galmuri9',monospace;font-size:10px;color:var(--sub);text-align:center;letter-spacing:1px;}
+.spellrow{display:flex;gap:6px;}
+.spellin{flex:1;min-width:0;background:var(--ink);border:2px solid var(--steel);color:var(--text);font-family:'Galmuri11',monospace;font-size:17px;padding:10px 12px;letter-spacing:2px;}
+.spellin:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 2px var(--ink);}
+.spellin.ok{border-color:var(--ok);color:#8ff0a8;}
+.spellin.no{border-color:var(--hp);color:#f09a9a;}
+.spellsubmit{flex-shrink:0;background:var(--win);border:2px solid var(--ink);color:#fff;font-size:14px;padding:0 16px;cursor:pointer;text-shadow:1px 1px 0 rgba(0,0,0,.5);}
+.spellsubmit:hover{background:var(--gold);color:var(--ink);border-color:var(--ink);text-shadow:none;}
+.spellsubmit:active{transform:translateY(1px);}
 .party{display:flex;align-items:center;gap:12px;padding:10px 14px;}
 .party img{width:44px;height:44px;image-rendering:pixelated;border:2px solid var(--ink);box-shadow:0 0 0 2px var(--steel);background:var(--night);}
 .pbars{flex:1;display:flex;flex-direction:column;gap:4px;}
@@ -536,6 +548,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <div class="goldbox msgbox"><span id="b-msg"></span><span class="cur">▼</span></div>
       <div class="btmzone">
         <div class="choices" id="choices"></div>
+        <div class="spellbox" id="spellbox" style="display:none;"></div>
         <div class="goldbox party">
           <img id="heroface" src="" alt="hero">
           <div class="pbars">
@@ -1030,7 +1043,7 @@ $('fleebtn').addEventListener('click',()=>{
   endBattle();
 });
 window.addEventListener('keydown',e=>{
-  if(S.screen==='battle'&&S.phase==='ask'){
+  if(S.screen==='battle'&&S.phase==='ask'&&S.mode==='e2k'){
     const n=parseInt(e.key,10);
     if(n>=1&&n<=4)answer(n-1);
   }
@@ -1117,6 +1130,7 @@ function renderMonHP(w){
 }
 function renderChoices(){
   const el=$('choices');
+  el.style.display='';const sbx=$('spellbox');if(sbx){sbx.style.display='none';sbx.innerHTML='';}
   el.innerHTML='';
   S.choices.forEach((c,i)=>{
     const b=document.createElement('button');
@@ -1125,6 +1139,25 @@ function renderChoices(){
     b.addEventListener('click',()=>answer(i));
     el.appendChild(b);
   });
+}
+// 타이핑 입력 UI (k2e·cloze). 글자 수만큼 ○ 힌트, 입력하면 ●로 채워짐.
+function renderSpellInput(w){
+  $('choices').style.display='none';
+  const box=$('spellbox');box.style.display='flex';
+  const n=(w.w||'').length;
+  const dots=Array.from({length:n},()=>'○').join(' ');
+  box.innerHTML='<div class="spellhint" id="spellhint">'+dots+'</div>'
+    +'<div class="spellcount">'+n+'글자 · 영어로 입력</div>'
+    +'<div class="spellrow"><input class="spellin" id="spellin" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" enterkeyhint="done" aria-label="영어 철자 입력">'
+    +'<button class="spellsubmit" id="spellsubmit" type="button">▶ 확인</button></div>';
+  const inp=$('spellin');
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitSpell();}});
+  inp.addEventListener('input',()=>{
+    const k=Math.min(inp.value.length,n);
+    $('spellhint').textContent=Array.from({length:n},(_,i)=>i<k?'●':'○').join(' ');
+  });
+  $('spellsubmit').addEventListener('click',submitSpell);
+  setTimeout(()=>{try{inp.focus();}catch(e){}},60);
 }
 function revealChoices(){
   const btns=$('choices').children;
@@ -1159,7 +1192,8 @@ function nextMon(){
   const pick=mode==='cloze'?(shuffle(bankSenses(w).slice())[0]||null):null;
   // k2e·cloze는 정답이 영어 단어라 몬스터 이름(=영어 단어)이 스포일러 → 답할 때까지 가림
   const showName=(mode==='e2k');
-  S.curId=w.id;S.mode=mode;S.clozePick=pick;S.choices=makeChoices(w,mode);S.picked=-1;S.phase='appear';
+  const typing=(mode==='k2e'||mode==='cloze'); // 이 두 모드는 4지선다 대신 철자 타이핑
+  S.curId=w.id;S.mode=mode;S.clozePick=pick;S.spellVal='';S.choices=typing?[]:makeChoices(w,mode);S.picked=-1;S.phase='appear';
   $('b-rtag').textContent=r.label;
   $('b-rtag').style.color=r.col;$('b-rtag').style.borderColor=r.col;
   $('b-rtag').style.animation=r.key==='legend'?'wqSpark 1.2s infinite':'none';
@@ -1173,31 +1207,51 @@ function nextMon(){
   renderMonHP(w);renderParty();
   renderRemain(s);
   $('choices').innerHTML='';
+  const sbx=$('spellbox');if(sbx){sbx.innerHTML='';sbx.style.display='none';}
   setMsg(showName?('야생의 '+name+'이 나타났다!'):'야생의 몬스터가 나타났다!');
   sfx('appear');
   wait(()=>{
     if(S.phase!=='appear')return;
     S.phase='ask';
     setMsg(askText(w,mode,pick));
-    renderChoices();
+    if(typing)renderSpellInput(w);else renderChoices();
   },1000);
 }
 
+// e2k(4지선다) 선택 응답
 function answer(i){
+  if(S.phase!=='ask'||S.mode!=='e2k')return;
+  const c=S.choices[i];if(!c)return;
+  S.picked=i;
+  revealChoices();
+  resolveAnswer(c.ok);
+}
+// k2e·cloze(타이핑) 철자 응답 — 대소문자·앞뒤 공백 무시, 정확 철자만 정답
+function submitSpell(){
   if(S.phase!=='ask')return;
+  const inp=$('spellin');if(!inp)return;
+  const val=inp.value.trim();
+  if(!val){inp.focus();return;}
+  const w=byId(S.curId);
+  const correct=val.toLowerCase()===(w.w||'').toLowerCase();
+  S.spellVal=val;
+  inp.disabled=true;const sb=$('spellsubmit');if(sb)sb.disabled=true;
+  inp.classList.add(correct?'ok':'no');
+  resolveAnswer(correct);
+}
+// 정답 여부 확정 후 공통 처리: 정답률·SRS·연출·다음 몬스터
+function resolveAnswer(correct){
   const s=S.session;
   const w=byId(S.curId);
   const name=w.w.toUpperCase()+'몬';
-  const c=S.choices[i];
   const t=today();
   w.seen=(w.seen||0)+1; // 정답률 추적: 시도 횟수
-  S.picked=i;S.phase='resolve';
-  revealChoices();
+  S.phase='resolve';
   $('b-name').textContent=name;$('b-name').style.color=rarity(w).col; // 가렸던 이름 공개
   $('b-speak').style.display='inline-flex';speak(w.w); // 정답 공개 시 발음 자동 재생 + 버튼 노출
   const img=$('b-spr');
 
-  if(c.ok){
+  if(correct){
     s.combo++;s.best=Math.max(s.best,s.combo);s.win++;
     if(s.combo>(S.meta.bestCombo||0))S.meta.bestCombo=s.combo;
     S.meta.exp=(S.meta.exp||0)+10;
@@ -1234,7 +1288,10 @@ function answer(i){
     w.wrong++;w.stage=0;w.due=t;
     s.q=s.q.slice(1);s.q.push(w.id);
     const r=rarity(w);
-    let m='으악! 정답은 「'+w.w+' = '+w.m+'」… '+name+'의 반격! (정착 초기화';
+    // 타이핑 모드에서 1글자 차이면 "거의 맞았다" 안내(여전히 오답)
+    const typed=(S.mode==='k2e'||S.mode==='cloze')?(S.spellVal||''):'';
+    const near=typed&&typed.toLowerCase()!==(w.w||'').toLowerCase()&&lev(typed.toLowerCase(),(w.w||'').toLowerCase())<=1;
+    let m=(near?'아깝다! 한 글자 차이다. ':'으악! ')+'정답은 「'+w.w+' = '+w.m+'」… '+name+'의 반격! (정착 초기화';
     m+=(w.wrong===1||w.wrong===3||w.wrong===5)?(', '+r.short+' 등급으로 강화!)'):')';
     setMsg(m);
     sfx('wrong');
