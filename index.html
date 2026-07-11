@@ -426,8 +426,10 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
 /* NES-style buttons: hard press, hover invert */
 .parsebtn,.bigbtn{box-shadow:4px 4px 0 var(--ink);transition:none;}
 .parsebtn:active,.bigbtn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink);}
-.navbtn:hover,.subbtn:hover,.mutebtn:hover,.fchip:hover{background:var(--gold)!important;color:var(--ink)!important;}
-.navbtn:hover *,.subbtn:hover *,.mutebtn:hover *{color:var(--ink)!important;}
+/* invert on hover: kill the border-image fill so the gold bg actually shows
+   (fill was painting the frame's dark center over the gold, hiding ink text) */
+.navbtn:hover,.subbtn:hover,.mutebtn:hover,.fchip:hover{background:var(--gold)!important;border-image:none!important;border-color:var(--ink)!important;color:var(--ink)!important;}
+.navbtn:hover *,.subbtn:hover *,.mutebtn:hover *,.fchip:hover *{color:var(--ink)!important;}
 /* menu cursor ▶ (blinking) */
 .mrow .star{font-size:14px;}
 /* pixel scrollbar */
