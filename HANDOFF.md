@@ -3,7 +3,7 @@
 > 단어 도감 · WORD QUEST — 영단어 복습을 16비트 JRPG 턴제 전투로 포장한 학습 웹앱.
 > "틀린 단어는 보스가 된다." 대상: 고1(내신·수능 기초 어휘).
 
-최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA 추가) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
+최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA + 부사 46개 보강) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
 ---
 
@@ -15,7 +15,7 @@
   | 파일 | 역할 |
   |---|---|
   | `index.html` | 앱 전체 — 스타일(CSS) + 마크업 + 로직(JS)이 한 파일에. |
-  | `words.js` | **단어은행 데이터**(602개). `window.WORDBANK` 배열. 로직과 분리됨. |
+  | `words.js` | **단어은행 데이터**(648개). `window.WORDBANK` 배열. 로직과 분리됨. |
   | `manifest.webmanifest` · `sw.js` | **PWA** — 설치형 매니페스트 + 서비스 워커(앱 셸 오프라인 캐시). 참고 §4.11. |
   | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 26종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
   | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
@@ -69,7 +69,8 @@
 
 - 냉정 평가 **최대 약점 ① 복귀 알림** 대응: 코드/워크플로/문서 **완성**. 로직은 단위 테스트(7)·fixture 드라이런·브라우저 토글 검증(9) 통과.
   - **활성화만 남음**: 사용자가 시크릿 3종(SendGrid 키·발신 이메일·Firebase 서비스계정) 등록하면 발송 시작(§4.10, `docs/reminder-setup.md`). 실메일 라이브 발송은 사용자 셋업 후 확인 예정.
-- **PWA(Phase B) 완료**: 설치 가능 + **오프라인 완전 부팅** 검증(HTTP 서버 + Playwright: SW 등록·제어·캐시·오프라인 리로드 시 WORDBANK 602 로드·폰트/CSS 렌더까지 확인). 향후 웹푸시 토대.
+- **PWA(Phase B) 완료**: 설치 가능 + **오프라인 완전 부팅** 검증(HTTP 서버 + Playwright: SW 등록·제어·캐시·오프라인 리로드 시 WORDBANK 전량 로드·폰트/CSS 렌더까지 확인). 향후 웹푸시 토대.
+- **단어은행 품질 1차 보강**: 품사 편중(부사 3개뿐) 완화 — 고빈도 수능 부사 46개 추가(부사 3→49, 총 648). 후보를 중복·예문 원형 포함·아포스트로피 자동 검증 후 삽입, 브라우저에서 BANK 조회·clozable·posOf 확인.
 - **미완(백로그 §8)**: 동기화 두 기기 병합 라이브 최종검증(사용자 Firebase 셋업 후) · ① 실메일 라이브.
 
 ---
@@ -146,7 +147,7 @@
 - 결과 화면 `renderWeak()`: 전체 정답률 + 취약 단어 TOP3(오답순). 도감 카드에도 정답률 표시.
 
 ### 4.7 단어은행 & 시딩
-- `words.js`의 `window.WORDBANK`(602개) → `BANK`(소문자 키 맵). `bankEx()`/`bankSenses()`/`clozable()`/`posOf()`.
+- `words.js`의 `window.WORDBANK`(648개) → `BANK`(소문자 키 맵). `bankEx()`/`bankSenses()`/`clozable()`/`posOf()`.
 - 첫 방문: `SAMPLE` 20개 자동 시딩.
 - **영입소** 3가지 등록: (1) 붙여넣기(`abandon - 버리다` 형식, `parseText()`), (2) 샘플 20개 버튼, (3) **"교과서 고빈도 단어 담기"** 버튼 = 은행 전체를 **하루 25개씩 순차 출현**(staggered due)하도록 시딩.
 - 붙여넣은 단어가 은행과 철자 일치하면 예문·품사 자동 연결.
@@ -169,7 +170,7 @@
 ### 4.9 클라우드 동기화 (선택 · 오프라인 우선)
 - **목적**: localStorage 단독의 데이터 취약성 해소 — 기기 이동·브라우저 정리 시 진도 보존(냉정 평가 약점 ②).
 - **스택**: `cloud.js` = Firebase Auth(이메일 링크, 패스워드리스) + Firestore. SDK는 gstatic ESM CDN에서 **동적 import**(빌드 도구 없음). `firebase-config.js`가 비면 `window.Cloud`=no-op → **완전 로컬 전용**(회귀 0). 로그인은 **선택**.
-- **데이터**: `users/{uid}` 문서 1개 = `{ schema:1, words:{<id>:{...word,updatedAt}}, meta:{...,updatedAt} }` (602단어 ~120KB < 1MB 한도).
+- **데이터**: `users/{uid}` 문서 1개 = `{ schema:1, words:{<id>:{...word,updatedAt}}, meta:{...,updatedAt} }` (648단어 ~130KB < 1MB 한도).
 - **병합(단어별 최신 우선)**: `resolveAnswer`에서 변경 단어에 `updatedAt` 스탬프. 동기화 = pull → merge(단어별 `updatedAt` 큰 쪽, meta는 LWW) → 로컬 반영(`WQ.applyMerged`) + 원격 write. **한 기기가 다른 기기 진도를 덮지 않음.** 리셋 시 원격도 비움(`Cloud.wipeRemote`).
 - **트리거**: 로그인 직후·앱 로드·변경 후 디바운스(3s)·탭 이탈(`visibilitychange`). 전투 중(`WQ.isBusy`)엔 로컬 반영 생략(원격 write만) → 진행 방해 방지. `persist()`가 `cloudApplying` 플래그로 병합 반영 중 재-푸시를 막음.
 - **UI**: 영입소 **상단** "☁ 클라우드 동기화"(미설정 시 숨김). 훅: `window.WQ`(getState/applyMerged/setSyncStatus/isBusy) ↔ `window.Cloud`(signIn/signOutUser/syncNow/notifyChanged/wipeRemote).
@@ -196,7 +197,7 @@
   - **Firebase Auth/Firestore 등 그 외 교차 출처**: **개입 안 함(캐시 우회)** → 실시간 동기화 보존. 비-GET도 통과.
 - **버전 관리**: `sw.js`의 `VERSION` 상수(현재 `v1`). 셸 파일 크게 바꾸면 올려서 구 캐시(`wq-v1`) 무효화. activate에서 현재 캐시 외 전부 삭제 + `clients.claim()`.
 - **아이콘**: `assets/icons/`(앰버 픽셀 몬스터, 다크 네이비 방사배경). 192·512(any) + maskable-512(넉넉한 안전지대) + apple-180. `scratchpad/gen-icon.mjs`로 수학 래스터화 후 Chromium 렌더 생성(교체 시 재생성).
-- **검증**: `file://`은 SW 미동작 → HTTP 서버 필요(`python3 -m http.server 8792`). Playwright로 SW 등록·제어·캐시 적재·**오프라인 리로드 부팅(WORDBANK 602)**·manifest 파싱·아이콘 200 전부 통과.
+- **검증**: `file://`은 SW 미동작 → HTTP 서버 필요(`python3 -m http.server 8792`). Playwright로 SW 등록·제어·캐시 적재·**오프라인 리로드 부팅(WORDBANK 전량)**·manifest 파싱·아이콘 200 전부 통과.
 
 ---
 
@@ -255,7 +256,7 @@
 - **웹푸시 알림**(선택) — PWA(§4.11) 위에 Push API + Firebase Cloud Messaging. ①의 이메일 대안(설치 사용자 대상). 서비스 워커 준비됨.
 
 **그 외:**
-- **단어은행 품질**: 품사 편중(동사 356·명사 111·부사 3) 보정, 특정 출판사 시험범위 매핑, 다의어 2예문 확충(현재 `ex2` 13/602).
+- **단어은행 품질**: 부사 3→49로 1차 보정 완료(총 648). 남은 편중(동사 356·형용사 132·명사 111 대비 부사 여전히 적음)·특정 출판사 시험범위 매핑·다의어 2예문 확충(현재 `ex2` 14/648) 여지.
 - **듣기 모드**: 예문/단어 음성 → 받아쓰기 또는 4지선다.
 - 오답 통계 대시보드 확장, 콜로케이션, `vocamon.html` 레거시 정리.
 - ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**, **PWA 설치형·오프라인 셸(§4.11)**.
