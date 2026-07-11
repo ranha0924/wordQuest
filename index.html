@@ -206,6 +206,13 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
   border:6px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);box-shadow:0 4px 0 rgba(0,0,0,.55);}
 .rtag{font-family:'Galmuri9',monospace;font-size:10px;padding:3px 7px;border:2px solid;letter-spacing:.5px;flex-shrink:0;line-height:1.1;}
 .monname{font-size:17px;text-shadow:2px 2px 0 var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* 발음 버튼(스피커) */
+.spk{display:inline-flex;align-items:center;justify-content:center;background:var(--night);border:2px solid var(--line);color:var(--gold);padding:2px 5px;cursor:pointer;line-height:0;flex-shrink:0;vertical-align:middle;transition:transform .08s steps(2);}
+.spk:hover{background:var(--gold);border-color:var(--ink);color:var(--ink);}
+.spk:active{transform:translateY(1px);}
+.nameplate .spk{margin-left:1px;}
+.dexcard .nm{display:flex;align-items:center;justify-content:center;gap:5px;}
+.dexcard .spk{padding:1px 4px;}
 .monbox{position:relative;width:156px;height:142px;display:flex;align-items:center;justify-content:center;}
 .monbox img{width:144px;height:132px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 12px 8px rgba(0,0,0,.55));}
 .arena.hasbg #bgcv,.arena.hasbg .torch{display:none;}
@@ -510,6 +517,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
           <div class="nameplate">
             <span class="rtag" id="b-rtag"></span>
             <span class="monname" id="b-name"></span>
+            <button class="spk" id="b-speak" type="button" title="발음 듣기" aria-label="발음 듣기" style="display:none;"></button>
           </div>
           <div class="monbox" id="monbox"><img id="b-spr" src="" alt="monster"></div>
         </div>
@@ -541,10 +549,10 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <div class="regex">
         <span>abandon <b>-</b> 버리다</span>
         <span>achieve <b>:</b> 성취하다</span>
-        <span>abundant <b>,</b> 풍부한</span>
-        <span>탭 · 공백 구분</span>
+        <span>witness <b>-</b> 목격하다<b>;</b> 증인</span>
+        <span>여러 뜻은 <b>;</b> 로 구분</span>
       </div>
-      <textarea class="reg" id="regtext" placeholder="abandon - 버리다&#10;achieve - 성취하다&#10;abundant - 풍부한"></textarea>
+      <textarea class="reg" id="regtext" placeholder="abandon - 버리다; 포기하다&#10;achieve - 성취하다&#10;witness - 목격하다; 증인"></textarea>
       <div class="regfoot">
         <div class="regdetect" id="regdetect"><b>0</b>개 인식</div>
         <button class="parsebtn" id="parsebtn">▶ 몬스터 영입!</button>
@@ -614,13 +622,13 @@ const S={
   screen:'home', session:null, curId:null, choices:[], phase:'idle', picked:-1,
   dexFilter:'all', lastResult:null
 };
-const SAMPLE='abandon - 버리다\nachieve - 성취하다\nabundant - 풍부한\naccurate - 정확한\nadapt - 적응하다\nadmire - 감탄하다\nforbid - 금지하다\ncourage - 용기\ndelicate - 섬세한\nenthusiasm - 열정\nexpand - 확장하다\nfragile - 연약한\nhesitate - 머뭇거리다\nnegotiate - 협상하다\novercome - 극복하다\npersuade - 설득하다\nrecover - 회복하다\nsacrifice - 희생하다\ntemporary - 일시적인\nwitness - 목격하다';
+const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundant - 풍부한\naccurate - 정확한\nadapt - 적응하다\nadmire - 감탄하다\nforbid - 금지하다\ncourage - 용기\ndelicate - 섬세한\nenthusiasm - 열정\nexpand - 확장하다; 팽창하다\nfragile - 연약한\nhesitate - 머뭇거리다\nnegotiate - 협상하다\novercome - 극복하다\npersuade - 설득하다\nrecover - 회복하다; 되찾다\nsacrifice - 희생하다\ntemporary - 일시적인\nwitness - 목격하다; 증인';
 /* ================= 교과서 단어은행 (예문 내장) =================
    고1 수준 상용어 + 문맥 예문. 예문은 대상 단어를 원형 그대로 포함 → 빈칸(cloze) 출제용.
    빈칸 모드/예문은 여기 있는 단어에 대해서만 동작하고, 사용자가 붙여넣은 단어가
    철자로 일치하면 자동으로 예문이 연결된다. 아래 배열에 항목만 추가하면 확장된다. */
 const WORDBANK=[
-  {w:'abandon',pos:'v',m:'버리다',ex:'They had to abandon the old house.'},
+  {w:'abandon',pos:'v',m:'버리다; 포기하다',ex:'They had to abandon the old house.'},
   {w:'achieve',pos:'v',m:'성취하다',ex:'You can achieve your dreams with effort.'},
   {w:'abundant',pos:'a',m:'풍부한',ex:'The region has abundant natural resources.'},
   {w:'accurate',pos:'a',m:'정확한',ex:'We need an accurate measurement.'},
@@ -630,29 +638,29 @@ const WORDBANK=[
   {w:'courage',pos:'n',m:'용기',ex:'It takes courage to tell the truth.'},
   {w:'delicate',pos:'a',m:'섬세한',ex:'The old vase is very delicate.'},
   {w:'enthusiasm',pos:'n',m:'열정',ex:'She spoke with great enthusiasm.'},
-  {w:'expand',pos:'v',m:'확장하다',ex:'The company plans to expand its business.'},
+  {w:'expand',pos:'v',m:'확장하다; 팽창하다',ex:'The company plans to expand its business.'},
   {w:'fragile',pos:'a',m:'연약한',ex:'Please be careful; the box is fragile.'},
   {w:'hesitate',pos:'v',m:'머뭇거리다',ex:"Don't hesitate to ask for help."},
   {w:'negotiate',pos:'v',m:'협상하다',ex:'The two sides will negotiate a deal.'},
   {w:'overcome',pos:'v',m:'극복하다',ex:'He worked hard to overcome his fear.'},
   {w:'persuade',pos:'v',m:'설득하다',ex:'I tried to persuade him to stay.'},
-  {w:'recover',pos:'v',m:'회복하다',ex:'It took her a week to recover from the flu.'},
+  {w:'recover',pos:'v',m:'회복하다; 되찾다',ex:'It took her a week to recover from the flu.'},
   {w:'sacrifice',pos:'v',m:'희생하다',ex:'Parents often sacrifice a lot for their children.'},
   {w:'temporary',pos:'a',m:'일시적인',ex:'This is only a temporary solution.'},
-  {w:'witness',pos:'v',m:'목격하다',ex:'Did anyone witness the accident?'},
+  {w:'witness',pos:'v',m:'목격하다; 증인',ex:'Did anyone witness the accident?'},
   {w:'ancient',pos:'a',m:'고대의',ex:'They discovered an ancient temple.'},
-  {w:'appreciate',pos:'v',m:'감사하다',ex:'I appreciate your help.'},
+  {w:'appreciate',pos:'v',m:'감사하다; 진가를 알다',ex:'I appreciate your help.'},
   {w:'assume',pos:'v',m:'가정하다',ex:"Let's not assume the worst."},
   {w:'avoid',pos:'v',m:'피하다',ex:'Try to avoid junk food.'},
-  {w:'benefit',pos:'n',m:'이익',ex:'The main benefit is a lower cost.'},
+  {w:'benefit',pos:'n',m:'이익; 이롭게 하다',ex:'The main benefit is a lower cost.'},
   {w:'consider',pos:'v',m:'고려하다',ex:'Please consider my suggestion.'},
-  {w:'constant',pos:'a',m:'끊임없는',ex:'The baby needs constant care.'},
+  {w:'constant',pos:'a',m:'끊임없는; 상수',ex:'The baby needs constant care.'},
   {w:'contribute',pos:'v',m:'기여하다',ex:'Everyone should contribute to the team.'},
   {w:'convince',pos:'v',m:'확신시키다',ex:'She managed to convince us.'},
-  {w:'decline',pos:'v',m:'감소하다',ex:'Sales began to decline last year.'},
+  {w:'decline',pos:'v',m:'감소하다; 거절하다',ex:'Sales began to decline last year.'},
   {w:'dedicate',pos:'v',m:'헌신하다',ex:'He decided to dedicate his life to science.'},
   {w:'defeat',pos:'v',m:'패배시키다',ex:'Our team hopes to defeat the champions.'},
-  {w:'demand',pos:'v',m:'요구하다',ex:'The workers demand higher pay.'},
+  {w:'demand',pos:'v',m:'요구하다; 수요',ex:'The workers demand higher pay.'},
   {w:'deny',pos:'v',m:'부인하다',ex:'He did not deny the mistake.'},
   {w:'distinguish',pos:'v',m:'구별하다',ex:'It is hard to distinguish the twins.'},
   {w:'efficient',pos:'a',m:'효율적인',ex:'We need a more efficient system.'},
@@ -666,13 +674,13 @@ const WORDBANK=[
   {w:'generate',pos:'v',m:'발생시키다',ex:'The plant can generate electricity.'},
   {w:'genuine',pos:'a',m:'진짜의',ex:'This is a genuine diamond.'},
   {w:'gradual',pos:'a',m:'점진적인',ex:'There was a gradual change in the weather.'},
-  {w:'humble',pos:'a',m:'겸손한',ex:'Despite his fame, he stayed humble.'},
+  {w:'humble',pos:'a',m:'겸손한; 초라한',ex:'Despite his fame, he stayed humble.'},
   {w:'ignore',pos:'v',m:'무시하다',ex:'Do not ignore the warning signs.'},
   {w:'imitate',pos:'v',m:'모방하다',ex:'Children often imitate adults.'},
   {w:'indicate',pos:'v',m:'나타내다',ex:'The results indicate a problem.'},
   {w:'inevitable',pos:'a',m:'불가피한',ex:'Change is inevitable.'},
-  {w:'interpret',pos:'v',m:'해석하다',ex:'How do you interpret this poem?'},
-  {w:'maintain',pos:'v',m:'유지하다',ex:'It is important to maintain good health.'},
+  {w:'interpret',pos:'v',m:'해석하다; 통역하다',ex:'How do you interpret this poem?'},
+  {w:'maintain',pos:'v',m:'유지하다; 주장하다',ex:'It is important to maintain good health.'},
   {w:'obvious',pos:'a',m:'명백한',ex:'The answer is obvious.'},
   {w:'participate',pos:'v',m:'참여하다',ex:'Everyone can participate in the event.'},
   {w:'postpone',pos:'v',m:'연기하다',ex:'We had to postpone the meeting.'},
@@ -681,7 +689,7 @@ const WORDBANK=[
   {w:'reject',pos:'v',m:'거절하다',ex:'They may reject the offer.'},
   {w:'reluctant',pos:'a',m:'꺼리는',ex:'She was reluctant to leave.'},
   {w:'remove',pos:'v',m:'제거하다',ex:'Please remove your shoes.'},
-  {w:'reveal',pos:'v',m:'드러내다',ex:'The report will reveal the truth.'},
+  {w:'reveal',pos:'v',m:'드러내다; 폭로하다',ex:'The report will reveal the truth.'},
   {w:'significant',pos:'a',m:'중요한',ex:'This is a significant discovery.'}
 ];
 const BANK={};
@@ -695,6 +703,15 @@ function bankEx(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.ex:null;}
 const MASTER_MAX=6, CAPTURE_STAGE=3;
 const LADDER=[0,1,3,7,16,35,75]; // days until next review, indexed by resulting stage
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
+
+/* ===== 오답지 근사치화용 유사도 ===== */
+function posOf(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.pos:null;}
+function firstSense(m){return (m||'').split(/[;,\/·]/)[0].trim();}
+// 한국어 뜻 어미로 대략적 품사 유형 추정 (동사~다 / 형용사~ㄴ·적 / 그외 명사)
+function koType(m){const s=firstSense(m);if(/다$/.test(s))return 'v';if(/[은운는한인]$|적$/.test(s))return 'a';return 'n';}
+function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;const d=Array.from({length:m+1},(_,i)=>{const r=new Array(n+1).fill(0);r[0]=i;return r;});for(let j=0;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[m][n];}
+// 철자 유사도: 접두 공유·접미 일치는 가점, 길이차·편집거리는 감점 → 헷갈리는 근사어일수록 높음
+function engSim(a,b){a=(a||'').toLowerCase();b=(b||'').toLowerCase();let pre=0;while(pre<a.length&&pre<b.length&&a[pre]===b[pre])pre++;const suf=(a.slice(-1)===b.slice(-1))?1:0;return pre*1.3+suf*0.6-Math.abs(a.length-b.length)*0.35-lev(a,b)*0.3;}
 
 // 첫 방문(저장 데이터 없음)일 때만 샘플 20개 자동 등록. 기존/초기화 사용자는 건드리지 않음.
 if(!saved){
@@ -824,6 +841,21 @@ function sfx(kind){
     else if(kind==='wrong'){beep(150,0,0.28,'sawtooth',0.1);beep(110,0.1,0.25,'sawtooth',0.1);}
     else if(kind==='capture'){[523,659,784,1047,784,1047].forEach((f,i)=>beep(f,i*0.11,0.12,'square',0.11));}
     else if(kind==='die'){beep(392,0,0.15,'triangle');beep(262,0.16,0.2,'triangle');beep(196,0.36,0.4,'triangle');}
+  }catch(e){}
+}
+/* ================= 발음(TTS) ================= */
+// 브라우저 음성합성으로 영어 단어를 읽어준다. 효과음 음소거와 무관하게 항상 동작(학습 보조).
+const SPK_SVG='<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 6h2l3-3v10L4 10H2z"/><path d="M10 4h1v8h-1z M12 2h1v12h-1z"/></svg>';
+let enVoice=null;
+function pickVoice(){try{const vs=speechSynthesis.getVoices();enVoice=vs.find(v=>/en[-_]US/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang))||null;}catch(e){}}
+if(window.speechSynthesis){pickVoice();speechSynthesis.onvoiceschanged=pickVoice;}
+function speak(word){
+  try{
+    if(!window.speechSynthesis||!word)return;
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(word);
+    u.lang='en-US';u.rate=0.9;if(enVoice)u.voice=enVoice;
+    speechSynthesis.speak(u);
   }catch(e){}
 }
 
@@ -982,6 +1014,8 @@ window.addEventListener('keydown',e=>{
     if(n>=1&&n<=4)answer(n-1);
   }
 });
+$('b-speak').innerHTML=SPK_SVG;
+$('b-speak').addEventListener('click',()=>{const w=byId(S.curId);if(w)speak(w.w);});
 
 /* ===== 출제 모드 =====
    e2k  : 영어 → 한국어 뜻 (재인, 가장 쉬움)      · stage 0~1
@@ -1005,17 +1039,22 @@ function askText(w,mode){
 }
 // 정답이 영어 단어(k2e·cloze)인지 한국어 뜻(e2k)인지에 따라 보기 풀을 다르게 뽑는다.
 // x.m!==w.m 필터로 같은 뜻을 가진 단어는 오답 보기에서 제외(중복정답 방지).
+// 후보를 유사도로 점수화해 헷갈리는 "근사치" 오답을 우선 배치한다.
 function makeChoices(w,mode){
   const wantEng=(mode==='k2e'||mode==='cloze');
   const correct=wantEng?w.w:w.m;
   const cl=correct.toLowerCase();
-  const others=S.words.filter(x=>x.id!==w.id&&x.m!==w.m).map(x=>wantEng?x.w:x.m);
-  shuffle(others);
+  const tgtPos=posOf(w),tgtType=koType(w.m);
+  const scored=S.words.filter(x=>x.id!==w.id&&x.m!==w.m).map(x=>{
+    let s=Math.random()*0.6; // 동점 흔들기 → 매번 같은 오답만 나오지 않게
+    if(wantEng){s+=engSim(correct,x.w);if(tgtPos&&posOf(x)===tgtPos)s+=1.2;}
+    else{if(koType(x.m)===tgtType)s+=1.5;if(tgtPos&&posOf(x)===tgtPos)s+=0.8;}
+    return {v:wantEng?x.w:x.m,s};
+  }).sort((a,b)=>b.s-a.s);
   const pool=[];const seen=new Set([cl]);
-  others.forEach(v=>{const vl=v.toLowerCase();if(pool.length<3&&!seen.has(vl)){seen.add(vl);pool.push(v);}});
-  const fb=shuffle((wantEng?FALLBACK_EN:FALLBACK).slice());
-  let fi=0;
-  while(pool.length<3&&fi<fb.length){const v=fb[fi++];const vl=v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(v);}}
+  for(const c of scored){if(pool.length>=3)break;const vl=c.v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(c.v);}}
+  if(pool.length<3){const fb=shuffle((wantEng?FALLBACK_EN:FALLBACK).slice());let fi=0;
+    while(pool.length<3&&fi<fb.length){const v=fb[fi++];const vl=v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(v);}}}
   const all=pool.map(v=>({t:v,ok:false}));
   all.push({t:correct,ok:true});
   return shuffle(all);
@@ -1102,6 +1141,7 @@ function nextMon(){
   $('b-rtag').style.color=r.col;$('b-rtag').style.borderColor=r.col;
   $('b-rtag').style.animation=r.key==='legend'?'wqSpark 1.2s infinite':'none';
   $('b-name').textContent=showName?name:'？？？몬';$('b-name').style.color=r.col;
+  $('b-speak').style.display=showName?'inline-flex':'none'; // 이름 가린 모드는 답 후 공개
   const img=$('b-spr');
   setMonImg(img,w);
   img.style.animation='none';void img.offsetWidth;
@@ -1130,6 +1170,7 @@ function answer(i){
   S.picked=i;S.phase='resolve';
   revealChoices();
   $('b-name').textContent=name;$('b-name').style.color=rarity(w).col; // 가렸던 이름 공개
+  $('b-speak').style.display='inline-flex';speak(w.w); // 정답 공개 시 발음 자동 재생 + 버튼 노출
   const img=$('b-spr');
 
   if(c.ok){
@@ -1255,15 +1296,20 @@ function renderDex(){
     const bottom=w.cap
       ? '<div class="sb">'+esc(w.m)+'</div><div class="rl" style="color:'+(dueNow?'var(--hp)':r.col)+'">'+capStatus+'</div>'
       : '<div class="gauge"><i style="width:'+Math.round(Math.min(st,CAPTURE_STAGE)/CAPTURE_STAGE*100)+'%"></i></div><div class="gt">포획까지 '+Math.min(st,CAPTURE_STAGE)+'/'+CAPTURE_STAGE+'</div>';
+    const nameHtml=w.cap
+      ? esc(w.w.toUpperCase())+'몬 <button class="spk" type="button" title="발음 듣기" aria-label="발음 듣기">'+SPK_SVG+'</button>'
+      : '???';
     d.innerHTML=(w.cap?'<div class="rtag2" style="background:'+r.col+'">'+r.short+'</div>':'')
       +'<img alt="" style="filter:'+(w.cap?'none':'brightness(0) opacity(.75)')+'">'
-      +'<div class="nm" style="color:'+(w.cap?'var(--text)':'var(--namedim)')+'">'+(w.cap?esc(w.w.toUpperCase())+'몬':'???')+'</div>'
+      +'<div class="nm" style="color:'+(w.cap?'var(--text)':'var(--namedim)')+'">'+nameHtml+'</div>'
       +bottom;
     const dimg=d.querySelector('img');
     const keepFilter=dimg.style.filter;
     dimg.onerror=function(){dimg.onerror=null;dimg.style.imageRendering='pixelated';dimg.src=sprite(w.w);dimg.style.filter=keepFilter;};
     dimg.style.imageRendering='auto';
     dimg.src=monAsset(w);
+    const spk=d.querySelector('.spk');
+    if(spk)spk.addEventListener('click',e=>{e.stopPropagation();speak(w.w);});
     grid.appendChild(d);
   });
 }
