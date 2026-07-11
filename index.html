@@ -2,8 +2,16 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>단어 도감 · WORD QUEST</title>
+<!-- PWA: 설치형 + 오프라인 셸 (sw.js) -->
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#101010">
+<link rel="apple-touch-icon" href="assets/icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="WordQuest">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1724,5 +1732,13 @@ document.addEventListener('visibilitychange',()=>{
 })();
 </script>
 <script type="module" src="cloud.js"></script>
+<!-- PWA: 서비스 워커 등록(보안 컨텍스트에서만 동작 · file://·미지원 시 조용히 무시) -->
+<script>
+if('serviceWorker' in navigator){
+  addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('[pwa] SW 등록 실패',e);});
+  });
+}
+</script>
 </body>
 </html>

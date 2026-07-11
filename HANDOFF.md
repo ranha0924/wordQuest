@@ -3,7 +3,7 @@
 > 단어 도감 · WORD QUEST — 영단어 복습을 16비트 JRPG 턴제 전투로 포장한 학습 웹앱.
 > "틀린 단어는 보스가 된다." 대상: 고1(내신·수능 기초 어휘).
 
-최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 추가) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
+최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA 추가) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
 ---
 
@@ -16,7 +16,8 @@
   |---|---|
   | `index.html` | 앱 전체 — 스타일(CSS) + 마크업 + 로직(JS)이 한 파일에. |
   | `words.js` | **단어은행 데이터**(602개). `window.WORDBANK` 배열. 로직과 분리됨. |
-  | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 26종(투명 PNG) + `bg.png`·`hero.png`. 외부 CDN 의존 없음. |
+  | `manifest.webmanifest` · `sw.js` | **PWA** — 설치형 매니페스트 + 서비스 워커(앱 셸 오프라인 캐시). 참고 §4.11. |
+  | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 26종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
   | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
   | `firebase-config.js` | Firebase 웹 config(사용자가 값 채움). 비어 있으면 로컬 전용. |
   | `firestore.rules` | Firestore 보안 규칙(본인 문서만 접근). |
@@ -64,10 +65,12 @@
 | 내용 |
 |---|
 | **① 이메일 복귀 알림 스캐폴드** — GitHub Actions 크론(매일 08:00 KST)이 Firestore를 읽어 옵트인 사용자에게 "오늘 복습 N마리" 메일 발송. `scripts/reminders/`(순수 로직+테스트+발송기) + 워크플로 + `docs/reminder-setup.md`. 앱엔 **매일 복습 알림 옵트인 토글**(`meta.notify`) + `meta.tz` 기록 추가. 참고 §4.10 |
+| **PWA(설치형·오프라인 셸)** — `manifest.webmanifest` + `sw.js`(앱 셸 precache + 자산 stale-while-revalidate + 오프라인 내비 폴백) + 브랜드 앰버 픽셀 아이콘. Firebase API는 캐시 우회(실시간성 보존). 참고 §4.11 |
 
 - 냉정 평가 **최대 약점 ① 복귀 알림** 대응: 코드/워크플로/문서 **완성**. 로직은 단위 테스트(7)·fixture 드라이런·브라우저 토글 검증(9) 통과.
-- **활성화만 남음**: 사용자가 시크릿 3종(SendGrid 키·발신 이메일·Firebase 서비스계정) 등록하면 발송 시작(§4.10, `docs/reminder-setup.md`). 실메일 라이브 발송은 사용자 셋업 후 확인 예정.
-- **미완(백로그 §8)**: **PWA** 미착수 · 동기화 두 기기 병합 라이브 최종검증(사용자 Firebase 셋업 후).
+  - **활성화만 남음**: 사용자가 시크릿 3종(SendGrid 키·발신 이메일·Firebase 서비스계정) 등록하면 발송 시작(§4.10, `docs/reminder-setup.md`). 실메일 라이브 발송은 사용자 셋업 후 확인 예정.
+- **PWA(Phase B) 완료**: 설치 가능 + **오프라인 완전 부팅** 검증(HTTP 서버 + Playwright: SW 등록·제어·캐시·오프라인 리로드 시 WORDBANK 602 로드·폰트/CSS 렌더까지 확인). 향후 웹푸시 토대.
+- **미완(백로그 §8)**: 동기화 두 기기 병합 라이브 최종검증(사용자 Firebase 셋업 후) · ① 실메일 라이브.
 
 ---
 
@@ -183,6 +186,17 @@
 - **셋업/활성화**: `docs/reminder-setup.md`. 시크릿 3종 — `FIREBASE_SERVICE_ACCOUNT`(관리자 JSON), `SENDGRID_API_KEY`, `REMINDER_FROM_EMAIL`. 선택 Variables — `REMINDER_APP_URL`/`REMINDER_FROM_NAME`/`REMINDER_TZ`. **미설정이면 크론이 돌아도 실패 종료만 하고 앱엔 무영향**(회귀 0). 서비스 계정은 `firestore.rules` 우회(규칙 수정 불요).
 - **검증**: `cd scripts/reminders && npm test`(단위 7) · `npm run dry-run`(fixtures 파이프라인, 네트워크·자격 불요) · 워크플로 `Run workflow`의 `dry_run` 입력. 실메일 라이브 발송만 사용자 시크릿 등록 후.
 
+### 4.11 PWA (설치형 · 오프라인 셸)
+- **목적**: 홈화면 설치 + 네트워크 없이도 앱 로드(오프라인 셸). 기존 오프라인 우선(localStorage) 위에 **셸 자체를 캐시**해 완전 오프라인화. 향후 웹푸시(①의 대안 채널) 토대.
+- **구성**: `manifest.webmanifest`(name·standalone·portrait·`theme_color #101010`/`background_color #080808`·아이콘 3종) + `sw.js`(서비스 워커). `index.html` `<head>`에 manifest·theme-color·apple-touch 메타, 본문 끝에 SW 등록(보안 컨텍스트에서만; `file://`·미지원 시 조용히 무시).
+- **캐시 전략(`sw.js`)**:
+  - **내비게이션**: 네트워크 우선 → 실패 시 캐시된 `index.html`(온라인이면 항상 최신 HTML, 오프라인이면 셸 부팅).
+  - **자산(동일 출처 + 정적 CDN 허용목록: googleapis 폰트·gstatic·jsdelivr)**: **stale-while-revalidate** — 캐시 즉시 응답 + 백그라운드 갱신. 배포 후 1회 리로드로 최신화. 폰트/CSS까지 캐시돼 오프라인에서도 레트로 렌더 유지.
+  - **Firebase Auth/Firestore 등 그 외 교차 출처**: **개입 안 함(캐시 우회)** → 실시간 동기화 보존. 비-GET도 통과.
+- **버전 관리**: `sw.js`의 `VERSION` 상수(현재 `v1`). 셸 파일 크게 바꾸면 올려서 구 캐시(`wq-v1`) 무효화. activate에서 현재 캐시 외 전부 삭제 + `clients.claim()`.
+- **아이콘**: `assets/icons/`(앰버 픽셀 몬스터, 다크 네이비 방사배경). 192·512(any) + maskable-512(넉넉한 안전지대) + apple-180. `scratchpad/gen-icon.mjs`로 수학 래스터화 후 Chromium 렌더 생성(교체 시 재생성).
+- **검증**: `file://`은 SW 미동작 → HTTP 서버 필요(`python3 -m http.server 8792`). Playwright로 SW 등록·제어·캐시 적재·**오프라인 리로드 부팅(WORDBANK 602)**·manifest 파싱·아이콘 200 전부 통과.
+
 ---
 
 ## 5. 확장·수정 가이드
@@ -211,6 +225,7 @@
   - 파이썬: `/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/bin/python3` (playwright 설치돼 있음).
   - `page.evaluate`로 전역 함수(`pickMode`,`answer`,`nextMon`,`S`…) 직접 호출해 상태 검증.
   - 주의: 전투 응답을 타이핑 애니메이션(20ms/글자)이 끝나기 **전에** 하면 피드백 메시지가 진행 중인 문제 타자기에 덮여 안 보임 → 검증 시 충분히 대기할 것(사람은 그 속도로 못 답하므로 실사용 무해).
+- **PWA/SW 검증**(§4.11): 서비스 워커는 `file://`에서 안 돎 → HTTP 서버 필수(`python3 -m http.server 8792` → `127.0.0.1:8792`). Playwright `context.setOffline(true)` 후 `reload`로 오프라인 부팅 확인. SW 갱신 안 잡히면 `sw.js`의 `VERSION` 올리기(또는 DevTools Application→Service Workers→Unregister).
 - **배포**: `main` 푸시 → Vercel 자동 배포. 커밋은 브랜치 → `--ff-only` 머지 → 푸시 패턴 사용.
 
 ---
@@ -222,6 +237,7 @@
 3. e2k는 여전히 4지선다(재인). 철자 생산은 k2e·cloze에만.
 4. 예문은 센스당 1문장(최대 2).
 5. **클라우드 동기화는 선택**(§4.9) — 로그인 + Firebase 셋업해야 켜짐. 안 하면 여전히 로컬 전용(백업 내보내기/가져오기 병행 권장).
+5b. **PWA 설치·SW는 HTTPS/배포에서만**(§4.11) — 로컬 `file://`은 SW 미동작(HTTP 서버 필요), 홈화면 "설치"는 배포 도메인(HTTPS)에서 뜸. 자산은 stale-while-revalidate라 배포 직후 **1회 리로드** 후 최신 반영. 셸 대개편 시 `sw.js` `VERSION` 올릴 것.
 6. **① 복귀 알림 — 코드 완성, 활성화 대기** — 크론+발송기+옵트인·문서 완비(§4.10). 단 SendGrid·Firebase 서비스계정 시크릿 3종을 등록해야 실제 발송. 미등록이면 크론이 실패 종료만 하고 앱엔 무영향. 실메일 라이브 검증은 사용자 셋업 후.
 7. **동기화 라이브 최종검증 미완** — 코드·로그인은 확인, 두 기기 실제 병합은 사용자 Firebase 셋업 후 검증 예정. 병합은 whole-doc write(~120KB) — 대량 사용 시 단어별 세분화 여지.
 8. **배포 URL 미확인** — `wordquest.vercel.app`은 404였음. 이메일 링크 로그인은 배포 도메인을 Firebase 승인목록에 추가해야 동작.
@@ -233,15 +249,15 @@
 ## 8. 백로그 (다음 후보)
 
 **우선순위(냉정 평가 기준):**
-- **PWA** (Phase B) — 설치형·오프라인 셸(manifest + service worker). 향후 웹 푸시 알림 기반도 됨. **미착수**(다음 1순위 후보).
 - **① 알림 활성화 + 라이브 검증** — 코드는 완성(§4.10). 사용자가 시크릿 3종 등록 → `dry_run` → 실발송 확인. (예문 확충 등 발송 카피 다듬기 여지.)
 - **동기화 라이브 검증 마무리** — 사용자 Firebase 셋업 후 두 기기 병합 확인(§7-7).
+- **웹푸시 알림**(선택) — PWA(§4.11) 위에 Push API + Firebase Cloud Messaging. ①의 이메일 대안(설치 사용자 대상). 서비스 워커 준비됨.
 
 **그 외:**
 - **단어은행 품질**: 품사 편중(동사 356·명사 111·부사 3) 보정, 특정 출판사 시험범위 매핑, 다의어 2예문 확충(현재 `ex2` 13/602).
 - **듣기 모드**: 예문/단어 음성 → 받아쓰기 또는 4지선다.
 - 오답 통계 대시보드 확장, 콜로케이션, `vocamon.html` 레거시 정리.
-- ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**.
+- ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**, **PWA 설치형·오프라인 셸(§4.11)**.
 
 ---
 
@@ -250,4 +266,5 @@
 **index.html 메인 `<script>`**: `pickMode` `clozable` `makeChoices` `askText` `clozeText` `bankSenses` · `nextMon` `answer` `submitSpell` `resolveAnswer` · `renderChoices` `renderSpellInput` `renderMonHP` `renderParty` · `renderDex` `renderHome` `renderReg` `renderWeak` `endBattle` · `dueIds` `rarity` `acc` `koType` `engSim` `lev` `posOf` · `monAsset` `setMonImg`(onReady 콜백) `sprite`(폴백) · `migrateWords` `persist` `parseText` `speak` · 시딩: `samplebtn`/`bankbtn` 핸들러.
 **클라우드(§4.9)**: 앱 측 `window.WQ`(getState/applyMerged/setSyncStatus/isBusy)·`setCloudStatus`·`renderCloudNotify`·`wireCloudUI`(index.html) ↔ `cloud.js`의 `window.Cloud`.
 **알림(§4.10)**: `scripts/reminders/lib.mjs`(`countDueWords`/`todayInTimeZone`/`shouldRemind`/`buildEmail`) · `send-reminders.mjs`(로드·발송 오케스트레이션). 앱 측 옵트인: `renderCloudNotify`·`persist`(meta.tz)·`meta.notify`.
+**PWA(§4.11)**: `manifest.webmanifest` · `sw.js`(`handleNavigate`/`handleAsset`·`CACHE`·`CACHE_HOSTS`) · `index.html` head 링크·본문 끝 SW 등록.
 **데이터/설정**: `words.js`(`window.WORDBANK`), `firebase-config.js`(`window.FIREBASE_CONFIG`).
