@@ -1,19 +1,18 @@
 /* ================================================================
    Firebase 웹 앱 설정 (클라우드 동기화·알림용)
    ----------------------------------------------------------------
-   아래 값을 본인 Firebase 프로젝트 값으로 교체하면 ☁ 동기화가 켜집니다.
-   값이 비어 있으면 앱은 지금처럼 100% 로컬 전용으로 동작합니다(안전).
-
-   값 얻는 곳:
-     Firebase Console → ⚙ 프로젝트 설정 → 일반 → 내 앱(웹) → "SDK 설정 및 구성"
-   자세한 셋업은 docs/firebase-setup.md 참고.
-   ※ 이 값들은 클라이언트에 노출돼도 되는 공개 식별자입니다(비밀키 아님).
+   이 파일에는 실제 키를 커밋하지 않습니다.
+   · 로컬에서 동기화를 쓰려면 아래 값을 채우세요(이 파일은 git skip-worktree 로
+     추적에서 제외돼 커밋되지 않게 설정했습니다 — 자세히는 docs/firebase-setup.md).
+   · 값이 비어 있으면 앱은 100% 로컬 전용으로 동작합니다(안전).
+   ※ Firebase 웹 apiKey 는 공개 식별자입니다. 실제 보안은 firestore.rules 와
+     Google Cloud 콘솔의 "키 사용처 제한(HTTP 리퍼러)"이 담당합니다.
    ================================================================ */
 window.FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBeJFT8TIhx3vxuKdruF6G4G5ZNfHoJpX8",
-  authDomain: "wordquest-a250d.firebaseapp.com",
-  projectId: "wordquest-a250d",
-  storageBucket: "wordquest-a250d.firebasestorage.app",
-  messagingSenderId: "363343730753",
-  appId: "1:363343730753:web:8d580304c92874405e0ec0"
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
 };
