@@ -3,7 +3,7 @@
 > 단어 도감 · WORD QUEST — 영단어 복습을 16비트 JRPG 턴제 전투로 포장한 학습 웹앱.
 > "틀린 단어는 보스가 된다." 대상: 고1(내신·수능 기초 어휘).
 
-최종 업데이트: 2026-07-11 · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
+최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 추가) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
 ---
 
@@ -20,7 +20,9 @@
   | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
   | `firebase-config.js` | Firebase 웹 config(사용자가 값 채움). 비어 있으면 로컬 전용. |
   | `firestore.rules` | Firestore 보안 규칙(본인 문서만 접근). |
-  | `docs/` | `cloud-sync-design.md`(설계), `firebase-setup.md`(셋업 가이드). |
+  | `scripts/reminders/` | **일일 복귀 알림 발송기**(①). `lib.mjs`(순수 로직+테스트) · `send-reminders.mjs`(Firestore→SendGrid) · `fixtures/`. 메인 앱과 독립(Node). 참고 §4.10. |
+  | `.github/workflows/daily-reminder.yml` | 알림 발송 **크론**(매일 08:00 KST) + 수동 트리거. |
+  | `docs/` | `cloud-sync-design.md`(설계), `firebase-setup.md`(동기화 셋업), `reminder-setup.md`(알림 셋업). |
   | `워드퀘스트-기획서.md` | 최초 기획서 v1(게임 디자인 원안). |
   | `vocamon.html` | 예전 별도 프로토타입. 현행 앱과 무관(정리 대상). |
   | `HANDOFF.md` | 이 문서. |
@@ -56,7 +58,16 @@
 | `3babade` 외 | **클라우드 동기화(②)** — Firebase Auth(이메일 링크)+Firestore, 오프라인 우선(§4.9) |
 
 - 냉정 평가 약점 대응: **② 데이터 신뢰성** = 클라우드 동기화 착수(로그인 시 기기 간 진도 보존).
-- **미완**: **① 복귀 알림**(이메일 리마인더)·**PWA** 미착수(백로그 §8). 클라우드 동기화는 코드/배포 완료 + 로그인 동작 확인했으나 **두 기기 실제 병합 라이브 최종검증은 미완**(사용자 Firebase 셋업 후).
+
+### 다음 세션(2026-07-11 이어서) 추가 — ① 복귀 알림 착수
+
+| 내용 |
+|---|
+| **① 이메일 복귀 알림 스캐폴드** — GitHub Actions 크론(매일 08:00 KST)이 Firestore를 읽어 옵트인 사용자에게 "오늘 복습 N마리" 메일 발송. `scripts/reminders/`(순수 로직+테스트+발송기) + 워크플로 + `docs/reminder-setup.md`. 앱엔 **매일 복습 알림 옵트인 토글**(`meta.notify`) + `meta.tz` 기록 추가. 참고 §4.10 |
+
+- 냉정 평가 **최대 약점 ① 복귀 알림** 대응: 코드/워크플로/문서 **완성**. 로직은 단위 테스트(7)·fixture 드라이런·브라우저 토글 검증(9) 통과.
+- **활성화만 남음**: 사용자가 시크릿 3종(SendGrid 키·발신 이메일·Firebase 서비스계정) 등록하면 발송 시작(§4.10, `docs/reminder-setup.md`). 실메일 라이브 발송은 사용자 셋업 후 확인 예정.
+- **미완(백로그 §8)**: **PWA** 미착수 · 동기화 두 기기 병합 라이브 최종검증(사용자 Firebase 셋업 후).
 
 ---
 
@@ -162,6 +173,16 @@
 - **셋업**: `docs/firebase-setup.md`(~10분, 무료 Spark 플랜). Firebase 웹 `apiKey`는 **공개 식별자**(배포 JS에 어차피 노출, 커밋 안전). 보안은 `firestore.rules`(본인 문서만) + (선택) Google Cloud 키 리퍼러 제한.
 - **주의**: 이메일 링크는 발신 시점의 `location.origin`으로 리다이렉트 → **로그인이 그 origin의 localStorage 맥락에서 완료**됨(다른 브라우저/주소에서 링크 열면 그쪽 진도로 로그인). 로컬은 기본 승인 도메인, 배포 도메인은 Firebase 승인목록에 추가 필요.
 
+### 4.10 복귀 알림 (선택 · 서버리스 · 냉정 평가 최대 약점 ①)
+- **목적**: SRS 예정일에 사용자를 다시 부르는 채널. 냉정 평가 **최대 약점 ①**(예정일에 돌아오게 할 알림 부재) 대응.
+- **스택(카드·서버 불필요, 무료 범위)**: **GitHub Actions 크론** → `scripts/reminders/send-reminders.mjs`(Node, `firebase-admin`) → Firestore `users/*` 조회 → **SendGrid v3 API**(`fetch`, SDK 없음) 발송. §4.9의 동기화 데이터를 그대로 재사용.
+- **선별**: `lib.shouldRemind` = `meta.notify===true` **그리고** 복습 예정(`due<=오늘`, 앱 `dueIds()` 규칙 미러: due 없음/오늘 이하, `deleted` 제외) > 0. 둘 다여야 발송. 이메일 주소는 문서에 저장하지 않고 **Auth에서 uid로 조회**(`admin.auth().getUser`).
+- **옵트인(기본 꺼짐)**: 앱 영입소 로그인 뷰의 **"매일 복습 알림" 토글** → `meta.notify` → 클라우드 동기화로 Firestore 반영 → 크론이 조회. 로그아웃/미설정이면 대상 아님.
+- **"오늘" 계산**: 크론은 UTC로 돌지만, 사용자별 `meta.tz`(앱이 `persist()`에서 1회 기록) 우선 → 없으면 env `REMINDER_TZ`(기본 `Asia/Seoul`). `todayInTimeZone`(Intl `en-CA`)로 `YYYY-MM-DD`.
+- **메일**: 16비트 JRPG 톤(제목 "⚔️ 오늘 복습할 몬스터 N마리…"), 개수·연속(streak)·CTA 링크(`REMINDER_APP_URL`)·끄는 법 안내. 외부 이미지 없음(차단 무해), `List-Unsubscribe` 헤더 포함. 트래킹 off.
+- **셋업/활성화**: `docs/reminder-setup.md`. 시크릿 3종 — `FIREBASE_SERVICE_ACCOUNT`(관리자 JSON), `SENDGRID_API_KEY`, `REMINDER_FROM_EMAIL`. 선택 Variables — `REMINDER_APP_URL`/`REMINDER_FROM_NAME`/`REMINDER_TZ`. **미설정이면 크론이 돌아도 실패 종료만 하고 앱엔 무영향**(회귀 0). 서비스 계정은 `firestore.rules` 우회(규칙 수정 불요).
+- **검증**: `cd scripts/reminders && npm test`(단위 7) · `npm run dry-run`(fixtures 파이프라인, 네트워크·자격 불요) · 워크플로 `Run workflow`의 `dry_run` 입력. 실메일 라이브 발송만 사용자 시크릿 등록 후.
+
 ---
 
 ## 5. 확장·수정 가이드
@@ -201,7 +222,7 @@
 3. e2k는 여전히 4지선다(재인). 철자 생산은 k2e·cloze에만.
 4. 예문은 센스당 1문장(최대 2).
 5. **클라우드 동기화는 선택**(§4.9) — 로그인 + Firebase 셋업해야 켜짐. 안 하면 여전히 로컬 전용(백업 내보내기/가져오기 병행 권장).
-6. **① 복귀 알림 미구현** — SRS인데 예정일에 사용자를 돌아오게 할 이메일/푸시 알림이 없음(냉정 평가 최대 약점). 백로그 §8.
+6. **① 복귀 알림 — 코드 완성, 활성화 대기** — 크론+발송기+옵트인·문서 완비(§4.10). 단 SendGrid·Firebase 서비스계정 시크릿 3종을 등록해야 실제 발송. 미등록이면 크론이 실패 종료만 하고 앱엔 무영향. 실메일 라이브 검증은 사용자 셋업 후.
 7. **동기화 라이브 최종검증 미완** — 코드·로그인은 확인, 두 기기 실제 병합은 사용자 Firebase 셋업 후 검증 예정. 병합은 whole-doc write(~120KB) — 대량 사용 시 단어별 세분화 여지.
 8. **배포 URL 미확인** — `wordquest.vercel.app`은 404였음. 이메일 링크 로그인은 배포 도메인을 Firebase 승인목록에 추가해야 동작.
 9. 타자기-피드백 레이스. 실사용 무해하나 자동화 검증 시 충분히 대기.
@@ -212,20 +233,21 @@
 ## 8. 백로그 (다음 후보)
 
 **우선순위(냉정 평가 기준):**
-- **① 이메일 복귀 알림** (Phase C · 최대 약점) — 매일 "오늘 복습 N마리" 메일. 카드 없이 무료 = **GitHub Actions 크론 + SendGrid**(Firebase Functions/Blaze 불필요). §4.9의 Firestore 데이터를 서비스 계정으로 조회 → 발송. **코드 미착수.**
-- **PWA** (Phase B) — 설치형·오프라인 셸(manifest + service worker). 향후 웹 푸시 알림 기반도 됨.
+- **PWA** (Phase B) — 설치형·오프라인 셸(manifest + service worker). 향후 웹 푸시 알림 기반도 됨. **미착수**(다음 1순위 후보).
+- **① 알림 활성화 + 라이브 검증** — 코드는 완성(§4.10). 사용자가 시크릿 3종 등록 → `dry_run` → 실발송 확인. (예문 확충 등 발송 카피 다듬기 여지.)
 - **동기화 라이브 검증 마무리** — 사용자 Firebase 셋업 후 두 기기 병합 확인(§7-7).
 
 **그 외:**
 - **단어은행 품질**: 품사 편중(동사 356·명사 111·부사 3) 보정, 특정 출판사 시험범위 매핑, 다의어 2예문 확충(현재 `ex2` 13/602).
 - **듣기 모드**: 예문/단어 음성 → 받아쓰기 또는 4지선다.
 - 오답 통계 대시보드 확장, 콜로케이션, `vocamon.html` 레거시 정리.
-- ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화.
+- ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**.
 
 ---
 
 ## 9. 참고 — 주요 함수 위치
 
 **index.html 메인 `<script>`**: `pickMode` `clozable` `makeChoices` `askText` `clozeText` `bankSenses` · `nextMon` `answer` `submitSpell` `resolveAnswer` · `renderChoices` `renderSpellInput` `renderMonHP` `renderParty` · `renderDex` `renderHome` `renderReg` `renderWeak` `endBattle` · `dueIds` `rarity` `acc` `koType` `engSim` `lev` `posOf` · `monAsset` `setMonImg`(onReady 콜백) `sprite`(폴백) · `migrateWords` `persist` `parseText` `speak` · 시딩: `samplebtn`/`bankbtn` 핸들러.
-**클라우드(§4.9)**: 앱 측 `window.WQ`(getState/applyMerged/setSyncStatus/isBusy)·`setCloudStatus`·`wireCloudUI`(index.html) ↔ `cloud.js`의 `window.Cloud`.
+**클라우드(§4.9)**: 앱 측 `window.WQ`(getState/applyMerged/setSyncStatus/isBusy)·`setCloudStatus`·`renderCloudNotify`·`wireCloudUI`(index.html) ↔ `cloud.js`의 `window.Cloud`.
+**알림(§4.10)**: `scripts/reminders/lib.mjs`(`countDueWords`/`todayInTimeZone`/`shouldRemind`/`buildEmail`) · `send-reminders.mjs`(로드·발송 오케스트레이션). 앱 측 옵트인: `renderCloudNotify`·`persist`(meta.tz)·`meta.notify`.
 **데이터/설정**: `words.js`(`window.WORDBANK`), `firebase-config.js`(`window.FIREBASE_CONFIG`).

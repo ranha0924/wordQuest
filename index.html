@@ -574,11 +574,14 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
           <input type="email" id="cloud-email" placeholder="이메일 주소" autocomplete="email" style="height:38px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
           <button class="subbtn" id="cloud-signin"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 4H14V12H2Z M3 5L8 9L13 5"/></svg>로그인 링크 받기</button>
         </div>
-        <div class="grid2" id="cloud-in" style="display:none;">
-          <button class="subbtn" id="cloud-syncnow"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>지금 동기화</button>
-          <button class="subbtn" id="cloud-signout">로그아웃</button>
+        <div id="cloud-in" style="display:none;">
+          <div class="grid2">
+            <button class="subbtn" id="cloud-syncnow"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>지금 동기화</button>
+            <button class="subbtn" id="cloud-signout">로그아웃</button>
+          </div>
+          <button class="subbtn" id="cloud-notify" style="width:100%;margin-top:8px;"></button>
         </div>
-        <div class="regmsg" id="cloud-hint" style="display:block;">기기 간 진도 동기화 · 로그인은 선택이며, 안 하면 지금처럼 이 기기에만 저장됩니다.</div>
+        <div class="regmsg" id="cloud-hint" style="display:block;">기기 간 진도 동기화 · 로그인은 선택이며, 안 하면 지금처럼 이 기기에만 저장됩니다. 로그인하면 매일 복습 알림 메일을 받을 수 있어요.</div>
       </div>
       <div class="flabel">단어 붙여넣기</div>
       <div class="regex">
@@ -724,7 +727,10 @@ function wait(fn,ms){timers.push(setTimeout(fn,ms));}
 let cloudApplying=false; // 클라우드 병합을 로컬에 반영하는 동안엔 재-푸시 방지
 function persist(){
   try{
-    if(S.meta) S.meta.updatedAt=Date.now();          // meta는 최신 저장 기준(LWW)
+    if(S.meta){
+      S.meta.updatedAt=Date.now();                   // meta는 최신 저장 기준(LWW)
+      if(!S.meta.tz){ try{S.meta.tz=Intl.DateTimeFormat().resolvedOptions().timeZone;}catch(e){} } // 복습 알림 크론의 '오늘' 계산용(1회 기록)
+    }
     localStorage.setItem(LSKEY,JSON.stringify({words:S.words,meta:S.meta}));
   }catch(e){}
   if(window.Cloud && !cloudApplying) window.Cloud.notifyChanged(); // 동기화(디바운스)
@@ -1638,6 +1644,16 @@ function setCloudStatus(s){
   const email=(window.Cloud&&window.Cloud.currentEmail)?window.Cloud.currentEmail():null;
   const inB=$('cloud-in'),outB=$('cloud-out');
   if(inB&&outB){ inB.style.display=email?'':'none'; outB.style.display=email?'none':''; }
+  renderCloudNotify();
+}
+// 매일 복습 알림 옵트인 토글(로그인 시에만 의미 · meta.notify 저장 → 클라우드 → 발송 크론이 조회)
+function renderCloudNotify(){
+  const btn=$('cloud-notify'); if(!btn) return;
+  const bell='<path d="M8 1L9 2A4 4 0 0 1 12 6V10L14 12H2L4 10V6A4 4 0 0 1 7 2Z M6 13H10A2 2 0 0 1 6 13Z"/>';
+  const on='<svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">'+bell+'</svg>';
+  const off='<svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">'+bell+'<path fill="none" stroke="currentColor" stroke-width="1.6" d="M3 3L13 13"/></svg>';
+  const nz=!!(S.meta&&S.meta.notify);
+  btn.innerHTML=(nz?on:off)+(nz?'매일 복습 알림 · 켜짐':'매일 복습 알림 · 꺼짐');
 }
 (function wireCloudUI(){
   const on=(id,ev,fn)=>{const el=$(id);if(el)el.addEventListener(ev,fn);};
@@ -1645,6 +1661,7 @@ function setCloudStatus(s){
   on('cloud-email','keydown',e=>{if(e.key==='Enter'){e.preventDefault();window.Cloud&&window.Cloud.signIn($('cloud-email').value);}});
   on('cloud-signout','click',()=>window.Cloud&&window.Cloud.signOutUser&&window.Cloud.signOutUser());
   on('cloud-syncnow','click',()=>window.Cloud&&window.Cloud.syncNow&&window.Cloud.syncNow());
+  on('cloud-notify','click',()=>{ S.meta.notify=!(S.meta&&S.meta.notify); persist(); renderCloudNotify(); });
 })();
 document.addEventListener('cloud-ready',()=>{
   if(window.Cloud&&window.Cloud.enabled){

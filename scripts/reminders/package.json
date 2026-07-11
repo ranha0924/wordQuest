@@ -1,0 +1,16 @@
+{
+  "name": "wordquest-reminders",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WordQuest 일일 복귀 알림 발송기 (GitHub Actions 크론에서 실행). 메인 정적 앱과 독립.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test",
+    "dry-run": "node send-reminders.mjs --dry-run --fixture fixtures/sample-users.json",
+    "send": "node send-reminders.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}

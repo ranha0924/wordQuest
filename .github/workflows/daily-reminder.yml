@@ -1,0 +1,51 @@
+# WordQuest 일일 복귀 알림 — SRS 예정일에 맞춰 매일 이메일 발송.
+# 셋업: docs/reminder-setup.md (시크릿 3종 등록 후 자동 동작).
+name: daily-reminder
+
+on:
+  schedule:
+    # 매일 23:00 UTC = 08:00 KST. (cron 은 UTC 기준)
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '발송하지 않고 대상만 미리보기'
+        type: boolean
+        default: false
+
+# 동시 실행 방지(크론과 수동 트리거가 겹쳐도 1건만).
+concurrency:
+  group: daily-reminder
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/reminders
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Send reminders
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          REMINDER_FROM_EMAIL: ${{ secrets.REMINDER_FROM_EMAIL }}
+          # 비민감 설정은 저장소 Variables 로(없으면 스크립트 기본값 사용).
+          REMINDER_FROM_NAME: ${{ vars.REMINDER_FROM_NAME }}
+          REMINDER_APP_URL: ${{ vars.REMINDER_APP_URL }}
+          REMINDER_TZ: ${{ vars.REMINDER_TZ }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            node send-reminders.mjs --dry-run
+          else
+            node send-reminders.mjs
+          fi
