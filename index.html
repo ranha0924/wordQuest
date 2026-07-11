@@ -582,6 +582,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       </div>
       <div class="regmsg" id="regmsg" style="display:none;"></div>
       <button class="samplebtn" id="samplebtn" style="display:none;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg>샘플 단어 20개로 시작하기</button>
+      <button class="samplebtn" id="bankbtn"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg><span id="bankbtn-t">교과서 고빈도 단어 담기</span></button>
       <div class="flabel">데이터 관리 <span class="sub" id="regcount">서식 중 0마리</span></div>
       <div class="regmanage">
         <div class="grid2">
@@ -635,6 +636,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
   <div class="hurtflash" id="hurtflash"></div>
 </div>
 
+<script src="words.js"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -648,74 +650,9 @@ const S={
 };
 const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundant - 풍부한\naccurate - 정확한\nadapt - 적응하다\nadmire - 감탄하다\nforbid - 금지하다\ncourage - 용기\ndelicate - 섬세한\nenthusiasm - 열정\nexpand - 확장하다; 팽창하다\nfragile - 연약한\nhesitate - 머뭇거리다\nnegotiate - 협상하다\novercome - 극복하다\npersuade - 설득하다\nrecover - 회복하다; 되찾다\nsacrifice - 희생하다\ntemporary - 일시적인\nwitness - 목격하다; 증인';
 /* ================= 교과서 단어은행 (예문 내장) =================
-   고1 수준 상용어 + 문맥 예문. 예문은 대상 단어를 원형 그대로 포함 → 빈칸(cloze) 출제용.
-   빈칸 모드/예문은 여기 있는 단어에 대해서만 동작하고, 사용자가 붙여넣은 단어가
-   철자로 일치하면 자동으로 예문이 연결된다. 아래 배열에 항목만 추가하면 확장된다. */
-const WORDBANK=[
-  {w:'abandon',pos:'v',m:'버리다; 포기하다',ex:'They had to abandon the old house.',ex2:'Never abandon hope.'},
-  {w:'achieve',pos:'v',m:'성취하다',ex:'You can achieve your dreams with effort.'},
-  {w:'abundant',pos:'a',m:'풍부한',ex:'The region has abundant natural resources.'},
-  {w:'accurate',pos:'a',m:'정확한',ex:'We need an accurate measurement.'},
-  {w:'adapt',pos:'v',m:'적응하다',ex:'Animals must adapt to their environment.'},
-  {w:'admire',pos:'v',m:'감탄하다',ex:'I really admire her courage.'},
-  {w:'forbid',pos:'v',m:'금지하다',ex:'The rules forbid running near the pool.'},
-  {w:'courage',pos:'n',m:'용기',ex:'It takes courage to tell the truth.'},
-  {w:'delicate',pos:'a',m:'섬세한',ex:'The old vase is very delicate.'},
-  {w:'enthusiasm',pos:'n',m:'열정',ex:'She spoke with great enthusiasm.'},
-  {w:'expand',pos:'v',m:'확장하다; 팽창하다',ex:'The company plans to expand its business.',ex2:'Metals expand when they are heated.'},
-  {w:'fragile',pos:'a',m:'연약한',ex:'Please be careful; the box is fragile.'},
-  {w:'hesitate',pos:'v',m:'머뭇거리다',ex:"Don't hesitate to ask for help."},
-  {w:'negotiate',pos:'v',m:'협상하다',ex:'The two sides will negotiate a deal.'},
-  {w:'overcome',pos:'v',m:'극복하다',ex:'He worked hard to overcome his fear.'},
-  {w:'persuade',pos:'v',m:'설득하다',ex:'I tried to persuade him to stay.'},
-  {w:'recover',pos:'v',m:'회복하다; 되찾다',ex:'It took her a week to recover from the flu.',ex2:'The police helped him recover his stolen bike.'},
-  {w:'sacrifice',pos:'v',m:'희생하다',ex:'Parents often sacrifice a lot for their children.'},
-  {w:'temporary',pos:'a',m:'일시적인',ex:'This is only a temporary solution.'},
-  {w:'witness',pos:'v',m:'목격하다; 증인',ex:'Did anyone witness the accident?',ex2:'The witness described the suspect to the police.'},
-  {w:'ancient',pos:'a',m:'고대의',ex:'They discovered an ancient temple.'},
-  {w:'appreciate',pos:'v',m:'감사하다; 진가를 알다',ex:'I appreciate your help.',ex2:'Few people appreciate good art.'},
-  {w:'assume',pos:'v',m:'가정하다',ex:"Let's not assume the worst."},
-  {w:'avoid',pos:'v',m:'피하다',ex:'Try to avoid junk food.'},
-  {w:'benefit',pos:'n',m:'이익; 이롭게 하다',ex:'The main benefit is a lower cost.',ex2:'The new law will benefit small farms.'},
-  {w:'consider',pos:'v',m:'고려하다',ex:'Please consider my suggestion.'},
-  {w:'constant',pos:'a',m:'끊임없는; 상수',ex:'The baby needs constant care.',ex2:'In this formula, c is a constant.'},
-  {w:'contribute',pos:'v',m:'기여하다',ex:'Everyone should contribute to the team.'},
-  {w:'convince',pos:'v',m:'확신시키다',ex:'She managed to convince us.'},
-  {w:'decline',pos:'v',m:'감소하다; 거절하다',ex:'Sales began to decline last year.',ex2:'She had to decline the invitation.'},
-  {w:'dedicate',pos:'v',m:'헌신하다',ex:'He decided to dedicate his life to science.'},
-  {w:'defeat',pos:'v',m:'패배시키다',ex:'Our team hopes to defeat the champions.'},
-  {w:'demand',pos:'v',m:'요구하다; 수요',ex:'The workers demand higher pay.',ex2:'There is high demand for clean energy.'},
-  {w:'deny',pos:'v',m:'부인하다',ex:'He did not deny the mistake.'},
-  {w:'distinguish',pos:'v',m:'구별하다',ex:'It is hard to distinguish the twins.'},
-  {w:'efficient',pos:'a',m:'효율적인',ex:'We need a more efficient system.'},
-  {w:'eliminate',pos:'v',m:'제거하다',ex:'We must eliminate the errors.'},
-  {w:'emphasize',pos:'v',m:'강조하다',ex:'Teachers often emphasize practice.'},
-  {w:'encounter',pos:'v',m:'마주치다',ex:'You may encounter problems at first.'},
-  {w:'ensure',pos:'v',m:'보장하다',ex:'Please ensure the door is locked.'},
-  {w:'essential',pos:'a',m:'필수적인',ex:'Water is essential for life.'},
-  {w:'estimate',pos:'v',m:'추정하다',ex:'Experts estimate the cost at five hundred dollars.'},
-  {w:'exhaust',pos:'v',m:'지치게 하다',ex:'The long trip will exhaust the children.'},
-  {w:'generate',pos:'v',m:'발생시키다',ex:'The plant can generate electricity.'},
-  {w:'genuine',pos:'a',m:'진짜의',ex:'This is a genuine diamond.'},
-  {w:'gradual',pos:'a',m:'점진적인',ex:'There was a gradual change in the weather.'},
-  {w:'humble',pos:'a',m:'겸손한; 초라한',ex:'Despite his fame, he stayed humble.',ex2:'They lived in a humble little house.'},
-  {w:'ignore',pos:'v',m:'무시하다',ex:'Do not ignore the warning signs.'},
-  {w:'imitate',pos:'v',m:'모방하다',ex:'Children often imitate adults.'},
-  {w:'indicate',pos:'v',m:'나타내다',ex:'The results indicate a problem.'},
-  {w:'inevitable',pos:'a',m:'불가피한',ex:'Change is inevitable.'},
-  {w:'interpret',pos:'v',m:'해석하다; 통역하다',ex:'How do you interpret this poem?',ex2:'She will interpret for the foreign visitors.'},
-  {w:'maintain',pos:'v',m:'유지하다; 주장하다',ex:'It is important to maintain good health.',ex2:'He continued to maintain that he was innocent.'},
-  {w:'obvious',pos:'a',m:'명백한',ex:'The answer is obvious.'},
-  {w:'participate',pos:'v',m:'참여하다',ex:'Everyone can participate in the event.'},
-  {w:'postpone',pos:'v',m:'연기하다',ex:'We had to postpone the meeting.'},
-  {w:'pretend',pos:'v',m:'~인 척하다',ex:'He likes to pretend to be a hero.'},
-  {w:'prevent',pos:'v',m:'예방하다',ex:'Vaccines help prevent disease.'},
-  {w:'reject',pos:'v',m:'거절하다',ex:'They may reject the offer.'},
-  {w:'reluctant',pos:'a',m:'꺼리는',ex:'She was reluctant to leave.'},
-  {w:'remove',pos:'v',m:'제거하다',ex:'Please remove your shoes.'},
-  {w:'reveal',pos:'v',m:'드러내다; 폭로하다',ex:'The report will reveal the truth.',ex2:'The reporter promised to reveal the scandal.'},
-  {w:'significant',pos:'a',m:'중요한',ex:'This is a significant discovery.'}
-];
+   실제 데이터는 words.js 에 있다 (window.WORDBANK). 단어 추가/편집은 그 파일에서.
+   여기서는 로드된 배열을 참조만 한다. 빈칸(cloze)·예문·품사 오답지 등이 이 데이터를 쓴다. */
+const WORDBANK=(window.WORDBANK||[]); // 데이터는 words.js 에서 로드
 const BANK={};
 WORDBANK.forEach(e=>{BANK[e.w.toLowerCase()]=e;});
 function bankEx(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.ex:null;}
@@ -956,6 +893,12 @@ function renderReg(){
   $('regmsg').style.display='none';
   $('regcount').textContent='서식 중 '+S.words.length+'마리';
   $('samplebtn').style.display=S.words.length===0?'block':'none';
+  // 단어은행 중 아직 안 담긴 개수
+  const have=new Set(S.words.map(w=>w.w.toLowerCase()));
+  const remain=WORDBANK.filter(e=>!have.has(e.w.toLowerCase())).length;
+  const bb=$('bankbtn');
+  if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='교과서 고빈도 단어 '+remain+'개 담기 (하루 25개씩 출현)';}
+  else bb.style.display='none';
   updateDetect();
 }
 $('regtext').addEventListener('input',updateDetect);
@@ -980,6 +923,20 @@ $('parsebtn').addEventListener('click',()=>{
 $('samplebtn').addEventListener('click',()=>{
   $('regtext').value=SAMPLE;
   $('parsebtn').click();
+});
+// 단어은행 전체를 하루 25개씩 순차 출현하도록 담기(간격 학습 페이싱)
+$('bankbtn').addEventListener('click',()=>{
+  const have=new Set(S.words.map(w=>w.w.toLowerCase()));
+  const news=WORDBANK.filter(e=>!have.has(e.w.toLowerCase()));
+  if(!news.length){regMsg('이미 전부 담겨 있다!');return;}
+  const t=today(),BATCH=25;
+  news.forEach((e,i)=>{
+    const k=e.w.toLowerCase();
+    S.words.push({id:k,w:e.w,m:e.m,stage:0,wrong:0,seen:0,cap:false,due:addDays(t,Math.floor(i/BATCH)),created:t});
+  });
+  persist();sfx('capture');
+  regMsg('교과서 단어 '+news.length+'마리를 담았다! 하루 약 '+BATCH+'마리씩 출현한다. (약 '+Math.ceil(news.length/BATCH)+'일 분량)');
+  renderReg();
 });
 $('exportbtn').addEventListener('click',()=>{
   const data=JSON.stringify({words:S.words,meta:S.meta},null,2);
@@ -1056,9 +1013,15 @@ $('b-speak').addEventListener('click',()=>{const w=byId(S.curId);if(w)speak(w.w)
    k2e  : 한국어 뜻 → 영어 단어 (역방향 인출)       · stage 2
    cloze: 예문 빈칸에 영어 단어 채우기 (문맥 인출)   · stage 3+ (예문 있을 때)
    단계가 오를수록 어려워져 "재인만으로 포획되는" 문제를 막는다. */
+// 예문에 단어 원형이 \b경계로 실제 들어있는 센스만 빈칸 출제 가능(정답 노출 방지)
+function clozable(w){
+  const word=(w.w||'').replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const re=new RegExp('\\b'+word+'\\b','i');
+  return bankSenses(w).filter(o=>o.ex&&re.test(o.ex));
+}
 function pickMode(w){
   const st=w.stage||0;
-  if(st>=CAPTURE_STAGE&&bankEx(w))return 'cloze';
+  if(st>=CAPTURE_STAGE&&clozable(w).length)return 'cloze';
   if(st>=2)return 'k2e';
   return 'e2k';
 }
@@ -1189,7 +1152,7 @@ function nextMon(){
   const name=w.w.toUpperCase()+'몬';
   const mode=pickMode(w);
   // cloze는 다의어면 이번 턴의 센스(예문+뜻)를 하나 골라 고정
-  const pick=mode==='cloze'?(shuffle(bankSenses(w).slice())[0]||null):null;
+  const pick=mode==='cloze'?(shuffle(clozable(w))[0]||null):null;
   // k2e·cloze는 정답이 영어 단어라 몬스터 이름(=영어 단어)이 스포일러 → 답할 때까지 가림
   const showName=(mode==='e2k');
   const typing=(mode==='k2e'||mode==='cloze'); // 이 두 모드는 4지선다 대신 철자 타이핑
