@@ -9,8 +9,8 @@
 
 ## 1. 한눈에 보기
 
-- **정적 웹앱** — 백엔드/빌드 없음. Vercel이 `index.html`을 루트로 서빙. 무설치·오프라인·무료.
-- **저장** — 브라우저 `localStorage` (키: `wordquest_v1`). 계정/서버 없음. 백업은 JSON 내보내기/가져오기.
+- **정적 웹앱** — 빌드 없음. Vercel이 `index.html`을 루트로 서빙. 무설치·오프라인·무료. **오프라인 우선**이며 클라우드 동기화(Firebase)는 **선택** — 설정/로그인 없으면 지금처럼 로컬 전용(§4.9).
+- **저장** — 브라우저 `localStorage`(키: `wordquest_v1`)가 주 저장소. 백업은 JSON 내보내기/가져오기. 로그인 시 Firestore로 기기 간 동기화(선택, §4.9).
 - **파일 구성**
   | 파일 | 역할 |
   |---|---|
@@ -31,7 +31,7 @@
 
 ## 2. 이번 작업 요약 (평가 → 개선)
 
-영어 교사 관점 초기 평가 **60/100**에서 출발해 지적사항을 순차 개선. 추정 현재 **≈88–90/100**.
+영어 교사 관점 초기 평가 **60/100**에서 출발해 지적사항을 순차 개선(학습 설계 기준 ≈88–90). 이후 **홀리스틱 냉정 평가 72/100**(전달·신뢰성·검증까지 포함) — 최대 약점 2가지(**① 복귀 알림 부재**, **② 데이터 취약**) 중 **②를 이번 세션에 착수**.
 
 | 커밋 | 내용 |
 |---|---|
@@ -46,6 +46,17 @@
 2. 재인 편중 → 재인/역방향/문맥/철자생산으로 단계 상승.
 3. 오답지 무작위 → 철자·품사·뜻유형 유사도 기반 근사치.
 4. 단일 뜻·발음 없음 → 다의어 + 센스별 예문 + TTS.
+
+### 이번 세션(2026-07-11) 추가
+
+| 커밋 | 내용 |
+|---|---|
+| `c413d12` | **몬스터 로스터 확장** — 신규 16종(힉스필드 Nano Banana 2) + **엘리트 등급 신설**(3단계 진화) + 전 에셋 로컬화(CloudFront → `assets/`) |
+| `52f28cd` | **등장 깜빡임 수정** — 새 몬스터 디코드 전까지 숨겨 이전 몬스터 잔상 제거(§4.8) |
+| `3babade` 외 | **클라우드 동기화(②)** — Firebase Auth(이메일 링크)+Firestore, 오프라인 우선(§4.9) |
+
+- 냉정 평가 약점 대응: **② 데이터 신뢰성** = 클라우드 동기화 착수(로그인 시 기기 간 진도 보존).
+- **미완**: **① 복귀 알림**(이메일 리마인더)·**PWA** 미착수(백로그 §8). 클라우드 동기화는 코드/배포 완료 + 로그인 동작 확인했으나 **두 기기 실제 병합 라이브 최종검증은 미완**(사용자 Firebase 셋업 후).
 
 ---
 
@@ -63,12 +74,13 @@
   cap: false,           // 포획(도감 등록) 여부
   capAt: '2026-07-11',  // 최초 포획일(선택)
   due: '2026-07-11',    // 다음 출현 예정일 (YYYY-MM-DD). null이면 미정
-  created: '2026-07-11'
+  created: '2026-07-11',
+  updatedAt: 1783747848808 // (선택) 이 단어 최종 변경 ms. 클라우드 단어별 병합 기준(§4.9)
 }
 ```
 
 ### 메타 — `S.meta`
-`{ lastDay, streak, bestCombo, muted, theme, exp }`
+`{ lastDay, streak, bestCombo, muted, theme, exp, updatedAt }` — `updatedAt`은 meta 최신저장(LWW) 기준(§4.9)
 
 ### 단어은행 항목 — `words.js`
 ```js
@@ -138,6 +150,17 @@
 - 단어→몬스터는 `hash(word) % 풀길이`로 결정론적(같은 단어는 같은 등급 안에서 항상 같은 몬스터). 오답이 쌓여 등급이 오르면 다른 풀에서 **새 모습으로 진화**(일반→희귀→영웅·전설).
 - 로드 실패 시 `setMonImg`가 절차 생성 스프라이트(`sprite()`, 12×11 대칭 픽셀)로 폴백 → 오프라인·이미지 유실에도 동작.
 - 신규 16종은 힉스필드(Nano Banana 2)로 기존 몬스터를 스타일 레퍼런스 삼아 생성 후, 배경제거·600 정규화·PNG8(128색) 최적화(장당 ~34KB).
+- **등장 깜빡임 방지**: `#b-spr`은 단일 `<img>`를 재사용 → 새 `src`를 넣어도 디코드 전까진 이전 몬스터 비트맵이 잠깐 보였음. `setMonImg(img,w,onReady)`가 **디코드 완료 시에만** 콜백하고, `nextMon`은 로드 전 `opacity=0`으로 숨겼다가 준비되면 `wqAppear`로 노출. `img.complete`(캐시/동일 URL)·onerror 폴백·1.5s 안전장치 처리. 무대 암전→점등(spawn) 연출은 유지.
+
+### 4.9 클라우드 동기화 (선택 · 오프라인 우선)
+- **목적**: localStorage 단독의 데이터 취약성 해소 — 기기 이동·브라우저 정리 시 진도 보존(냉정 평가 약점 ②).
+- **스택**: `cloud.js` = Firebase Auth(이메일 링크, 패스워드리스) + Firestore. SDK는 gstatic ESM CDN에서 **동적 import**(빌드 도구 없음). `firebase-config.js`가 비면 `window.Cloud`=no-op → **완전 로컬 전용**(회귀 0). 로그인은 **선택**.
+- **데이터**: `users/{uid}` 문서 1개 = `{ schema:1, words:{<id>:{...word,updatedAt}}, meta:{...,updatedAt} }` (602단어 ~120KB < 1MB 한도).
+- **병합(단어별 최신 우선)**: `resolveAnswer`에서 변경 단어에 `updatedAt` 스탬프. 동기화 = pull → merge(단어별 `updatedAt` 큰 쪽, meta는 LWW) → 로컬 반영(`WQ.applyMerged`) + 원격 write. **한 기기가 다른 기기 진도를 덮지 않음.** 리셋 시 원격도 비움(`Cloud.wipeRemote`).
+- **트리거**: 로그인 직후·앱 로드·변경 후 디바운스(3s)·탭 이탈(`visibilitychange`). 전투 중(`WQ.isBusy`)엔 로컬 반영 생략(원격 write만) → 진행 방해 방지. `persist()`가 `cloudApplying` 플래그로 병합 반영 중 재-푸시를 막음.
+- **UI**: 영입소 **상단** "☁ 클라우드 동기화"(미설정 시 숨김). 훅: `window.WQ`(getState/applyMerged/setSyncStatus/isBusy) ↔ `window.Cloud`(signIn/signOutUser/syncNow/notifyChanged/wipeRemote).
+- **셋업**: `docs/firebase-setup.md`(~10분, 무료 Spark 플랜). Firebase 웹 `apiKey`는 **공개 식별자**(배포 JS에 어차피 노출, 커밋 안전). 보안은 `firestore.rules`(본인 문서만) + (선택) Google Cloud 키 리퍼러 제한.
+- **주의**: 이메일 링크는 발신 시점의 `location.origin`으로 리다이렉트 → **로그인이 그 origin의 localStorage 맥락에서 완료**됨(다른 브라우저/주소에서 링크 열면 그쪽 진도로 로그인). 로컬은 기본 승인 도메인, 배포 도메인은 Firebase 승인목록에 추가 필요.
 
 ---
 
@@ -150,13 +173,14 @@
 - **포획 기준 변경** → `CAPTURE_STAGE`.
 - **모드 난이도 배치 변경** → `pickMode()`.
 - **몬스터 추가/교체** → `assets/mon/`에 투명 PNG(권장 600×600) 저장 후 `ASSETS`의 해당 등급 배열(`cute`/`elite`/`boss`)에 `MON+'파일명.png'` 한 줄 추가. 풀 길이가 바뀌면 기존 단어의 몬스터 배정이 재셔플됨(데이터 무관, 외형만 변경). 참고 §4.8.
+- **클라우드 동기화 설정/디버그** → `docs/firebase-setup.md`. 로직은 `cloud.js`, 앱 연동 훅은 `window.WQ`(index.html). 미설정이면 로컬 전용. 참고 §4.9.
 - **테마** → 현재 Arcade 고정(전환 UI 숨김). 되돌리려면 CSS의 `#themebtn,.themelabel,.themepick{display:none!important;}` 한 줄 제거.
 
 ---
 
 ## 6. 개발 워크플로
 
-- 백엔드/빌드/의존성 없음. `index.html`을 브라우저로 열면 됨(단, `words.js`가 옆에 있어야 함).
+- 빌드/의존성 없음. 로컬 전용 기능은 `index.html`을 브라우저로 열면 됨(`words.js` 옆에 있어야 함). **단, 클라우드 동기화(`cloud.js`는 ESM 모듈)는 `file://`에서 CORS로 안 됨 → 정적 HTTP 서버 필요**: `python3 -m http.server 8792` 후 `localhost:8792`.
 - **문법 체크**: 메인 스크립트 추출 후 `node --check`.
   ```bash
   node -e "const fs=require('fs');const h=fs.readFileSync('index.html','utf8');const b=[...h.matchAll(/<script>([\s\S]*?)<\/script>/g)];fs.writeFileSync('/tmp/wq.js',b[0][1]);"
@@ -176,24 +200,32 @@
 2. **듣기 모드 없음** — 단어 단위 TTS만. 문장 받아쓰기/듣고 고르기 없음.
 3. e2k는 여전히 4지선다(재인). 철자 생산은 k2e·cloze에만.
 4. 예문은 센스당 1문장(최대 2).
-5. **동기화/계정 없음** — localStorage 로컬 저장. 기기 이동은 백업 내보내기/가져오기로.
-6. **배포 URL 미확인** — `wordquest.vercel.app`은 404. 실제 URL로 라이브 QA 미수행(로직은 동일 파일 Playwright로 커버).
-7. 타자기-피드백 레이스(위 6장). 실사용 무해하나 자동화 검증 시 주의.
+5. **클라우드 동기화는 선택**(§4.9) — 로그인 + Firebase 셋업해야 켜짐. 안 하면 여전히 로컬 전용(백업 내보내기/가져오기 병행 권장).
+6. **① 복귀 알림 미구현** — SRS인데 예정일에 사용자를 돌아오게 할 이메일/푸시 알림이 없음(냉정 평가 최대 약점). 백로그 §8.
+7. **동기화 라이브 최종검증 미완** — 코드·로그인은 확인, 두 기기 실제 병합은 사용자 Firebase 셋업 후 검증 예정. 병합은 whole-doc write(~120KB) — 대량 사용 시 단어별 세분화 여지.
+8. **배포 URL 미확인** — `wordquest.vercel.app`은 404였음. 이메일 링크 로그인은 배포 도메인을 Firebase 승인목록에 추가해야 동작.
+9. 타자기-피드백 레이스. 실사용 무해하나 자동화 검증 시 충분히 대기.
+10. **참고(버그 아님)**: 타이핑 모드는 단어 stage 2+에서만 등장(§4.2). 4지선다만 보이면 단어가 아직 stage 0~1이라는 뜻.
 
 ---
 
 ## 8. 백로그 (다음 후보)
 
+**우선순위(냉정 평가 기준):**
+- **① 이메일 복귀 알림** (Phase C · 최대 약점) — 매일 "오늘 복습 N마리" 메일. 카드 없이 무료 = **GitHub Actions 크론 + SendGrid**(Firebase Functions/Blaze 불필요). §4.9의 Firestore 데이터를 서비스 계정으로 조회 → 발송. **코드 미착수.**
+- **PWA** (Phase B) — 설치형·오프라인 셸(manifest + service worker). 향후 웹 푸시 알림 기반도 됨.
+- **동기화 라이브 검증 마무리** — 사용자 Firebase 셋업 후 두 기기 병합 확인(§7-7).
+
+**그 외:**
+- **단어은행 품질**: 품사 편중(동사 356·명사 111·부사 3) 보정, 특정 출판사 시험범위 매핑, 다의어 2예문 확충(현재 `ex2` 13/602).
 - **듣기 모드**: 예문/단어 음성 → 받아쓰기 또는 4지선다.
-- **단어은행 확장/정확화**: 특정 출판사 기준 맞춤(웹 조사 필요, 완전성 보장 어려움).
-- 오답 통계 대시보드 확장(과별/일별 추이).
-- 예문 센스 3개+ 지원, 콜로케이션.
-- (원한다면) 서버 DB(Supabase 등)로 계정·기기 간 동기화·공유 단어장·선생님 대시보드 — 앱 성격이 온라인 서비스로 바뀌는 큰 작업.
-- `vocamon.html` 등 레거시 정리.
+- 오답 통계 대시보드 확장, 콜로케이션, `vocamon.html` 레거시 정리.
+- ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화.
 
 ---
 
-## 9. 참고 — 주요 함수 위치(모두 `index.html` 메인 `<script>`)
+## 9. 참고 — 주요 함수 위치
 
-`pickMode` `clozable` `makeChoices` `askText` `clozeText` `bankSenses` · `nextMon` `answer` `submitSpell` `resolveAnswer` · `renderChoices` `renderSpellInput` `renderMonHP` `renderParty` · `renderDex` `renderHome` `renderReg` `renderWeak` `endBattle` · `dueIds` `rarity` `acc` `koType` `engSim` `lev` `posOf` · `migrateWords` `persist` `parseText` `speak` · 시딩: `samplebtn`/`bankbtn` 핸들러.
-데이터: `words.js`(`window.WORDBANK`).
+**index.html 메인 `<script>`**: `pickMode` `clozable` `makeChoices` `askText` `clozeText` `bankSenses` · `nextMon` `answer` `submitSpell` `resolveAnswer` · `renderChoices` `renderSpellInput` `renderMonHP` `renderParty` · `renderDex` `renderHome` `renderReg` `renderWeak` `endBattle` · `dueIds` `rarity` `acc` `koType` `engSim` `lev` `posOf` · `monAsset` `setMonImg`(onReady 콜백) `sprite`(폴백) · `migrateWords` `persist` `parseText` `speak` · 시딩: `samplebtn`/`bankbtn` 핸들러.
+**클라우드(§4.9)**: 앱 측 `window.WQ`(getState/applyMerged/setSyncStatus/isBusy)·`setCloudStatus`·`wireCloudUI`(index.html) ↔ `cloud.js`의 `window.Cloud`.
+**데이터/설정**: `words.js`(`window.WORDBANK`), `firebase-config.js`(`window.FIREBASE_CONFIG`).
