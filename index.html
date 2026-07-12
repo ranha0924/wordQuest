@@ -371,6 +371,19 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
 .rw-row .rw-m{color:var(--dim);font-family:'Galmuri9',monospace;font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .rw-row .rw-s{color:var(--hp);font-family:'Galmuri9',monospace;font-size:10px;flex-shrink:0;}
 .rw-tip{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);margin-top:9px;line-height:1.6;}
+/* 오답 노트: 주제별 정답률 바 + 발음 버튼 */
+#note-stats .res3{margin:2px 0;}
+#note-stats .rescell{border:4px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);padding:10px 4px;text-align:center;}
+#note-stats .num{font-size:20px;color:var(--gold);line-height:1.1;}
+#note-stats .lbl{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);margin-top:3px;}
+#note-themes{display:flex;flex-direction:column;gap:7px;}
+.tacc{display:flex;align-items:center;gap:8px;font-family:'Galmuri9',monospace;font-size:11px;}
+.tacc-n{color:var(--text);width:82px;flex-shrink:0;}
+.tacc-bar{flex:1;height:12px;background:var(--ink);border:2px solid var(--line);position:relative;overflow:hidden;}
+.tacc-bar i{display:block;height:100%;transition:width .3s;}
+.tacc-p{color:var(--dim);width:36px;text-align:right;flex-shrink:0;}
+#note-weak .spk{background:none;border:none;color:var(--gold);cursor:pointer;padding:2px;flex-shrink:0;display:inline-flex;}
+#note-weak .rw-row{border-bottom:1px solid var(--line);padding-bottom:5px;}
 
 /* ===== screen title card (Famicom, matches home) ===== */
 .scr-head{text-align:center;margin:2px 0 6px;user-select:none;}
@@ -516,6 +529,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <button class="mrow" id="enterbtn"><span class="star">▶</span><span class="mlabel">던전 입장</span><span class="sub" id="h-sub"></span></button>
         <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
+        <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
       </div>
       <div class="homemsg" id="h-msg" style="display:none;"></div>
       <div class="titlestatus">
@@ -657,6 +671,21 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <button class="goldbox bigbtn" style="font-size:16px;padding:16px;min-height:54px;" data-go="home">▶ 마을로 돌아간다</button>
     </div>
 
+    <!-- 오답 노트 / 통계 -->
+    <div class="screen" id="scr-note" style="gap:12px;">
+      <div class="scr-head">
+        <div class="scr-head-t">오답 노트</div>
+        <div class="scr-head-b">약점을 집중 공략한다</div>
+      </div>
+      <div id="note-stats"></div>
+      <button class="goldbox bigbtn" id="drillbtn" style="font-size:15px;padding:15px;min-height:52px;"><span id="drillbtn-t">▶ 약점 집중 사냥</span></button>
+      <div class="flabel">주제별 정답률</div>
+      <div id="note-themes"></div>
+      <div class="flabel">취약 단어 <span class="sub" id="note-weakcount"></span></div>
+      <div id="note-weak"></div>
+      <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
+    </div>
+
     <div class="foot">에빙하우스 망각곡선 기반 간격 반복 · 데이터는 이 브라우저에만 저장된다</div>
   </div>
   <div class="scanlines"></div>
@@ -684,6 +713,7 @@ const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundan
 const WORDBANK=(window.WORDBANK||[]); // 범용 고빈도(words.js)
 const WORDPACK_HS1=(window.WORDPACK_HS1||[]); // 고1 필수 어휘 팩(pack-hs1.js, 주제별 큐레이션)
 const PACK_THEMES=[...new Set(WORDPACK_HS1.map(e=>e.th))]; // 주제 순서(선택 시딩용)
+const PACK_THEME_OF={}; WORDPACK_HS1.forEach(e=>{PACK_THEME_OF[e.w.toLowerCase()]=e.th;}); // id→주제(통계용)
 const BANK={};
 WORDBANK.forEach(e=>{BANK[e.w.toLowerCase()]=e;});
 // 팩 예문/품사도 BANK에 편입(cloze·오답지에서 사용). 겹치면 기존 은행 우선.
@@ -911,10 +941,11 @@ function speak(word){
 /* ================= screens ================= */
 function show(name){
   S.screen=name;
-  ['home','battle','reg','dex','result'].forEach(n=>$('scr-'+n).classList.toggle('on',n===name));
+  ['home','battle','reg','dex','result','note'].forEach(n=>$('scr-'+n).classList.toggle('on',n===name));
   if(name==='home')renderHome();
   if(name==='reg')renderReg();
   if(name==='dex')renderDex();
+  if(name==='note')renderNote();
   window.scrollTo({top:0});
 }
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{sfx('select');show(b.dataset.go);}));
@@ -1457,6 +1488,59 @@ function renderWeak(){
   }
   el.innerHTML=html;el.style.display='block';
 }
+
+/* ================= 오답 노트 / 통계 ================= */
+// 취약 단어: 틀린 적 있는 단어를 오답 많은 순 · 정답률 낮은 순으로
+function weakWords(){
+  return S.words.filter(w=>w.wrong>0).sort((a,b)=>(b.wrong-a.wrong)||((acc(a)??100)-(acc(b)??100)));
+}
+// 약점 집중 사냥: due 무관하게 취약 단어만 모아 즉석 전투(SRS는 정상 적용)
+function startWeakDrill(){
+  const ws=weakWords().slice(0,20);
+  if(!ws.length)return;
+  const q=ws.map(w=>w.id);
+  for(let i=q.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=q[i];q[i]=q[j];q[j]=t;}
+  S.session={q,hearts:HEARTS_MAX,maxH:HEARTS_MAX,combo:0,best:0,win:0,hurt:0,cap:0,drill:true};
+  sfx('select');show('battle');nextMon();
+}
+function renderNote(){
+  const seenAll=S.words.filter(w=>w.seen>0);
+  const totSeen=seenAll.reduce((a,w)=>a+w.seen,0);
+  const totWrong=seenAll.reduce((a,w)=>a+w.wrong,0);
+  const overall=totSeen?Math.round((totSeen-totWrong)/totSeen*100):null;
+  const mastered=S.words.filter(w=>w.cap).length;
+  $('note-stats').innerHTML='<div class="res3">'
+    +'<div class="rescell"><div class="num">'+(overall!==null?overall+'%':'—')+'</div><div class="lbl">정답률</div></div>'
+    +'<div class="rescell"><div class="num" style="color:var(--steel);">'+totSeen+'</div><div class="lbl">시도</div></div>'
+    +'<div class="rescell"><div class="num" style="color:var(--ok);">'+mastered+'</div><div class="lbl">마스터</div></div>'
+    +'</div>';
+  const ws=weakWords();
+  const db=$('drillbtn');
+  if(db){db.disabled=!ws.length;db.style.opacity=ws.length?'':'.5';db.style.cursor=ws.length?'':'default';
+    $('drillbtn-t').textContent=ws.length?('▶ 약점 집중 사냥 ('+Math.min(ws.length,20)+'마리)'):'틀린 단어가 없다';}
+  // 주제별 정답률(팩 단어 한정, 시도한 것만)
+  const rows=[];
+  PACK_THEMES.forEach(th=>{
+    const tw=S.words.filter(w=>PACK_THEME_OF[w.id]===th&&w.seen>0);
+    if(!tw.length)return;
+    const ts=tw.reduce((a,w)=>a+w.seen,0),twr=tw.reduce((a,w)=>a+w.wrong,0);
+    const a=Math.round((ts-twr)/ts*100);
+    const col=a>=80?'var(--ok)':a>=60?'var(--gold)':'var(--hp)';
+    rows.push('<div class="tacc"><span class="tacc-n">'+esc(th)+'</span><span class="tacc-bar"><i style="width:'+a+'%;background:'+col+';"></i></span><span class="tacc-p">'+a+'%</span></div>');
+  });
+  $('note-themes').innerHTML=rows.length?rows.join(''):'<div class="rw-tip">아직 주제별 데이터가 없다. 팩 단어를 풀어보자.</div>';
+  // 취약 단어 리스트(최대 30)
+  const weak=ws.slice(0,30);
+  $('note-weakcount').textContent=ws.length?('총 '+ws.length+'개'):'';
+  $('note-weak').innerHTML=weak.length
+    ?'<div class="rw-list">'+weak.map(w=>
+      '<div class="rw-row"><button class="spk" data-spk="'+esc(w.w)+'" aria-label="발음">'+SPK_SVG+'</button>'
+      +'<span class="rw-w">'+esc(w.w)+'</span><span class="rw-m">'+esc(firstSense(w.m))+'</span>'
+      +'<span class="rw-s">오답 '+w.wrong+'회'+(acc(w)!==null?' · '+acc(w)+'%':'')+'</span></div>').join('')+'</div>'
+    :'<div class="rw-tip">아직 틀린 단어가 없다. 완벽하다!</div>';
+  $('note-weak').querySelectorAll('[data-spk]').forEach(b=>b.addEventListener('click',()=>speak(b.dataset.spk)));
+}
+$('drillbtn').addEventListener('click',startWeakDrill);
 
 /* ================= dex ================= */
 const FDEFS=[

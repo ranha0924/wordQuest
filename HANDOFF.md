@@ -146,9 +146,9 @@
 - `speak(word)` — 브라우저 `speechSynthesis`(en-US). 효과음 음소거와 독립.
 - 🔊 버튼: 전투(정답 공개 후 자동 재생 + 버튼) + 도감 포획 카드. 아이콘은 픽셀 SVG(`SPK_SVG`).
 
-### 4.6 약점 분석
-- `seen` 시도수 추적 → `acc(w)` 정답률.
-- 결과 화면 `renderWeak()`: 전체 정답률 + 취약 단어 TOP3(오답순). 도감 카드에도 정답률 표시.
+### 4.6 약점 분석 & 오답 노트
+- `seen` 시도수 추적 → `acc(w)` 정답률. 결과 화면 `renderWeak()`: 전체 정답률 + 취약 단어 TOP3. 도감 카드에도 정답률.
+- **오답 노트 화면**(`scr-note`, 홈 메뉴 4번째 `data-go="note"` → `renderNote()`): (1) 전체 통계(정답률·시도·마스터), (2) **주제별 정답률 바**(팩 `PACK_THEME_OF`로 주제 매핑, 시도한 것만 · 색: ≥80 초록/≥60 골드/그외 빨강), (3) 취약 단어 리스트(오답순 최대 30, 발음 버튼), (4) **약점 집중 사냥**(`startWeakDrill`) = due 무관하게 취약 단어(`weakWords()`)만 모아 즉석 전투(SRS 정상 적용, 세션 `drill:true`).
 
 ### 4.7 단어은행 & 시딩
 - **두 데이터셋**을 `BANK`(소문자 키 맵)에 편입: `words.js`의 `window.WORDBANK`(범용 고빈도 648) + `pack-hs1.js`의 `window.WORDPACK_HS1`(고1 필수 팩 224, 14주제). 겹치면 **WORDBANK 우선**(기존 예문 유지), 팩 신규분(≈157)이 BANK를 채워 cloze·오답지에 쓰임. `bankEx()`/`bankSenses()`/`clozable()`/`posOf()`.
@@ -270,7 +270,7 @@
 
 ## 9. 참고 — 주요 함수 위치
 
-**index.html 메인 `<script>`**: `pickMode` `clozable` `makeChoices` `askText` `clozeText` `bankSenses` · `nextMon` `answer` `submitSpell` `resolveAnswer` · `renderChoices` `renderSpellInput` `renderMonHP` `renderParty` · `renderDex` `renderHome` `renderReg` `renderWeak` `endBattle` · `dueIds` `rarity` `acc` `koType` `engSim` `lev` `posOf` · `monAsset` `setMonImg`(onReady 콜백) `sprite`(폴백) · `migrateWords` `persist` `parseText` `speak` · 시딩: `samplebtn`/`bankbtn` 핸들러.
+**index.html 메인 `<script>`**: `pickMode` `clozable` `makeChoices` `askText` `clozeText` `bankSenses` · `nextMon` `answer` `submitSpell` `resolveAnswer` · `renderChoices` `renderSpellInput` `renderMonHP` `renderParty` · `renderDex` `renderHome` `renderReg` `renderWeak` `endBattle` · `renderNote` `weakWords` `startWeakDrill`(오답 노트·§4.6) · `renderPackThemes` `seedTheme`(주제 시딩·§4.7) · `dueIds` `rarity` `acc` `koType` `engSim` `lev` `posOf` · `monAsset` `setMonImg`(onReady 콜백) `sprite`(폴백) · `migrateWords` `persist` `parseText` `speak` · 시딩: `packbtn`/`bankbtn` 핸들러.
 **클라우드(§4.9)**: 앱 측 `window.WQ`(getState/applyMerged/setSyncStatus/isBusy)·`setCloudStatus`·`renderCloudNotify`·`wireCloudUI`(index.html) ↔ `cloud.js`의 `window.Cloud`.
 **알림(§4.10)**: `scripts/reminders/lib.mjs`(`countDueWords`/`todayInTimeZone`/`shouldRemind`/`buildEmail`) · `send-reminders.mjs`(로드·발송 오케스트레이션). 앱 측 옵트인: `renderCloudNotify`·`persist`(meta.tz)·`meta.notify`.
 **PWA(§4.11)**: `manifest.webmanifest` · `sw.js`(`handleNavigate`/`handleAsset`·`CACHE`·`CACHE_HOSTS`) · `index.html` head 링크·본문 끝 SW 등록.
