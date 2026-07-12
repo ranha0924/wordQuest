@@ -289,6 +289,8 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
 .regmsg{font-size:13px;color:var(--gold);text-align:center;animation:wqPop .3s;text-shadow:1px 1px 0 var(--ink);}
 .samplebtn{background:var(--night);border:3px dashed var(--steel);color:var(--dim);font-family:'Galmuri9',monospace;font-size:12px;padding:12px;cursor:pointer;}
 .samplebtn:hover{color:var(--gold);border-color:var(--gold);}
+.addalt{display:flex;gap:6px;}
+.addalt .samplebtn{flex:1;font-size:10px;padding:9px 6px;border-width:2px;}
 .subbtn{border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);color:var(--dim);font-family:'Galmuri9',monospace;font-size:11px;padding:11px;cursor:pointer;min-height:42px;display:flex;align-items:center;justify-content:center;transition:transform .08s steps(2);}
 .subbtn:hover{border-image:var(--frame-gold) 3 fill;color:var(--gold);}
 .subbtn:active{transform:translateY(1px);}
@@ -619,11 +621,14 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <button class="parsebtn" id="parsebtn">▶ 몬스터 영입!</button>
       </div>
       <div class="regmsg" id="regmsg" style="display:none;"></div>
+      <div class="flabel">어휘 담기 <span class="sub">교재 없이 바로 시작</span></div>
       <button class="samplebtn" id="samplebtn" style="display:none;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg>샘플 단어 20개로 시작하기</button>
       <button class="samplebtn" id="packbtn" style="border-style:solid;border-color:var(--gold);color:var(--gold);"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3H7V13L2 12Z M9 3H14V12L9 13Z"/></svg><span id="packbtn-t">고1 필수 어휘 팩 담기</span></button>
-      <button class="samplebtn" id="packthemes-toggle" style="font-size:11px;padding:9px;"><span id="packthemes-arrow">▸</span> 주제별로 골라 담기</button>
+      <div class="addalt">
+        <button class="samplebtn" id="packthemes-toggle"><span id="packthemes-arrow">▸</span> 주제별 골라담기</button>
+        <button class="samplebtn" id="bankbtn"><span id="bankbtn-t">범용 어휘 담기</span></button>
+      </div>
       <div id="packthemes" style="display:none;flex-wrap:wrap;gap:6px;justify-content:center;"></div>
-      <button class="samplebtn" id="bankbtn"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg><span id="bankbtn-t">고빈도 영단어(범용) 담기</span></button>
       <div class="flabel">데이터 관리 <span class="sub" id="regcount">서식 중 0마리</span></div>
       <div class="regmanage">
         <div class="grid2">
@@ -1006,13 +1011,13 @@ function renderReg(){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
   const packRemain=WORDPACK_HS1.filter(e=>!have.has(e.w.toLowerCase())).length;
   const pb=$('packbtn');
-  if(pb){ if(packRemain>0){pb.style.display='block';$('packbtn-t').textContent='고1 필수 어휘 팩 '+packRemain+'개 담기 (주제별 · 하루 25개)';} else pb.style.display='none'; }
+  if(pb){ if(packRemain>0){pb.style.display='block';$('packbtn-t').textContent='고1 필수 어휘 팩 '+packRemain+'개 담기 (하루 25개)';} else pb.style.display='none'; }
   const pt=$('packthemes-toggle'),pbox=$('packthemes');
   if(pt) pt.style.display=packRemain>0?'block':'none';
   if(pbox){ if(packRemain===0){pbox.style.display='none';const ar=$('packthemes-arrow');if(ar)ar.textContent='▸';} else if(pbox.style.display!=='none') renderPackThemes(); }
   const remain=WORDBANK.filter(e=>!have.has(e.w.toLowerCase())).length;
   const bb=$('bankbtn');
-  if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='고빈도 영단어(범용) '+remain+'개 담기 (하루 25개씩)';}
+  if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='범용 어휘 '+remain+'개';}
   else bb.style.display='none';
   updateDetect();
 }
