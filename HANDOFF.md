@@ -3,7 +3,7 @@
 > 단어 도감 · WORD QUEST — 영단어 복습을 16비트 JRPG 턴제 전투로 포장한 학습 웹앱.
 > "틀린 단어는 보스가 된다." 대상: 고1(내신·수능 기초 어휘).
 
-최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA + 부사 46개 보강) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
+최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA + 부사 46개 + 고1 필수 어휘 팩 112) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
 ---
 
@@ -15,7 +15,8 @@
   | 파일 | 역할 |
   |---|---|
   | `index.html` | 앱 전체 — 스타일(CSS) + 마크업 + 로직(JS)이 한 파일에. |
-  | `words.js` | **단어은행 데이터**(648개). `window.WORDBANK` 배열. 로직과 분리됨. |
+  | `words.js` | **범용 고빈도 단어은행**(648개). `window.WORDBANK` 배열. 로직과 분리됨. |
+  | `pack-hs1.js` | **고1 필수 어휘 팩**(112개, 7주제 큐레이션). `window.WORDPACK_HS1`. 예문·품사 포함, BANK에 편입돼 cloze 지원. 참고 §4.7. |
   | `manifest.webmanifest` · `sw.js` | **PWA** — 설치형 매니페스트 + 서비스 워커(앱 셸 오프라인 캐시). 참고 §4.11. |
   | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 26종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
   | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
@@ -71,6 +72,7 @@
   - **활성화만 남음**: 사용자가 시크릿 3종(SendGrid 키·발신 이메일·Firebase 서비스계정) 등록하면 발송 시작(§4.10, `docs/reminder-setup.md`). 실메일 라이브 발송은 사용자 셋업 후 확인 예정.
 - **PWA(Phase B) 완료**: 설치 가능 + **오프라인 완전 부팅** 검증(HTTP 서버 + Playwright: SW 등록·제어·캐시·오프라인 리로드 시 WORDBANK 전량 로드·폰트/CSS 렌더까지 확인). 향후 웹푸시 토대.
 - **단어은행 품질 1차 보강**: 품사 편중(부사 3개뿐) 완화 — 고빈도 수능 부사 46개 추가(부사 3→49, 총 648). 후보를 중복·예문 원형 포함·아포스트로피 자동 검증 후 삽입, 브라우저에서 BANK 조회·clozable·posOf 확인.
+- **고1 필수 어휘 팩 정식 내장(냉정 평가 레버 ③)**: "범용 빈도 리스트라 교과서 약속 미이행" 지적 대응. `pack-hs1.js`(7주제×16=112, 뜻+cloze 예문) 신설 + 영입소 **"고1 필수 어휘 팩 담기"** 추천 버튼 + 기존 "교과서 고빈도"를 **"고빈도 영단어(범용)"로 정직하게 개칭**. 112개 검증(팩내 중복0·예문 원형·아포스트로피0·주제 완비), 앱에서 로드·BANK 편입(cloze)·시딩 112·중복방지 확인.
 - **미완(백로그 §8)**: 동기화 두 기기 병합 라이브 최종검증(사용자 Firebase 셋업 후) · ① 실메일 라이브.
 
 ---
@@ -147,10 +149,11 @@
 - 결과 화면 `renderWeak()`: 전체 정답률 + 취약 단어 TOP3(오답순). 도감 카드에도 정답률 표시.
 
 ### 4.7 단어은행 & 시딩
-- `words.js`의 `window.WORDBANK`(648개) → `BANK`(소문자 키 맵). `bankEx()`/`bankSenses()`/`clozable()`/`posOf()`.
+- **두 데이터셋**을 `BANK`(소문자 키 맵)에 편입: `words.js`의 `window.WORDBANK`(범용 고빈도 648) + `pack-hs1.js`의 `window.WORDPACK_HS1`(고1 필수 팩 112, 7주제). 겹치면 **WORDBANK 우선**(기존 예문 유지), 팩 신규분(81)이 BANK를 채워 cloze·오답지에 쓰임. `bankEx()`/`bankSenses()`/`clozable()`/`posOf()`.
 - 첫 방문: `SAMPLE` 20개 자동 시딩.
-- **영입소** 3가지 등록: (1) 붙여넣기(`abandon - 버리다` 형식, `parseText()`), (2) 샘플 20개 버튼, (3) **"교과서 고빈도 단어 담기"** 버튼 = 은행 전체를 **하루 25개씩 순차 출현**(staggered due)하도록 시딩.
-- 붙여넣은 단어가 은행과 철자 일치하면 예문·품사 자동 연결.
+- **영입소** 등록 경로: (1) 붙여넣기(`abandon - 버리다` 형식, `parseText()`), (2) 샘플 20개 버튼, (3) **"고1 필수 어휘 팩 담기"**(`packbtn`, 추천·골드 실선) = 주제별 큐레이션 112개, (4) **"고빈도 영단어(범용) 담기"**(`bankbtn`, 이전 "교과서 고빈도"에서 **정직하게 개칭**) = 범용 은행. (3)·(4) 모두 **하루 25개씩 순차 출현**(staggered due)·이미 담긴 단어 제외.
+- 붙여넣은 단어가 은행/팩과 철자 일치하면 예문·품사 자동 연결.
+- **팩 확장**: `pack-hs1.js`에 `{w,pos,m,ex,th:'주제'}` 추가(예문은 원형 포함·아포스트로피 금지). 검증 파이프라인은 `scratchpad/validate-pack.mjs` 패턴 참고(중복·원형·아포스트로피 자동 점검).
 
 ### 4.8 몬스터 에셋 & 등급 진화
 - 이미지는 전부 **로컬**(`assets/`): 몬스터 스프라이트 `assets/mon/*.png`(600×600 투명 PNG), 배경 `assets/bg.png`, 용사 `assets/hero.png`. 외부 CDN 의존 없음(과거 CloudFront → 로컬로 이관).
@@ -234,7 +237,7 @@
 
 ## 7. 알려진 한계
 
-1. **단어은행은 범용 고빈도 어휘**지 특정 출판사 공통영어 교과서의 정확한 목록이 아님. 정확한 시험범위는 영입소 붙여넣기 또는 `words.js` 직접 추가로.
+1. **콘텐츠 = 범용 은행(648) + 고1 필수 팩(112, 주제별 큐레이션)**. 팩은 여러 교과서·수능에 반복 출현하는 핵심 어휘를 정직하게 선별한 것이지 **특정 출판사 교과서의 정확한 목록은 아님**(저작권·정확성). 정확한 시험범위는 영입소 붙여넣기 또는 `pack-hs1.js`/`words.js` 직접 추가로.
 2. **듣기 모드 없음** — 단어 단위 TTS만. 문장 받아쓰기/듣고 고르기 없음.
 3. e2k는 여전히 4지선다(재인). 철자 생산은 k2e·cloze에만.
 4. 예문은 센스당 1문장(최대 2).
@@ -256,7 +259,7 @@
 - **웹푸시 알림**(선택) — PWA(§4.11) 위에 Push API + Firebase Cloud Messaging. ①의 이메일 대안(설치 사용자 대상). 서비스 워커 준비됨.
 
 **그 외:**
-- **단어은행 품질**: 부사 3→49로 1차 보정 완료(총 648). 남은 편중(동사 356·형용사 132·명사 111 대비 부사 여전히 적음)·특정 출판사 시험범위 매핑·다의어 2예문 확충(현재 `ex2` 14/648) 여지.
+- **단어은행 품질**: 부사 3→49 보정 + 고1 필수 팩 112(주제별) 내장 완료. 남은 것 — 팩 주제/분량 확대(현재 7주제×16), 특정 출판사 시험범위 정밀 매핑, 다의어 2예문 확충(현재 `ex2` 14/648), 주제별 선택 시딩 UI(현재 팩 전체 담기만).
 - **듣기 모드**: 예문/단어 음성 → 받아쓰기 또는 4지선다.
 - 오답 통계 대시보드 확장, 콜로케이션, `vocamon.html` 레거시 정리.
 - ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**, **PWA 설치형·오프라인 셸(§4.11)**.
@@ -269,4 +272,4 @@
 **클라우드(§4.9)**: 앱 측 `window.WQ`(getState/applyMerged/setSyncStatus/isBusy)·`setCloudStatus`·`renderCloudNotify`·`wireCloudUI`(index.html) ↔ `cloud.js`의 `window.Cloud`.
 **알림(§4.10)**: `scripts/reminders/lib.mjs`(`countDueWords`/`todayInTimeZone`/`shouldRemind`/`buildEmail`) · `send-reminders.mjs`(로드·발송 오케스트레이션). 앱 측 옵트인: `renderCloudNotify`·`persist`(meta.tz)·`meta.notify`.
 **PWA(§4.11)**: `manifest.webmanifest` · `sw.js`(`handleNavigate`/`handleAsset`·`CACHE`·`CACHE_HOSTS`) · `index.html` head 링크·본문 끝 SW 등록.
-**데이터/설정**: `words.js`(`window.WORDBANK`), `firebase-config.js`(`window.FIREBASE_CONFIG`).
+**데이터/설정**: `words.js`(`window.WORDBANK`), `pack-hs1.js`(`window.WORDPACK_HS1` — 고1 필수 팩), `firebase-config.js`(`window.FIREBASE_CONFIG`). 시딩: `packbtn`/`bankbtn` 핸들러.

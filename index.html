@@ -606,7 +606,8 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       </div>
       <div class="regmsg" id="regmsg" style="display:none;"></div>
       <button class="samplebtn" id="samplebtn" style="display:none;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg>샘플 단어 20개로 시작하기</button>
-      <button class="samplebtn" id="bankbtn"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg><span id="bankbtn-t">교과서 고빈도 단어 담기</span></button>
+      <button class="samplebtn" id="packbtn" style="border-style:solid;border-color:var(--gold);color:var(--gold);"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3H7V13L2 12Z M9 3H14V12L9 13Z"/></svg><span id="packbtn-t">고1 필수 어휘 팩 담기</span></button>
+      <button class="samplebtn" id="bankbtn"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg><span id="bankbtn-t">고빈도 영단어(범용) 담기</span></button>
       <div class="flabel">데이터 관리 <span class="sub" id="regcount">서식 중 0마리</span></div>
       <div class="regmanage">
         <div class="grid2">
@@ -661,6 +662,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <script src="words.js"></script>
+<script src="pack-hs1.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 'use strict';
@@ -677,9 +679,12 @@ const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundan
 /* ================= 교과서 단어은행 (예문 내장) =================
    실제 데이터는 words.js 에 있다 (window.WORDBANK). 단어 추가/편집은 그 파일에서.
    여기서는 로드된 배열을 참조만 한다. 빈칸(cloze)·예문·품사 오답지 등이 이 데이터를 쓴다. */
-const WORDBANK=(window.WORDBANK||[]); // 데이터는 words.js 에서 로드
+const WORDBANK=(window.WORDBANK||[]); // 범용 고빈도(words.js)
+const WORDPACK_HS1=(window.WORDPACK_HS1||[]); // 고1 필수 어휘 팩(pack-hs1.js, 주제별 큐레이션)
 const BANK={};
 WORDBANK.forEach(e=>{BANK[e.w.toLowerCase()]=e;});
+// 팩 예문/품사도 BANK에 편입(cloze·오답지에서 사용). 겹치면 기존 은행 우선.
+WORDPACK_HS1.forEach(e=>{const k=e.w.toLowerCase();if(!BANK[k])BANK[k]=e;});
 function bankEx(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.ex:null;}
 // 다의어: 예문(ex/ex2)을 각 뜻(;로 구분)에 매핑 → 센스별로 구분해 학습
 function bankSenses(w){
@@ -963,9 +968,12 @@ function renderReg(){
   $('samplebtn').style.display=S.words.length===0?'block':'none';
   // 단어은행 중 아직 안 담긴 개수
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
+  const packRemain=WORDPACK_HS1.filter(e=>!have.has(e.w.toLowerCase())).length;
+  const pb=$('packbtn');
+  if(pb){ if(packRemain>0){pb.style.display='block';$('packbtn-t').textContent='고1 필수 어휘 팩 '+packRemain+'개 담기 (주제별 · 하루 25개)';} else pb.style.display='none'; }
   const remain=WORDBANK.filter(e=>!have.has(e.w.toLowerCase())).length;
   const bb=$('bankbtn');
-  if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='교과서 고빈도 단어 '+remain+'개 담기 (하루 25개씩 출현)';}
+  if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='고빈도 영단어(범용) '+remain+'개 담기 (하루 25개씩)';}
   else bb.style.display='none';
   updateDetect();
 }
@@ -992,7 +1000,21 @@ $('samplebtn').addEventListener('click',()=>{
   $('regtext').value=SAMPLE;
   $('parsebtn').click();
 });
-// 단어은행 전체를 하루 25개씩 순차 출현하도록 담기(간격 학습 페이싱)
+// 고1 필수 어휘 팩(주제별 큐레이션)을 하루 25개씩 순차 담기 — 주제 순서대로 출현
+$('packbtn').addEventListener('click',()=>{
+  const have=new Set(S.words.map(w=>w.w.toLowerCase()));
+  const news=WORDPACK_HS1.filter(e=>!have.has(e.w.toLowerCase()));
+  if(!news.length){regMsg('고1 필수 어휘를 이미 전부 담았다!');return;}
+  const t=today(),BATCH=25;
+  news.forEach((e,i)=>{
+    const k=e.w.toLowerCase();
+    S.words.push({id:k,w:e.w,m:e.m,stage:0,wrong:0,seen:0,cap:false,due:addDays(t,Math.floor(i/BATCH)),created:t});
+  });
+  persist();sfx('capture');
+  regMsg('고1 필수 어휘 '+news.length+'마리를 담았다! 주제별로 하루 약 '+BATCH+'마리씩 출현한다. (약 '+Math.ceil(news.length/BATCH)+'일 분량)');
+  renderReg();
+});
+// 범용 고빈도 단어은행 전체를 하루 25개씩 순차 출현하도록 담기(간격 학습 페이싱)
 $('bankbtn').addEventListener('click',()=>{
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
   const news=WORDBANK.filter(e=>!have.has(e.w.toLowerCase()));
