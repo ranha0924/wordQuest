@@ -704,6 +704,8 @@ function bankSenses(w){
    그 이후에도 사다리를 계속 타며 복습이 이어진다. */
 const MASTER_MAX=6, CAPTURE_STAGE=3;
 const LADDER=[0,1,3,7,16,35,75]; // days until next review, indexed by resulting stage
+const LISTEN_P=0.35; // 생산 단계(stage>=2)에서 '듣고 받아쓰기'가 등장할 확률
+function ttsOK(){return !!(window.speechSynthesis);} // 음성 합성 가능 여부
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
 
 /* ===== 오답지 근사치화용 유사도 ===== */
@@ -1149,6 +1151,8 @@ function clozable(w){
 }
 function pickMode(w){
   const st=w.stage||0;
+  // 듣기(받아쓰기): 생산 단계에서 가끔 등장 — 청취+철자 훈련(TTS 가능할 때만)
+  if(st>=2&&ttsOK()&&Math.random()<LISTEN_P)return 'listen';
   if(st>=CAPTURE_STAGE&&clozable(w).length)return 'cloze';
   if(st>=2)return 'k2e';
   return 'e2k';
@@ -1158,6 +1162,7 @@ function clozeText(w,ex){
   return ex.replace(re,'______');
 }
 function askText(w,mode,pick){
+  if(mode==='listen')return '들리는 단어를 영어로 쓰세요  (뜻: '+w.m+')';
   if(mode==='k2e')return '「'+w.m+'」 …영어로 쓰면?';
   if(mode==='cloze'){const p=pick||bankSenses(w)[0]||{ex:bankEx(w),sense:w.m};return '빈칸에 알맞은 단어는?  '+clozeText(w,p.ex)+'  (뜻: '+p.sense+')';}
   return '「'+w.w+'」 …이 단어의 뜻은?';
@@ -1237,10 +1242,13 @@ function renderSpellInput(w){
   const box=$('spellbox');box.style.display='flex';
   const n=(w.w||'').length;
   const dots=Array.from({length:n},()=>'○').join(' ');
-  box.innerHTML='<div class="spellhint" id="spellhint">'+dots+'</div>'
-    +'<div class="spellcount">'+n+'글자 · 영어로 입력</div>'
+  const listen=(S.mode==='listen');
+  box.innerHTML=(listen?'<button class="spellsubmit" id="replaybtn" type="button" style="margin:0 auto 8px;">'+SPK_SVG+' 다시 듣기</button>':'')
+    +'<div class="spellhint" id="spellhint">'+dots+'</div>'
+    +'<div class="spellcount">'+n+'글자 · '+(listen?'듣고 영어로 입력':'영어로 입력')+'</div>'
     +'<div class="spellrow"><input class="spellin" id="spellin" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="latin" enterkeyhint="done" aria-label="영어 철자 입력">'
     +'<button class="spellsubmit" id="spellsubmit" type="button">▶ 확인</button></div>';
+  if(listen){const rb=$('replaybtn');if(rb)rb.addEventListener('click',()=>speak(w.w));}
   const inp=$('spellin');
   inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submitSpell();}});
   inp.addEventListener('input',()=>{
@@ -1283,7 +1291,7 @@ function nextMon(){
   const pick=mode==='cloze'?(shuffle(clozable(w))[0]||null):null;
   // k2e·cloze는 정답이 영어 단어라 몬스터 이름(=영어 단어)이 스포일러 → 답할 때까지 가림
   const showName=(mode==='e2k');
-  const typing=(mode==='k2e'||mode==='cloze'); // 이 두 모드는 4지선다 대신 철자 타이핑
+  const typing=(mode==='k2e'||mode==='cloze'||mode==='listen'); // 철자 타이핑 모드들(듣기 포함)
   S.curId=w.id;S.mode=mode;S.clozePick=pick;S.spellVal='';S.choices=typing?[]:makeChoices(w,mode);S.picked=-1;S.phase='appear';
   $('b-rtag').textContent=r.label;
   $('b-rtag').style.color=r.col;$('b-rtag').style.borderColor=r.col;
@@ -1309,6 +1317,7 @@ function nextMon(){
     S.phase='ask';
     setMsg(askText(w,mode,pick));
     if(typing)renderSpellInput(w);else renderChoices();
+    if(mode==='listen')wait(()=>speak(w.w),350); // 듣기: 문제 제시 직후 발음 자동 재생
   },1000);
 }
 
@@ -1384,7 +1393,7 @@ function resolveAnswer(correct){
     s.q=s.q.slice(1);s.q.push(w.id);
     const r=rarity(w);
     // 타이핑 모드에서 1글자 차이면 "거의 맞았다" 안내(여전히 오답)
-    const typed=(S.mode==='k2e'||S.mode==='cloze')?(S.spellVal||''):'';
+    const typed=(S.mode==='k2e'||S.mode==='cloze'||S.mode==='listen')?(S.spellVal||''):'';
     const near=typed&&typed.toLowerCase()!==(w.w||'').toLowerCase()&&lev(typed.toLowerCase(),(w.w||'').toLowerCase())<=1;
     let m=(near?'아깝다! 한 글자 차이다. ':'으악! ')+'정답은 「'+w.w+' = '+w.m+'」… '+name+'의 반격! (정착 초기화';
     m+=(w.wrong===1||w.wrong===3||w.wrong===5)?(', '+r.short+' 등급으로 강화!)'):')';
