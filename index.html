@@ -703,8 +703,13 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
               <button class="subbtn" id="acct-role-teacher">🧑‍🏫 선생님</button>
             </div>
           </div>
-          <!-- 학생: 반 참여 -->
+          <!-- 학생: 이름 + 반 참여 -->
           <div id="acct-student" style="display:none;">
+            <div class="regmsg" style="display:block;margin-bottom:6px;">이름 <span class="sub">선생님이 명단에서 알아볼 수 있게</span></div>
+            <div class="grid2" style="margin-bottom:10px;">
+              <input id="acct-name" placeholder="이름 (예: 홍길동)" maxlength="20" style="height:38px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
+              <button class="subbtn" id="acct-savename">이름 저장</button>
+            </div>
             <div id="acct-noclass">
               <div class="regmsg" style="display:block;margin-bottom:6px;">선생님이 알려준 반 코드를 입력하세요.</div>
               <div class="grid2">
@@ -1972,6 +1977,8 @@ function renderAccount(){
   if(tea) tea.style.display=(role==='teacher')?'':'none';
   if(role==='student'){
     const has=!!(p&&p.classId);
+    const nameInp=$('acct-name');
+    if(nameInp&&document.activeElement!==nameInp) nameInp.value=(p&&p.displayName)||'';
     const nc=$('acct-noclass'),hc=$('acct-hasclass');
     if(nc) nc.style.display=has?'none':'';
     if(hc){ hc.style.display=has?'block':'none'; if(has) hc.textContent='소속 반: '+((p&&p.className)||'(이름 없음)')+' · 다른 반 코드를 입력하면 반을 옮겨요.'; }
@@ -2059,11 +2066,22 @@ function renderCloudNotify(){
   // 역할 선택
   on('acct-role-student','click',()=>C()&&C().chooseRole&&C().chooseRole('student'));
   on('acct-role-teacher','click',()=>C()&&C().chooseRole&&C().chooseRole('teacher'));
-  // 학생: 반 참여
+  // 학생: 이름 저장
+  const doSaveName=async()=>{
+    const nm=$('acct-name'); if(!nm||!C()||!C().setDisplayName) return;
+    const r=await C().setDisplayName(nm.value);
+    if(r&&r.ok) alert('이름을 “'+r.name+'”(으)로 저장했어요.');
+    else alert((r&&r.msg)||'이름 저장에 실패했어요.');
+  };
+  on('acct-savename','click',doSaveName);
+  on('acct-name','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doSaveName();}});
+  // 학생: 반 참여(이름 + 코드)
   const doJoin=async()=>{
-    const inp=$('acct-code'); if(!inp||!C()||!C().joinClassByCode) return;
-    const r=await C().joinClassByCode(inp.value);
-    if(r&&r.ok){ inp.value=''; alert('“'+r.name+'” 반에 참여했어요!'); }
+    const inp=$('acct-code'),nm=$('acct-name'); if(!inp||!C()||!C().joinClassByCode) return;
+    const name=(nm&&nm.value||'').trim();
+    if(!name){ alert('먼저 이름을 입력해 주세요.'); if(nm)nm.focus(); return; }
+    const r=await C().joinClassByCode(inp.value,name);
+    if(r&&r.ok){ inp.value=''; alert('“'+r.name+'” 반에 참여했어요! (이름: '+name+')'); }
     else alert((r&&r.msg)||'반 참여에 실패했어요.');
   };
   on('acct-join','click',doJoin);
