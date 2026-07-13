@@ -623,12 +623,10 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <div class="regmsg" id="regmsg" style="display:none;"></div>
       <div class="flabel">어휘 담기 <span class="sub">교재 없이 바로 시작</span></div>
       <button class="samplebtn" id="samplebtn" style="display:none;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg>샘플 단어 20개로 시작하기</button>
-      <button class="samplebtn" id="packbtn" style="border-style:solid;border-color:var(--gold);color:var(--gold);"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3H7V13L2 12Z M9 3H14V12L9 13Z"/></svg><span id="packbtn-t">고1 필수 어휘 팩 담기</span></button>
+      <div id="packlist"></div>
       <div class="addalt">
-        <button class="samplebtn" id="packthemes-toggle"><span id="packthemes-arrow">▸</span> 주제별 골라담기</button>
         <button class="samplebtn" id="bankbtn"><span id="bankbtn-t">범용 어휘 담기</span></button>
       </div>
-      <div id="packthemes" style="display:none;flex-wrap:wrap;gap:6px;justify-content:center;"></div>
       <div class="flabel">데이터 관리 <span class="sub" id="regcount">서식 중 0마리</span></div>
       <div class="regmanage">
         <div class="grid2">
@@ -699,6 +697,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 
 <script src="words.js"></script>
 <script src="pack-hs1.js"></script>
+<script src="pack-confuse.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 'use strict';
@@ -717,12 +716,18 @@ const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundan
    여기서는 로드된 배열을 참조만 한다. 빈칸(cloze)·예문·품사 오답지 등이 이 데이터를 쓴다. */
 const WORDBANK=(window.WORDBANK||[]); // 범용 고빈도(words.js)
 const WORDPACK_HS1=(window.WORDPACK_HS1||[]); // 고1 필수 어휘 팩(pack-hs1.js, 주제별 큐레이션)
-const PACK_THEMES=[...new Set(WORDPACK_HS1.map(e=>e.th))]; // 주제 순서(선택 시딩용)
-const PACK_THEME_OF={}; WORDPACK_HS1.forEach(e=>{PACK_THEME_OF[e.w.toLowerCase()]=e.th;}); // id→주제(통계용)
+const WORDPACK_CONFUSE=(window.WORDPACK_CONFUSE||[]); // 철자 혼동 어휘 팩(pack-confuse.js)
+// 여러 어휘 팩을 하나의 목록으로 관리 — 담기 UI·통계가 이 목록을 순회한다.
+const PACKS=[
+  {key:'hs1',     label:'고1 필수 어휘 팩', data:WORDPACK_HS1},
+  {key:'confuse', label:'철자 혼동 어휘',   data:WORDPACK_CONFUSE},
+];
+const PACK_THEMES=[...new Set(PACKS.flatMap(p=>p.data.map(e=>e.th)))]; // 전체 주제 순서(통계용)
+const PACK_THEME_OF={}; PACKS.forEach(p=>p.data.forEach(e=>{PACK_THEME_OF[e.w.toLowerCase()]=e.th;})); // id→주제(통계용)
 const BANK={};
 WORDBANK.forEach(e=>{BANK[e.w.toLowerCase()]=e;});
 // 팩 예문/품사도 BANK에 편입(cloze·오답지에서 사용). 겹치면 기존 은행 우선.
-WORDPACK_HS1.forEach(e=>{const k=e.w.toLowerCase();if(!BANK[k])BANK[k]=e;});
+PACKS.forEach(p=>p.data.forEach(e=>{const k=e.w.toLowerCase();if(!BANK[k])BANK[k]=e;}));
 function bankEx(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.ex:null;}
 // 다의어: 예문(ex/ex2)을 각 뜻(;로 구분)에 매핑 → 센스별로 구분해 학습
 function bankSenses(w){
@@ -1009,12 +1014,7 @@ function renderReg(){
   $('samplebtn').style.display=S.words.length===0?'block':'none';
   // 단어은행 중 아직 안 담긴 개수
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
-  const packRemain=WORDPACK_HS1.filter(e=>!have.has(e.w.toLowerCase())).length;
-  const pb=$('packbtn');
-  if(pb){ if(packRemain>0){pb.style.display='block';$('packbtn-t').textContent='고1 필수 어휘 팩 '+packRemain+'개 담기 (하루 25개)';} else pb.style.display='none'; }
-  const pt=$('packthemes-toggle'),pbox=$('packthemes');
-  if(pt) pt.style.display=packRemain>0?'block':'none';
-  if(pbox){ if(packRemain===0){pbox.style.display='none';const ar=$('packthemes-arrow');if(ar)ar.textContent='▸';} else if(pbox.style.display!=='none') renderPackThemes(); }
+  renderPacks();
   const remain=WORDBANK.filter(e=>!have.has(e.w.toLowerCase())).length;
   const bb=$('bankbtn');
   if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='범용 어휘 '+remain+'개';}
@@ -1044,24 +1044,24 @@ $('samplebtn').addEventListener('click',()=>{
   $('regtext').value=SAMPLE;
   $('parsebtn').click();
 });
-// 고1 필수 어휘 팩(주제별 큐레이션)을 하루 25개씩 순차 담기 — 주제 순서대로 출현
-$('packbtn').addEventListener('click',()=>{
+// 어휘 팩을 하루 25개씩 순차 담기 — 주제 순서대로 출현
+function seedPack(pack){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
-  const news=WORDPACK_HS1.filter(e=>!have.has(e.w.toLowerCase()));
-  if(!news.length){regMsg('고1 필수 어휘를 이미 전부 담았다!');return;}
+  const news=pack.data.filter(e=>!have.has(e.w.toLowerCase()));
+  if(!news.length){regMsg(pack.label+'을(를) 이미 전부 담았다!');return;}
   const t=today(),BATCH=25;
   news.forEach((e,i)=>{
     const k=e.w.toLowerCase();
     S.words.push({id:k,w:e.w,m:e.m,stage:0,wrong:0,seen:0,cap:false,due:addDays(t,Math.floor(i/BATCH)),created:t});
   });
   persist();sfx('capture');
-  regMsg('고1 필수 어휘 '+news.length+'마리를 담았다! 주제별로 하루 약 '+BATCH+'마리씩 출현한다. (약 '+Math.ceil(news.length/BATCH)+'일 분량)');
+  regMsg(pack.label+' '+news.length+'마리를 담았다! 주제별로 하루 약 '+BATCH+'마리씩 출현한다. (약 '+Math.ceil(news.length/BATCH)+'일 분량)');
   renderReg();
-});
+}
 // 주제별 선택 시딩: 고른 주제의 단어만 즉시 담기(집중 학습)
-function seedTheme(th){
+function seedTheme(pack,th){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
-  const news=WORDPACK_HS1.filter(e=>e.th===th&&!have.has(e.w.toLowerCase()));
+  const news=pack.data.filter(e=>e.th===th&&!have.has(e.w.toLowerCase()));
   if(!news.length){regMsg('"'+th+'" 주제는 이미 전부 담았다!');return;}
   const t=today();
   news.forEach(e=>{const k=e.w.toLowerCase();S.words.push({id:k,w:e.w,m:e.m,stage:0,wrong:0,seen:0,cap:false,due:t,created:t});});
@@ -1069,26 +1069,52 @@ function seedTheme(th){
   regMsg('『'+th+'』 주제 '+news.length+'마리를 담았다!');
   renderReg();
 }
-function renderPackThemes(){
-  const box=$('packthemes'); if(!box) return;
-  const have=new Set(S.words.map(w=>w.w.toLowerCase()));
-  box.innerHTML='';
-  PACK_THEMES.forEach(th=>{
-    const remain=WORDPACK_HS1.filter(e=>e.th===th&&!have.has(e.w.toLowerCase())).length;
+// 팩별 담기 UI를 동적으로 렌더(팩마다: 담기 버튼 + 주제별 골라담기 + 주제 칩)
+const packThemeOpen={}; // 팩별 주제 목록 펼침 상태
+function fillPackThemes(box,pack,have){
+  const themes=[...new Set(pack.data.map(e=>e.th))];
+  themes.forEach(th=>{
+    const remain=pack.data.filter(e=>e.th===th&&!have.has(e.w.toLowerCase())).length;
     const b=document.createElement('button');
     b.className='fchip'+(remain===0?' on':'');
-    b.innerHTML=th+'<span class="c">'+(remain===0?'✓':remain)+'</span>';
+    b.innerHTML=esc(th)+'<span class="c">'+(remain===0?'✓':remain)+'</span>';
     if(remain===0){b.disabled=true;b.style.opacity='.55';}
-    else b.addEventListener('click',()=>seedTheme(th));
+    else b.addEventListener('click',()=>seedTheme(pack,th));
     box.appendChild(b);
   });
 }
-$('packthemes-toggle').addEventListener('click',()=>{
-  const box=$('packthemes'),open=box.style.display!=='none';
-  box.style.display=open?'none':'flex';
-  const ar=$('packthemes-arrow');if(ar)ar.textContent=open?'▸':'▾';
-  if(!open)renderPackThemes();
-});
+function renderPacks(){
+  const host=$('packlist'); if(!host) return;
+  const have=new Set(S.words.map(w=>w.w.toLowerCase()));
+  host.innerHTML='';
+  PACKS.forEach(pack=>{
+    const remain=pack.data.filter(e=>!have.has(e.w.toLowerCase())).length;
+    if(remain===0) return; // 다 담은 팩은 숨김
+    const wrap=document.createElement('div');
+    wrap.style.cssText='display:flex;flex-direction:column;gap:6px;margin-bottom:8px;';
+    // 담기 버튼
+    const btn=document.createElement('button');
+    btn.className='samplebtn';
+    btn.style.cssText='border-style:solid;border-color:var(--gold);color:var(--gold);';
+    btn.innerHTML='<svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3H7V13L2 12Z M9 3H14V12L9 13Z"/></svg><span>'+esc(pack.label)+' '+remain+'개 담기 (하루 25개)</span>';
+    btn.addEventListener('click',()=>seedPack(pack));
+    wrap.appendChild(btn);
+    // 주제별 골라담기 토글
+    const open=!!packThemeOpen[pack.key];
+    const tog=document.createElement('button');
+    tog.className='samplebtn';
+    tog.style.fontSize='11px';
+    tog.innerHTML='<span>'+(open?'▾':'▸')+'</span> 주제별 골라담기';
+    tog.addEventListener('click',()=>{packThemeOpen[pack.key]=!packThemeOpen[pack.key];renderPacks();});
+    wrap.appendChild(tog);
+    // 주제 칩 박스
+    const tbox=document.createElement('div');
+    tbox.style.cssText='display:'+(open?'flex':'none')+';flex-wrap:wrap;gap:6px;justify-content:center;';
+    if(open) fillPackThemes(tbox,pack,have);
+    wrap.appendChild(tbox);
+    host.appendChild(wrap);
+  });
+}
 // 범용 고빈도 단어은행 전체를 하루 25개씩 순차 출현하도록 담기(간격 학습 페이싱)
 $('bankbtn').addEventListener('click',()=>{
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
