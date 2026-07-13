@@ -155,7 +155,19 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .homemsg{font-size:12px;color:var(--gold);text-align:center;animation:wqPop .3s;text-shadow:1px 1px 0 var(--ink);}
 
 /* ===== title screen (Famicom style) ===== */
-#scr-home{align-items:center;gap:0;justify-content:center;flex:1;}
+#scr-home{align-items:center;gap:0;justify-content:center;flex:1;position:relative;}
+/* 우측 상단 설정 톱니(메뉴에서 분리해 타이틀을 깔끔하게) */
+.homegear{position:absolute;top:2px;right:2px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+  background:var(--night);border:5px solid transparent;border-image:var(--frame-steel) 3 fill;color:var(--gold);cursor:pointer;z-index:6;padding:0;}
+.homegear:active{transform:translateY(1px);}
+.homegear .ic{width:18px;height:18px;}
+/* 홈 학습 히트맵 — 상태칸과 같은 강철 프레임으로 통일 */
+.homeheat{margin-top:14px;width:100%;max-width:420px;align-self:center;
+  border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);padding:11px 10px 13px;}
+.homeheat .hh-lbl{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);text-align:center;margin-bottom:9px;letter-spacing:.5px;}
+.homeheat .hh-lbl b{color:var(--gold);font-weight:normal;}
+.heatgrid{display:grid;grid-auto-flow:column;gap:3px;justify-content:center;}
+.heatgrid i{width:12px;height:12px;border-radius:2px;display:block;}
 .titlelogo{text-align:center;margin:0 0 30px;user-select:none;}
 .tl-main{font-size:56px;line-height:1;letter-spacing:3px;
   background:linear-gradient(var(--tl1) 0%,var(--tl2) 40%,var(--tl3) 72%,var(--tl4) 100%);
@@ -521,6 +533,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 
     <!-- 마을 (타이틀 화면) -->
     <div class="screen" id="scr-home">
+      <button class="homegear" data-go="settings" aria-label="설정" title="설정"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M6.5 1h3l.5 2 1.2.5 1.8-1 2 2-1 1.8.5 1.2 2 .5v3l-2 .5-.5 1.2 1 1.8-2 2-1.8-1-1.2.5-.5 2h-3l-.5-2-1.2-.5-1.8 1-2-2 1-1.8L1.5 10 0 9.5v-3l2-.5.5-1.2-1-1.8 2-2 1.8 1L6 3zM8 5.5A2.5 2.5 0 1 0 8 10.5A2.5 2.5 0 0 0 8 5.5z"/></svg></button>
       <div class="titlelogo">
         <div class="tl-main">단어도감</div>
         <div class="tl-en">WORD QUEST</div>
@@ -533,7 +546,6 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
         <button class="mrow" data-go="teacher" id="h-teacher-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">선생님 대시보드</span><span class="sub">반별 학생 학습 현황</span></button>
-        <button class="mrow" data-go="settings"><span class="star">▶</span><span class="mlabel">설정</span><span class="sub" id="h-settings-sub">로그인 · 계정 · 동기화</span></button>
       </div>
       <div class="homemsg" id="h-msg" style="display:none;"></div>
       <div class="titlestatus">
@@ -543,8 +555,8 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="ts-cell"><b id="h-best">0</b><span>최고 콤보</span></div>
         <span style="display:none;"><span id="h-bar"></span><span id="h-c0"></span><span id="h-c1"></span><span id="h-c2"></span><span id="h-c3"></span></span>
       </div>
-      <div class="homeheat" id="home-heat" style="display:none;margin-top:4px;text-align:center;">
-        <div style="font-size:11px;color:#8a8ab0;margin-bottom:5px;" id="home-heat-lbl">최근 학습</div>
+      <div class="homeheat" id="home-heat" style="display:none;">
+        <div class="hh-lbl" id="home-heat-lbl">최근 학습</div>
         <div id="home-heat-grid"></div>
       </div>
       <button class="navbtn" id="pwa-install" style="display:none;margin-top:2px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2H9V7H12L8 11L4 7H7Z M3 12H13V14H3Z"/></svg>홈 화면에 앱 설치</button>
@@ -904,9 +916,9 @@ function heatmapHTML(dh,weeks){
     let lv=0; if(a>0)lv=1; if(a>=5)lv=2; if(a>=15)lv=3; if(a>=30)lv=4;
     const col=['#1b1b2e','#274a2a','#2f7a37','#3fae46','#5fe06a'][lv];
     const ok=e?e.ok:0;
-    cells.push('<i title="'+ds+' · '+a+'문제'+(a?(' · 정답 '+ok):'')+'" style="width:12px;height:12px;border-radius:2px;background:'+col+';display:block;"></i>');
+    cells.push('<i title="'+ds+' · '+a+'문제'+(a?(' · 정답 '+ok):'')+'" style="background:'+col+';"></i>');
   }
-  return '<div style="display:grid;grid-template-columns:repeat('+weeks+',12px);grid-auto-flow:column;grid-template-rows:repeat(7,12px);gap:3px;justify-content:center;">'+cells.join('')+'</div>';
+  return '<div class="heatgrid" style="grid-template-rows:repeat(7,12px);">'+cells.join('')+'</div>';
 }
 
 /* ================= rarity ================= */
