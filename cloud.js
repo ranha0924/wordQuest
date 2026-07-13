@@ -38,6 +38,7 @@
     joinClassByCode: function () { return Promise.resolve({ ok: false }); },
     createClass: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
+    listStudents: function () { return Promise.resolve([]); },
     onChange: function () {}
   };
 
@@ -82,6 +83,15 @@
   function hhmm() {
     var d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function addDaysStr(ds, n) {
+    var p = ds.split('-').map(Number);
+    var d = new Date(p[0], p[1] - 1, p[2] + n);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
   // ── 병합: 단어별 updatedAt 최신 우선, meta도 updatedAt 최신 우선 ──
@@ -141,9 +151,21 @@
   // ── users/{uid} 최상위 문서에 프로필/요약 기록(레거시 words 제거) ──
   async function writeSummary(arr, meta) {
     if (!user) return;
-    var cap = 0, i;
+    var cap = 0, attempts = 0, wrong = 0, i, wd;
     arr = arr || [];
-    for (i = 0; i < arr.length; i++) { if (arr[i] && arr[i].cap) cap++; }
+    for (i = 0; i < arr.length; i++) {
+      wd = arr[i]; if (!wd) continue;
+      if (wd.cap) cap++;
+      attempts += (wd.seen || 0);
+      wrong += (wd.wrong || 0);
+    }
+    var correct = Math.max(0, attempts - wrong);
+    var accuracy = attempts ? Math.round(correct / attempts * 100) : 0;
+    // 최근 35일 학습 히트맵(요약용, 크기 제한)
+    var dh = (meta && meta.dailyHistory) || {};
+    var daily = {}, t = todayStr();
+    for (i = 0; i < 35; i++) { var ds = addDaysStr(t, -i); if (dh[ds]) daily[ds] = dh[ds]; }
+    var todayE = dh[t] || null;
     var top = {
       schema: 2,
       profile: {
@@ -156,7 +178,12 @@
         streak: (meta && meta.streak) || 0,
         lastDay: (meta && meta.lastDay) || null,
         total: arr.length,
-        captured: cap
+        captured: cap,
+        attempts: attempts,
+        accuracy: accuracy,
+        studiedToday: !!todayE,
+        todayCount: todayE ? (todayE.a || 0) : 0,
+        daily: daily
       },
       updatedAt: now()
     };
@@ -316,6 +343,34 @@
     }
   }
 
+  // ── 반 학생 목록 + 요약(선생님) ──
+  async function listStudents(classId) {
+    if (!user || !classId) return [];
+    try {
+      var q = fsMod.query(fsMod.collection(db, 'users'), fsMod.where('classId', '==', classId));
+      var res = await fsMod.getDocs(q);
+      var out = [];
+      res.forEach(function (d) {
+        var v = d.data() || {};
+        if (d.id === user.uid) return; // 선생님 본인 제외
+        out.push({
+          uid: d.id,
+          name: (v.profile && v.profile.name) || '',
+          email: (v.profile && v.profile.email) || '',
+          summary: v.summary || null
+        });
+      });
+      out.sort(function (a, b) {
+        var an = a.name || a.email, bn = b.name || b.email;
+        return an < bn ? -1 : 1;
+      });
+      return out;
+    } catch (e) {
+      console.warn('[cloud] 학생 목록 조회 실패', e);
+      return [];
+    }
+  }
+
   // ── 인증 상태 변화 → 프로필 로드 + 상태표시 + 최초 동기화 ──
   authMod.onAuthStateChanged(auth, async function (u) {
     user = u || null;
@@ -345,6 +400,7 @@
     joinClassByCode: joinClassByCode,
     createClass: createClass,
     listMyClasses: listMyClasses,
+    listStudents: listStudents,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };
 

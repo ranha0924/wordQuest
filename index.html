@@ -532,6 +532,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
+        <button class="mrow" data-go="teacher" id="h-teacher-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">선생님 대시보드</span><span class="sub">반별 학생 학습 현황</span></button>
         <button class="mrow" data-go="settings"><span class="star">▶</span><span class="mlabel">설정</span><span class="sub" id="h-settings-sub">로그인 · 계정 · 동기화</span></button>
       </div>
       <div class="homemsg" id="h-msg" style="display:none;"></div>
@@ -541,6 +542,10 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="ts-cell"><b><span id="h-streak">0일</span><svg class="ic ic-fire" viewBox="0 0 16 16" aria-hidden="true"><path fill="#f0881c" d="M8 1L10 4L11 3L11 6L13 8L13 12L11 14L5 14L3 12L3 8L6 5L6 3Z"/><path fill="#ffc63a" d="M8 6L9 8L10 9L10 12L9 13L7 13L6 12L6 10L7 8Z"/></svg></b><span>연속</span></div>
         <div class="ts-cell"><b id="h-best">0</b><span>최고 콤보</span></div>
         <span style="display:none;"><span id="h-bar"></span><span id="h-c0"></span><span id="h-c1"></span><span id="h-c2"></span><span id="h-c3"></span></span>
+      </div>
+      <div class="homeheat" id="home-heat" style="display:none;margin-top:4px;text-align:center;">
+        <div style="font-size:11px;color:#8a8ab0;margin-bottom:5px;" id="home-heat-lbl">최근 학습</div>
+        <div id="home-heat-grid"></div>
       </div>
       <button class="navbtn" id="pwa-install" style="display:none;margin-top:2px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 2H9V7H12L8 11L4 7H7Z M3 12H13V14H3Z"/></svg>홈 화면에 앱 설치</button>
       <div class="themelabel">테마</div>
@@ -729,6 +734,23 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
     </div>
 
+    <!-- 선생님 대시보드 -->
+    <div class="screen" id="scr-teacher" style="gap:12px;">
+      <div class="scr-head">
+        <div class="scr-head-t">선생님 대시보드</div>
+        <div class="scr-head-b">반별 학생 학습 현황</div>
+      </div>
+      <div class="flabel">반 선택 <span class="sub" id="tc-count"></span></div>
+      <div class="grid2">
+        <select id="tc-class" style="height:38px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;"></select>
+        <button class="subbtn" id="tc-refresh"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>새로고침</button>
+      </div>
+      <div id="tc-codeline" class="regmsg" style="display:none;"></div>
+      <div id="tc-empty" class="dexempty" style="display:none;">아직 만든 반이 없어요.<br>설정에서 반을 먼저 만들어 주세요.</div>
+      <div id="tc-students"></div>
+      <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
+    </div>
+
     <div class="foot">에빙하우스 망각곡선 기반 간격 반복 · 데이터는 이 브라우저에만 저장된다</div>
   </div>
   <div class="scanlines"></div>
@@ -853,6 +875,34 @@ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 /* ================= dates ================= */
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function addDays(ds,n){const p=ds.split('-').map(Number);const d=new Date(p[0],p[1]-1,p[2]+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+/* ===== 날짜별 학습 기록(연속·오늘 공부 세세 추적) =====
+   meta.dailyHistory[YYYY-MM-DD] = {a:시도수, ok:정답수}. 매 문항마다 갱신. */
+function recordStudy(correct){
+  if(!S.meta.dailyHistory)S.meta.dailyHistory={};
+  const t=today();
+  const e=S.meta.dailyHistory[t]||{a:0,ok:0};
+  e.a++; if(correct)e.ok++;
+  S.meta.dailyHistory[t]=e;
+  S.meta.updatedAt=Date.now(); // 클라우드 동기화 대상
+}
+// 최근 weeks*7일 히트맵 SVG-less 그리드 HTML. dh: dailyHistory 맵.
+function heatmapHTML(dh,weeks){
+  dh=dh||{}; weeks=weeks||5;
+  const days=weeks*7;
+  const t=today();
+  // 오늘이 속한 주의 끝까지 채우도록 오늘 요일 기준 정렬(월~일). getDay:0=일.
+  const cells=[];
+  for(let i=days-1;i>=0;i--){
+    const ds=addDays(t,-i);
+    const e=dh[ds]; const a=e?e.a:0;
+    let lv=0; if(a>0)lv=1; if(a>=5)lv=2; if(a>=15)lv=3; if(a>=30)lv=4;
+    const col=['#1b1b2e','#274a2a','#2f7a37','#3fae46','#5fe06a'][lv];
+    const ok=e?e.ok:0;
+    cells.push('<i title="'+ds+' · '+a+'문제'+(a?(' · 정답 '+ok):'')+'" style="width:12px;height:12px;border-radius:2px;background:'+col+';display:block;"></i>');
+  }
+  return '<div style="display:grid;grid-template-columns:repeat('+weeks+',12px);grid-auto-flow:column;grid-template-rows:repeat(7,12px);gap:3px;justify-content:center;">'+cells.join('')+'</div>';
+}
 
 /* ================= rarity ================= */
 function rarity(w){
@@ -1004,12 +1054,13 @@ function speak(word){
 /* ================= screens ================= */
 function show(name){
   S.screen=name;
-  ['home','battle','reg','dex','result','note','settings'].forEach(n=>{const el=$('scr-'+n);if(el)el.classList.toggle('on',n===name);});
+  ['home','battle','reg','dex','result','note','settings','teacher'].forEach(n=>{const el=$('scr-'+n);if(el)el.classList.toggle('on',n===name);});
   if(name==='home')renderHome();
   if(name==='reg')renderReg();
   if(name==='dex')renderDex();
   if(name==='note')renderNote();
   if(name==='settings'){try{renderAccount();renderCloudNotify();}catch(e){}}
+  if(name==='teacher'){try{renderTeacher();}catch(e){}}
   window.scrollTo({top:0});
 }
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>{sfx('select');show(b.dataset.go);}));
@@ -1034,6 +1085,19 @@ function renderHome(){
   const due=dueIds().length;
   $('h-sub').textContent=due?('오늘 출현하는 몬스터: '+due+'마리'):(total?'오늘 출현 예정 없음':'서식 중인 몬스터 없음');
   $('h-msg').style.display='none';
+  renderHomeHeat();
+  try{toggleTeacherBtn();}catch(e){}
+}
+// 홈 학습 히트맵(최근 5주) + 오늘 공부량
+function renderHomeHeat(){
+  const box=$('home-heat'); if(!box) return;
+  const dh=S.meta.dailyHistory||{};
+  const keys=Object.keys(dh);
+  if(!keys.length){ box.style.display='none'; return; }
+  box.style.display='';
+  const te=dh[today()];
+  $('home-heat-lbl').innerHTML='최근 학습 · 오늘 '+(te?('<b style="color:#5fe06a;">'+te.a+'문제</b> (정답 '+te.ok+')'):'<b style="color:#8a8ab0;">아직 안 함</b>');
+  $('home-heat-grid').innerHTML=heatmapHTML(dh,5);
 }
 function homeMsg(m){$('h-msg').textContent=m;$('h-msg').style.display='block';}
 
@@ -1466,6 +1530,7 @@ function resolveAnswer(correct){
   const t=today();
   w.seen=(w.seen||0)+1; // 정답률 추적: 시도 횟수
   w.updatedAt=Date.now(); // 클라우드 병합용: 이 단어가 방금 변경됨(기기 간 최신 우선)
+  recordStudy(correct); // 날짜별 학습 기록(오늘 시도/정답 수)
   S.phase='resolve';
   $('b-name').textContent=name;$('b-name').style.color=rarity(w).col; // 가렸던 이름 공개
   $('b-speak').style.display='inline-flex';speak(w.w); // 정답 공개 시 발음 자동 재생 + 버튼 노출
@@ -1913,12 +1978,67 @@ function renderAccount(){
     if(has){ const nc2=$('acct-noclass'); if(nc2) nc2.style.display=''; } // 반 이동 허용
   }
   if(role==='teacher') renderClassList();
+  toggleTeacherBtn();
 }
 async function renderClassList(){
   const box=$('acct-classlist'); if(!box||!window.Cloud||!window.Cloud.listMyClasses) return;
   const list=await window.Cloud.listMyClasses();
   if(!list.length){ box.innerHTML='<div class="regmsg" style="display:block;">아직 만든 반이 없어요.</div>'; return; }
   box.innerHTML=list.map(c=>'<div class="acctcls" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0d0d1a;border:2px solid #34345a;border-radius:6px;margin-bottom:6px;font-size:13px;"><span>'+esc(c.name)+'</span><b style="letter-spacing:2px;color:#ffc63a;">'+esc(c.code)+'</b></div>').join('');
+}
+// 홈 메뉴의 선생님 대시보드 버튼: 선생님 로그인 시에만 노출
+function toggleTeacherBtn(){
+  const btn=$('h-teacher-btn'); if(!btn) return;
+  const p=(window.Cloud&&window.Cloud.getProfile)?window.Cloud.getProfile():null;
+  btn.style.display=(p&&p.role==='teacher')?'':'none';
+}
+/* ===== 선생님 대시보드 ===== */
+let tcClasses=[]; // 캐시된 내 반 목록
+async function renderTeacher(){
+  const C=window.Cloud;
+  const sel=$('tc-class'),empty=$('tc-empty'),stu=$('tc-students'),cl=$('tc-codeline');
+  if(!C||!C.enabled||!C.currentUser||!C.currentUser()){ if(stu)stu.innerHTML=''; if(empty){empty.style.display='';empty.innerHTML='로그인이 필요해요. 설정에서 구글로 로그인하세요.';} return; }
+  tcClasses=await C.listMyClasses();
+  $('tc-count').textContent='반 '+tcClasses.length+'개';
+  if(!tcClasses.length){ if(empty){empty.style.display='';empty.innerHTML='아직 만든 반이 없어요.<br>설정에서 반을 먼저 만들어 주세요.';} if(sel)sel.innerHTML=''; if(stu)stu.innerHTML=''; if(cl)cl.style.display='none'; return; }
+  if(empty)empty.style.display='none';
+  const prev=sel.value;
+  sel.innerHTML=tcClasses.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
+  if(prev&&tcClasses.some(c=>c.id===prev))sel.value=prev;
+  await renderTeacherStudents();
+}
+async function renderTeacherStudents(){
+  const C=window.Cloud;
+  const sel=$('tc-class'),stu=$('tc-students'),cl=$('tc-codeline');
+  const cid=sel.value; const cls=tcClasses.find(c=>c.id===cid);
+  if(cl&&cls){ cl.style.display='block'; cl.innerHTML='반 코드: <b style="letter-spacing:2px;color:#ffc63a;">'+esc(cls.code)+'</b> · 학생에게 알려주세요.'; }
+  if(!cid){ stu.innerHTML=''; return; }
+  stu.innerHTML='<div class="regmsg" style="display:block;">불러오는 중…</div>';
+  const list=await C.listStudents(cid);
+  if(!list.length){ stu.innerHTML='<div class="dexempty">아직 이 반에 참여한 학생이 없어요.</div>'; return; }
+  const t=today();
+  stu.innerHTML=list.map(s=>{
+    const sm=s.summary||{};
+    const studied=sm.studiedToday||(sm.lastDay===t);
+    const acc=(sm.accuracy!=null)?sm.accuracy+'%':'—';
+    const streak=sm.streak||0;
+    const cap=(sm.captured!=null?sm.captured:'—'), tot=(sm.total!=null?sm.total:'—');
+    const nm=esc(s.name||s.email||'(이름 없음)');
+    const heat=heatmapHTML(sm.daily||{},5);
+    const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
+    return '<div style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
+        +'<div style="font-size:14px;font-weight:700;color:#e8e8f0;">'+dot+nm+'</div>'
+        +'<div style="font-size:11px;color:#8a8ab0;">'+(studied?('오늘 '+(sm.todayCount||0)+'문제'):'오늘 학습 없음')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:14px;font-size:12px;color:#b7b7d8;margin-bottom:8px;flex-wrap:wrap;">'
+        +'<span>🔥 연속 <b style="color:#f0881c;">'+streak+'일</b></span>'
+        +'<span>🎯 정답률 <b style="color:#5fe06a;">'+acc+'</b></span>'
+        +'<span>⭐ 포획 <b style="color:#ffc63a;">'+cap+' / '+tot+'</b></span>'
+      +'</div>'
+      +'<div style="overflow-x:auto;">'+heat+'</div>'
+    +'</div>';
+  }).join('');
 }
 // 매일 복습 알림 옵트인 토글(로그인 시에만 의미 · meta.notify 저장 → 클라우드 → 발송 크론이 조회)
 function renderCloudNotify(){
@@ -1957,6 +2077,9 @@ function renderCloudNotify(){
   };
   on('acct-create','click',doCreate);
   on('acct-clsname','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doCreate();}});
+  // 선생님 대시보드: 반 전환·새로고침
+  on('tc-class','change',()=>{ renderTeacherStudents(); });
+  on('tc-refresh','click',()=>{ renderTeacher(); });
   // 시작 로그인 모달
   on('login-modal-google','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
   on('login-modal-skip','click',()=>{ try{sessionStorage.setItem('wq_login_skipped','1');}catch(e){} hideLoginModal(); });
