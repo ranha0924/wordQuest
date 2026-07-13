@@ -38,6 +38,8 @@
     joinClassByCode: function () { return Promise.resolve({ ok: false }); },
     setDisplayName: function () { return Promise.resolve({ ok: false }); },
     createClass: function () { return Promise.resolve({ ok: false }); },
+    deleteClass: function () { return Promise.resolve({ ok: false }); },
+    removeStudent: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
     listStudents: function () { return Promise.resolve([]); },
     onChange: function () {}
@@ -95,13 +97,21 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  // ── 병합: 단어별 updatedAt 최신 우선, meta도 updatedAt 최신 우선 ──
+  // ── 병합: 단어별 updatedAt 최신 우선, meta는 스칼라 LWW + dailyHistory 날짜별 병합 ──
   function merge(local, remote) {
     var lWords = (local && local.words) || [];
     var rWords = (remote && remote.words) || {};
+    // 원격에 실제 단어가 있으면, 아직 동기화된 적 없는 로컬 샘플 단어(sample:true)는 버린다.
+    // (새 기기에서 로그인 시 첫 방문 샘플 20개가 실제 계정에 주입되는 오염 방지)
+    var remoteHasWords = false;
+    for (var rk in rWords) { if (Object.prototype.hasOwnProperty.call(rWords, rk)) { remoteHasWords = true; break; } }
     var map = {};
     var i, w;
-    for (i = 0; i < lWords.length; i++) { w = lWords[i]; if (w && w.id) map[w.id] = { a: w, au: (w.updatedAt || 0) }; }
+    for (i = 0; i < lWords.length; i++) {
+      w = lWords[i]; if (!w || !w.id) continue;
+      if (w.sample && remoteHasWords && !rWords[w.id]) continue; // 떠도는 샘플 제거
+      map[w.id] = { a: w, au: (w.updatedAt || 0) };
+    }
     for (var id in rWords) {
       if (!Object.prototype.hasOwnProperty.call(rWords, id)) continue;
       var rw = rWords[id]; var ru = (rw && rw.updatedAt) || 0;
@@ -114,8 +124,21 @@
       mergedMap[k] = it;
       if (!it.deleted) mergedArr.push(it);
     }
+    // meta: 스칼라(streak/exp 등)는 updatedAt 최신 우선. dailyHistory는 날짜별로 합쳐(기기 간 손실 방지)
     var lm = (local && local.meta) || {}, rm = (remote && remote.meta) || {};
-    var mergedMeta = ((lm.updatedAt || 0) >= (rm.updatedAt || 0)) ? lm : rm;
+    var base = ((lm.updatedAt || 0) >= (rm.updatedAt || 0)) ? lm : rm;
+    var mergedMeta = {};
+    for (var mk in rm) if (Object.prototype.hasOwnProperty.call(rm, mk)) mergedMeta[mk] = rm[mk];
+    for (var mk2 in base) if (Object.prototype.hasOwnProperty.call(base, mk2)) mergedMeta[mk2] = base[mk2];
+    var dh = {};
+    var ldh = lm.dailyHistory || {}, rdh = rm.dailyHistory || {};
+    for (var d1 in rdh) if (Object.prototype.hasOwnProperty.call(rdh, d1)) dh[d1] = rdh[d1];
+    for (var d2 in ldh) {
+      if (!Object.prototype.hasOwnProperty.call(ldh, d2)) continue;
+      // 같은 날짜는 시도수(a)가 더 많은 쪽 채택
+      if (!dh[d2] || ((ldh[d2] && ldh[d2].a) || 0) >= ((dh[d2] && dh[d2].a) || 0)) dh[d2] = ldh[d2];
+    }
+    if (Object.keys(dh).length) mergedMeta.dailyHistory = dh;
     return { map: mergedMap, arr: mergedArr, meta: mergedMeta };
   }
 
@@ -363,16 +386,24 @@
     }
   }
 
-  // ── 반 학생 목록 + 요약(선생님) ──
+  // ── 반 학생 목록 + 요약(선생님) — 제외 목록(removed) 반영 ──
   async function listStudents(classId) {
     if (!user || !classId) return [];
     try {
+      // 반 문서의 제외 목록을 먼저 읽어 숨길 학생 uid 집합 구성
+      var removed = {};
+      try {
+        var cs = await fsMod.getDoc(classRef(classId));
+        var rr = cs.exists() ? (cs.data().removed || []) : [];
+        for (var ri = 0; ri < rr.length; ri++) removed[rr[ri]] = true;
+      } catch (e0) { /* 무시 */ }
       var q = fsMod.query(fsMod.collection(db, 'users'), fsMod.where('classId', '==', classId));
       var res = await fsMod.getDocs(q);
       var out = [];
       res.forEach(function (d) {
         var v = d.data() || {};
         if (d.id === user.uid) return; // 선생님 본인 제외
+        if (removed[d.id]) return;     // 반에서 제외된 학생 숨김
         out.push({
           uid: d.id,
           name: v.displayName || (v.profile && v.profile.name) || '', // 입력한 이름 우선
@@ -388,6 +419,30 @@
     } catch (e) {
       console.warn('[cloud] 학생 목록 조회 실패', e);
       return [];
+    }
+  }
+
+  // ── 반 삭제(소유 선생님) ──
+  async function deleteClass(classId) {
+    if (!user || !classId) return { ok: false, msg: '로그인이 필요해요.' };
+    try {
+      await fsMod.deleteDoc(classRef(classId));
+      return { ok: true };
+    } catch (e) {
+      console.warn('[cloud] 반 삭제 실패', e);
+      return { ok: false, msg: (e && e.message ? e.message : '반 삭제에 실패했어요.') };
+    }
+  }
+
+  // ── 학생을 반에서 제외(반 문서의 removed 목록에 추가 → 대시보드에서 숨김) ──
+  async function removeStudent(classId, studentUid) {
+    if (!user || !classId || !studentUid) return { ok: false, msg: '잘못된 요청이에요.' };
+    try {
+      await fsMod.updateDoc(classRef(classId), { removed: fsMod.arrayUnion(studentUid) });
+      return { ok: true };
+    } catch (e) {
+      console.warn('[cloud] 학생 제외 실패', e);
+      return { ok: false, msg: (e && e.message ? e.message : '학생 제외에 실패했어요.') };
     }
   }
 
@@ -420,6 +475,8 @@
     joinClassByCode: joinClassByCode,
     setDisplayName: setDisplayName,
     createClass: createClass,
+    deleteClass: deleteClass,
+    removeStudent: removeStudent,
     listMyClasses: listMyClasses,
     listStudents: listStudents,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
