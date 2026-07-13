@@ -536,7 +536,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 
     <!-- 마을 (타이틀 화면) -->
     <div class="screen" id="scr-home">
-      <button class="homegear" data-go="settings" aria-label="설정" title="설정"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M6.5 1h3l.5 2 1.2.5 1.8-1 2 2-1 1.8.5 1.2 2 .5v3l-2 .5-.5 1.2 1 1.8-2 2-1.8-1-1.2.5-.5 2h-3l-.5-2-1.2-.5-1.8 1-2-2 1-1.8L1.5 10 0 9.5v-3l2-.5.5-1.2-1-1.8 2-2 1.8 1L6 3zM8 5.5A2.5 2.5 0 1 0 8 10.5A2.5 2.5 0 0 0 8 5.5z"/></svg></button>
+      <button class="homegear" data-go="settings" aria-label="설정" title="설정"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.48.48 0 0 0 13.4 2h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L1.82 8.47a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></button>
       <div class="titlelogo">
         <div class="tl-main">단어도감</div>
         <div class="tl-en">WORD QUEST</div>
@@ -766,6 +766,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <button class="subbtn" id="tc-refresh"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>새로고침</button>
       </div>
       <div id="tc-codeline" class="regmsg" style="display:none;"></div>
+      <button class="subbtn" id="tc-delclass" style="display:none;width:100%;border-color:#5a2a2a;color:#e57373;">🗑 이 반 삭제</button>
       <div id="tc-empty" class="dexempty" style="display:none;">아직 만든 반이 없어요.<br>설정에서 반을 먼저 만들어 주세요.</div>
       <div id="tc-students"></div>
       <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
@@ -853,10 +854,11 @@ function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;cons
 function engSim(a,b){a=(a||'').toLowerCase();b=(b||'').toLowerCase();let pre=0;while(pre<a.length&&pre<b.length&&a[pre]===b[pre])pre++;const suf=(a.slice(-1)===b.slice(-1))?1:0;return pre*1.3+suf*0.6-Math.abs(a.length-b.length)*0.35-lev(a,b)*0.3;}
 
 // 첫 방문(저장 데이터 없음)일 때만 샘플 20개 자동 등록. 기존/초기화 사용자는 건드리지 않음.
+// sample:true 로 표시 → 새 기기에서 클라우드에 실제 데이터가 있으면 병합 시 이 샘플은 버려진다.
 if(!saved){
   parseText(SAMPLE).forEach(p=>{
     const k=p.w.toLowerCase();
-    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,seen:0,cap:false,due:today(),created:today()});
+    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,seen:0,cap:false,due:today(),created:today(),sample:true});
   });
   persist();
 }
@@ -876,8 +878,9 @@ function migrateWords(){
   if(changed)persist();
 }
 migrateWords();
-const timers=[];
-function wait(fn,ms){timers.push(setTimeout(fn,ms));}
+let timers=[];
+function wait(fn,ms){const id=setTimeout(fn,ms);timers.push(id);return id;}
+function clearWaits(){timers.forEach(clearTimeout);timers=[];} // 전투 종료·도망 시 예약된 연출 타이머 취소
 let cloudApplying=false; // 클라우드 병합을 로컬에 반영하는 동안엔 재-푸시 방지
 function persist(){
   try{
@@ -915,24 +918,25 @@ function heatmapHTML(dh,weeks){
   const cells=[];
   for(let i=days-1;i>=0;i--){
     const ds=addDays(t,-i);
-    const e=dh[ds]; const a=e?e.a:0;
+    const e=dh[ds]; const a=heatInt(e&&e.a); // 학생이 위조 가능 → 정수 강제변환
     let lv=0; if(a>0)lv=1; if(a>=5)lv=2; if(a>=15)lv=3; if(a>=30)lv=4;
     const col=['#1b1b2e','#274a2a','#2f7a37','#3fae46','#5fe06a'][lv];
-    const ok=e?e.ok:0;
+    const ok=heatInt(e&&e.ok);
     cells.push('<i title="'+ds+' · '+a+'문제'+(a?(' · 정답 '+ok):'')+'" style="background:'+col+';"></i>');
   }
   return '<div class="heatgrid" style="grid-template-rows:repeat(7,12px);">'+cells.join('')+'</div>';
 }
+function heatInt(v){const n=Math.trunc(Number(v));return Number.isFinite(n)?n:0;}
 // 최근 days일을 한 줄 스트립으로(홈 압축용). dh: dailyHistory 맵.
 function heatStripHTML(dh,days){
   dh=dh||{}; days=days||28;
   const t=today(); const cells=[];
   for(let i=days-1;i>=0;i--){
     const ds=addDays(t,-i);
-    const e=dh[ds]; const a=e?e.a:0;
+    const e=dh[ds]; const a=heatInt(e&&e.a); // 위조 가능 값 → 정수 강제변환
     let lv=0; if(a>0)lv=1; if(a>=5)lv=2; if(a>=15)lv=3; if(a>=30)lv=4;
     const col=['#1b1b2e','#274a2a','#2f7a37','#3fae46','#5fe06a'][lv];
-    cells.push('<i title="'+ds+' · '+a+'문제'+(a&&e?(' · 정답 '+e.ok):'')+'" style="background:'+col+';"></i>');
+    cells.push('<i title="'+ds+' · '+a+'문제'+(a?(' · 정답 '+heatInt(e&&e.ok)):'')+'" style="background:'+col+';"></i>');
   }
   return '<div class="heatstrip">'+cells.join('')+'</div>';
 }
@@ -1631,6 +1635,7 @@ function resolveAnswer(correct){
 }
 
 function endBattle(){
+  clearWaits(); // 진행 중이던 연출 타이머가 결과 화면을 덮어 재렌더하지 않도록 취소
   const s=S.session||{win:0,hurt:0,cap:0,best:0,hearts:1,q:[]};
   const t=today(),tomorrow=addDays(t,1);
   const laterDue=S.words.filter(w=>w.due&&w.due<=tomorrow&&w.due>t).length;
@@ -1972,7 +1977,12 @@ window.WQ={
     cloudApplying=true;
     try{
       if(m&&Array.isArray(m.words)){ S.words.length=0; Array.prototype.push.apply(S.words,m.words); }
-      if(m&&m.meta){ S.meta=Object.assign({lastDay:null,streak:0,bestCombo:0,muted:S.meta.muted,theme:S.meta.theme},m.meta); }
+      if(m&&m.meta){
+        // 음소거·테마는 기기별 로컬 설정 → 클라우드 값으로 덮지 않고 유지(Object.assign 뒤에 재적용)
+        const localMuted=S.meta.muted, localTheme=S.meta.theme;
+        S.meta=Object.assign({lastDay:null,streak:0,bestCombo:0},m.meta);
+        S.meta.muted=localMuted; S.meta.theme=localTheme;
+      }
       migrateWords();
       persist();
       try{renderHome();}catch(e){}
@@ -2044,27 +2054,34 @@ async function renderTeacher(){
 }
 async function renderTeacherStudents(){
   const C=window.Cloud;
-  const sel=$('tc-class'),stu=$('tc-students'),cl=$('tc-codeline');
+  const sel=$('tc-class'),stu=$('tc-students'),cl=$('tc-codeline'),del=$('tc-delclass');
   const cid=sel.value; const cls=tcClasses.find(c=>c.id===cid);
   if(cl&&cls){ cl.style.display='block'; cl.innerHTML='반 코드: <b style="letter-spacing:2px;color:#ffc63a;">'+esc(cls.code)+'</b> · 학생에게 알려주세요.'; }
+  if(del) del.style.display=cid?'':'none';
   if(!cid){ stu.innerHTML=''; return; }
   stu.innerHTML='<div class="regmsg" style="display:block;">불러오는 중…</div>';
   const list=await C.listStudents(cid);
   if(!list.length){ stu.innerHTML='<div class="dexempty">아직 이 반에 참여한 학생이 없어요.</div>'; return; }
   const t=today();
+  // 학생 요약은 학생이 직접 쓸 수 있는(위조 가능) 값 → 전부 정수 강제변환/이스케이프 후 삽입(XSS 차단)
+  const int=v=>{const n=Math.trunc(Number(v));return Number.isFinite(n)?n:0;};
   stu.innerHTML=list.map(s=>{
     const sm=s.summary||{};
-    const studied=sm.studiedToday||(sm.lastDay===t);
-    const acc=(sm.accuracy!=null)?sm.accuracy+'%':'—';
-    const streak=sm.streak||0;
-    const cap=(sm.captured!=null?sm.captured:'—'), tot=(sm.total!=null?sm.total:'—');
+    const studied=!!(sm.studiedToday||(sm.lastDay===t));
+    const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';
+    const streak=int(sm.streak);
+    const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
+    const todayCount=int(sm.todayCount);
     const nm=esc(s.name||s.email||'(이름 없음)');
     const heat=heatmapHTML(sm.daily||{},5);
     const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
     return '<div style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
         +'<div style="font-size:14px;font-weight:700;color:#e8e8f0;">'+dot+nm+'</div>'
-        +'<div style="font-size:11px;color:#8a8ab0;">'+(studied?('오늘 '+(sm.todayCount||0)+'문제'):'오늘 학습 없음')+'</div>'
+        +'<div style="display:flex;align-items:center;gap:8px;">'
+          +'<span style="font-size:11px;color:#8a8ab0;">'+(studied?('오늘 '+todayCount+'문제'):'오늘 학습 없음')+'</span>'
+          +'<button class="tcx" data-uid="'+esc(s.uid)+'" title="반에서 제외" style="background:none;border:1px solid #5a2a2a;color:#e57373;border-radius:4px;font-size:10px;padding:2px 7px;cursor:pointer;font-family:inherit;flex:0 0 auto;">제외</button>'
+        +'</div>'
       +'</div>'
       +'<div style="display:flex;gap:14px;font-size:12px;color:#b7b7d8;margin-bottom:8px;flex-wrap:wrap;">'
         +'<span>🔥 연속 <b style="color:#f0881c;">'+streak+'일</b></span>'
@@ -2074,6 +2091,16 @@ async function renderTeacherStudents(){
       +'<div style="overflow-x:auto;">'+heat+'</div>'
     +'</div>';
   }).join('');
+  // 학생 제외 버튼(반 문서 removed 목록에 추가 → 대시보드에서 숨김)
+  Array.from(document.querySelectorAll('#tc-students .tcx')).forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const uid=btn.dataset.uid; if(!uid||!C.removeStudent)return;
+      if(!window.confirm('이 학생을 반에서 제외할까요?\n(학생의 학습 데이터는 삭제되지 않고, 대시보드에서만 숨겨집니다.)'))return;
+      const r=await C.removeStudent(cid,uid);
+      if(r&&r.ok) renderTeacherStudents();
+      else alert((r&&r.msg)||'제외에 실패했어요.');
+    });
+  });
 }
 // 매일 복습 알림 옵트인 토글(로그인 시에만 의미 · meta.notify 저장 → 클라우드 → 발송 크론이 조회)
 function renderCloudNotify(){
@@ -2123,9 +2150,17 @@ function renderCloudNotify(){
   };
   on('acct-create','click',doCreate);
   on('acct-clsname','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doCreate();}});
-  // 선생님 대시보드: 반 전환·새로고침
+  // 선생님 대시보드: 반 전환·새로고침·반 삭제
   on('tc-class','change',()=>{ renderTeacherStudents(); });
   on('tc-refresh','click',()=>{ renderTeacher(); });
+  on('tc-delclass','click',async()=>{
+    const sel=$('tc-class'); const cid=sel&&sel.value; if(!cid||!C()||!C().deleteClass)return;
+    const cls=(typeof tcClasses!=='undefined')?tcClasses.find(c=>c.id===cid):null;
+    if(!window.confirm('“'+((cls&&cls.name)||'이 반')+'”을(를) 삭제할까요?\n반 코드가 무효화되고 대시보드에서 사라집니다. (학생들의 학습 데이터 자체는 지워지지 않아요.)'))return;
+    const r=await C().deleteClass(cid);
+    if(r&&r.ok){ renderTeacher(); }
+    else alert((r&&r.msg)||'반 삭제에 실패했어요.');
+  });
   // 시작 로그인 모달
   on('login-modal-google','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
   on('login-modal-skip','click',()=>{ try{sessionStorage.setItem('wq_login_skipped','1');}catch(e){} hideLoginModal(); });
