@@ -698,6 +698,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 <script src="words.js"></script>
 <script src="pack-hs1.js"></script>
 <script src="pack-confuse.js"></script>
+<script src="pack-vacation.js"></script>
 <script src="firebase-config.js"></script>
 <script>
 'use strict';
@@ -717,10 +718,12 @@ const SAMPLE='abandon - 버리다; 포기하다\nachieve - 성취하다\nabundan
 const WORDBANK=(window.WORDBANK||[]); // 범용 고빈도(words.js)
 const WORDPACK_HS1=(window.WORDPACK_HS1||[]); // 고1 필수 어휘 팩(pack-hs1.js, 주제별 큐레이션)
 const WORDPACK_CONFUSE=(window.WORDPACK_CONFUSE||[]); // 철자 혼동 어휘 팩(pack-confuse.js)
+const WORDPACK_VACATION=(window.WORDPACK_VACATION||[]); // 방학 단어팩(pack-vacation.js, 어원 어휘)
 // 여러 어휘 팩을 하나의 목록으로 관리 — 담기 UI·통계가 이 목록을 순회한다.
 const PACKS=[
-  {key:'hs1',     label:'고1 필수 어휘 팩', data:WORDPACK_HS1},
-  {key:'confuse', label:'철자 혼동 어휘',   data:WORDPACK_CONFUSE},
+  {key:'hs1',      label:'고1 필수 어휘 팩', data:WORDPACK_HS1},
+  {key:'confuse',  label:'철자 혼동 어휘',   data:WORDPACK_CONFUSE},
+  {key:'vacation', label:'방학 단어팩',      data:WORDPACK_VACATION},
 ];
 const PACK_THEMES=[...new Set(PACKS.flatMap(p=>p.data.map(e=>e.th)))]; // 전체 주제 순서(통계용)
 const PACK_THEME_OF={}; PACKS.forEach(p=>p.data.forEach(e=>{PACK_THEME_OF[e.w.toLowerCase()]=e.th;})); // id→주제(통계용)
