@@ -789,11 +789,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=13"></script>
-<script src="pack-hs1.js?v=13"></script>
-<script src="pack-confuse.js?v=13"></script>
-<script src="pack-vacation.js?v=13"></script>
-<script src="firebase-config.js?v=13"></script>
+<script src="words.js?v=14"></script>
+<script src="pack-hs1.js?v=14"></script>
+<script src="pack-confuse.js?v=14"></script>
+<script src="pack-vacation.js?v=14"></script>
+<script src="firebase-config.js?v=14"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2074,7 +2074,7 @@ async function renderTeacherStudents(){
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
     const todayCount=int(sm.todayCount);
     const nm=esc(s.name||s.email||'(이름 없음)');
-    const heat=heatmapHTML(sm.daily||{},5);
+    const heat=heatStripHTML(sm.daily||{},28); // 홈처럼 가로 스트립(최근 28일)
     const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
     return '<div style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
@@ -2242,7 +2242,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=13"></script>
+<script type="module" src="cloud.js?v=14"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
