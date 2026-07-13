@@ -593,20 +593,50 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="scr-head-t">영입소</div>
         <div class="scr-head-b">단어를 몬스터로 영입한다</div>
       </div>
-      <div class="flabel" id="cloud-label" style="display:none;">☁ 클라우드 동기화 <span class="sub" id="cloud-status">로그아웃</span></div>
+      <div class="flabel" id="cloud-label" style="display:none;">☁ 계정 · 클라우드 <span class="sub" id="cloud-status">로그아웃</span></div>
       <div class="regmanage" id="cloud-box" style="display:none;">
-        <div class="grid2" id="cloud-out">
-          <input type="email" id="cloud-email" placeholder="이메일 주소" autocomplete="email" style="height:38px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
-          <button class="subbtn" id="cloud-signin"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 4H14V12H2Z M3 5L8 9L13 5"/></svg>로그인 링크 받기</button>
+        <!-- 로그아웃 상태: 구글 로그인 -->
+        <div id="cloud-out">
+          <button class="subbtn" id="cloud-signin" style="width:100%;"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path fill="#4285F4" d="M15.5 8.2c0-.5 0-1-.1-1.5H8v2.9h4.2a3.6 3.6 0 0 1-1.6 2.3v1.9h2.6c1.5-1.4 2.3-3.4 2.3-5.6z"/><path fill="#34A853" d="M8 16c2.2 0 4-.7 5.3-1.9l-2.6-2c-.7.5-1.6.8-2.7.8-2.1 0-3.9-1.4-4.5-3.3H.8v2.1A8 8 0 0 0 8 16z"/><path fill="#FBBC05" d="M3.5 9.5a4.8 4.8 0 0 1 0-3.1V4.3H.8a8 8 0 0 0 0 7.2l2.7-2z"/><path fill="#EA4335" d="M8 3.2c1.2 0 2.2.4 3 1.2l2.3-2.3A8 8 0 0 0 .8 4.3l2.7 2.1C4.1 4.6 5.9 3.2 8 3.2z"/></svg>구글로 로그인</button>
         </div>
+        <!-- 로그인 상태 -->
         <div id="cloud-in" style="display:none;">
-          <div class="grid2">
+          <div class="acctline" id="acct-line" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:#b7b7d8;"></div>
+          <!-- 역할 선택(최초 1회) -->
+          <div id="acct-role" style="display:none;">
+            <div class="regmsg" style="display:block;margin-bottom:6px;">누구로 시작할까요?</div>
+            <div class="grid2">
+              <button class="subbtn" id="acct-role-student">🎒 학생</button>
+              <button class="subbtn" id="acct-role-teacher">🧑‍🏫 선생님</button>
+            </div>
+          </div>
+          <!-- 학생: 반 참여 -->
+          <div id="acct-student" style="display:none;">
+            <div id="acct-noclass">
+              <div class="regmsg" style="display:block;margin-bottom:6px;">선생님이 알려준 반 코드를 입력하세요.</div>
+              <div class="grid2">
+                <input id="acct-code" placeholder="반 코드 (예: ABC123)" maxlength="8" autocapitalize="characters" style="height:38px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;text-transform:uppercase;">
+                <button class="subbtn" id="acct-join">반 참여</button>
+              </div>
+            </div>
+            <div id="acct-hasclass" class="regmsg" style="display:none;"></div>
+          </div>
+          <!-- 선생님: 반 관리(최소) -->
+          <div id="acct-teacher" style="display:none;">
+            <div class="regmsg" style="display:block;margin-bottom:6px;">반을 만들면 코드가 발급됩니다. 학생에게 코드를 알려주세요.</div>
+            <div class="grid2">
+              <input id="acct-clsname" placeholder="반 이름 (예: 3학년 2반)" maxlength="20" style="height:38px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
+              <button class="subbtn" id="acct-create">반 만들기</button>
+            </div>
+            <div id="acct-classlist" style="margin-top:8px;"></div>
+          </div>
+          <div class="grid2" style="margin-top:8px;">
             <button class="subbtn" id="cloud-syncnow"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>지금 동기화</button>
             <button class="subbtn" id="cloud-signout">로그아웃</button>
           </div>
           <button class="subbtn" id="cloud-notify" style="width:100%;margin-top:8px;"></button>
         </div>
-        <div class="regmsg" id="cloud-hint" style="display:block;">기기 간 진도 동기화 · 로그인은 선택이며, 안 하면 지금처럼 이 기기에만 저장됩니다. 로그인하면 매일 복습 알림 메일을 받을 수 있어요.</div>
+        <div class="regmsg" id="cloud-hint" style="display:block;">구글 로그인은 선택이며, 안 하면 지금처럼 이 기기에만 저장됩니다. 로그인하면 기기 간 진도 동기화와 매일 복습 알림을 받을 수 있어요.</div>
       </div>
       <div class="flabel">단어 붙여넣기</div>
       <div class="regex">
@@ -1840,6 +1870,34 @@ function setCloudStatus(s){
   const inB=$('cloud-in'),outB=$('cloud-out');
   if(inB&&outB){ inB.style.display=email?'':'none'; outB.style.display=email?'none':''; }
   renderCloudNotify();
+  renderAccount();
+}
+// 로그인 후 계정 영역: 역할 선택 / 학생 반 참여 / 선생님 반 관리
+function renderAccount(){
+  const C=window.Cloud; if(!C||!C.enabled) return;
+  const u=C.currentUser?C.currentUser():null;
+  const p=C.getProfile?C.getProfile():null;
+  const line=$('acct-line'); if(line) line.textContent=u?((u.name?u.name+' · ':'')+(u.email||'')):'';
+  const roleBox=$('acct-role'),stu=$('acct-student'),tea=$('acct-teacher');
+  if(!u){ if(roleBox)roleBox.style.display='none'; if(stu)stu.style.display='none'; if(tea)tea.style.display='none'; return; }
+  const role=p?p.role:null;
+  if(roleBox) roleBox.style.display=role?'none':'';
+  if(stu) stu.style.display=(role==='student')?'':'none';
+  if(tea) tea.style.display=(role==='teacher')?'':'none';
+  if(role==='student'){
+    const has=!!(p&&p.classId);
+    const nc=$('acct-noclass'),hc=$('acct-hasclass');
+    if(nc) nc.style.display=has?'none':'';
+    if(hc){ hc.style.display=has?'block':'none'; if(has) hc.textContent='소속 반: '+((p&&p.className)||'(이름 없음)')+' · 다른 반 코드를 입력하면 반을 옮겨요.'; }
+    if(has){ const nc2=$('acct-noclass'); if(nc2) nc2.style.display=''; } // 반 이동 허용
+  }
+  if(role==='teacher') renderClassList();
+}
+async function renderClassList(){
+  const box=$('acct-classlist'); if(!box||!window.Cloud||!window.Cloud.listMyClasses) return;
+  const list=await window.Cloud.listMyClasses();
+  if(!list.length){ box.innerHTML='<div class="regmsg" style="display:block;">아직 만든 반이 없어요.</div>'; return; }
+  box.innerHTML=list.map(c=>'<div class="acctcls" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0d0d1a;border:2px solid #34345a;border-radius:6px;margin-bottom:6px;font-size:13px;"><span>'+esc(c.name)+'</span><b style="letter-spacing:2px;color:#ffc63a;">'+esc(c.code)+'</b></div>').join('');
 }
 // 매일 복습 알림 옵트인 토글(로그인 시에만 의미 · meta.notify 저장 → 클라우드 → 발송 크론이 조회)
 function renderCloudNotify(){
@@ -1852,11 +1910,32 @@ function renderCloudNotify(){
 }
 (function wireCloudUI(){
   const on=(id,ev,fn)=>{const el=$(id);if(el)el.addEventListener(ev,fn);};
-  on('cloud-signin','click',()=>window.Cloud&&window.Cloud.signIn($('cloud-email').value));
-  on('cloud-email','keydown',e=>{if(e.key==='Enter'){e.preventDefault();window.Cloud&&window.Cloud.signIn($('cloud-email').value);}});
-  on('cloud-signout','click',()=>window.Cloud&&window.Cloud.signOutUser&&window.Cloud.signOutUser());
-  on('cloud-syncnow','click',()=>window.Cloud&&window.Cloud.syncNow&&window.Cloud.syncNow());
+  const C=()=>window.Cloud;
+  on('cloud-signin','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
+  on('cloud-signout','click',()=>C()&&C().signOutUser&&C().signOutUser());
+  on('cloud-syncnow','click',()=>C()&&C().syncNow&&C().syncNow());
   on('cloud-notify','click',()=>{ S.meta.notify=!(S.meta&&S.meta.notify); persist(); renderCloudNotify(); });
+  // 역할 선택
+  on('acct-role-student','click',()=>C()&&C().chooseRole&&C().chooseRole('student'));
+  on('acct-role-teacher','click',()=>C()&&C().chooseRole&&C().chooseRole('teacher'));
+  // 학생: 반 참여
+  const doJoin=async()=>{
+    const inp=$('acct-code'); if(!inp||!C()||!C().joinClassByCode) return;
+    const r=await C().joinClassByCode(inp.value);
+    if(r&&r.ok){ inp.value=''; alert('“'+r.name+'” 반에 참여했어요!'); }
+    else alert((r&&r.msg)||'반 참여에 실패했어요.');
+  };
+  on('acct-join','click',doJoin);
+  on('acct-code','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doJoin();}});
+  // 선생님: 반 만들기
+  const doCreate=async()=>{
+    const inp=$('acct-clsname'); if(!inp||!C()||!C().createClass) return;
+    const r=await C().createClass(inp.value);
+    if(r&&r.ok){ inp.value=''; alert('“'+r.name+'” 반이 만들어졌어요.\n반 코드: '+r.code+'\n학생에게 이 코드를 알려주세요.'); renderClassList(); }
+    else alert((r&&r.msg)||'반 생성에 실패했어요.');
+  };
+  on('acct-create','click',doCreate);
+  on('acct-clsname','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doCreate();}});
 })();
 document.addEventListener('cloud-ready',()=>{
   if(window.Cloud&&window.Cloud.enabled){
@@ -1865,6 +1944,8 @@ document.addEventListener('cloud-ready',()=>{
     setCloudStatus(null); // 로그인 여부에 맞게 로그인/로그아웃 뷰 토글
   }
 });
+// 로그인/역할/반 상태가 바뀌면 계정 영역 다시 그림
+document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} });
 // 탭을 벗어나기 직전 마지막 변경분 동기화(로그인 시)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&window.Cloud&&window.Cloud.currentEmail&&window.Cloud.currentEmail()&&window.Cloud.syncNow)window.Cloud.syncNow();

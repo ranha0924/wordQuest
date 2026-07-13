@@ -1,13 +1,22 @@
 /* ================================================================
-   cloud.js — WordQuest 클라우드 동기화 (Firebase Auth + Firestore)
+   cloud.js — WordQuest 클라우드 (Firebase Auth + Firestore)
    ----------------------------------------------------------------
-   · 오프라인 우선: 설정/로그인이 없으면 아무 것도 안 하고 앱은 로컬 전용.
+   · 오프라인 우선: 설정/로그인이 없으면 앱은 로컬 전용으로 동작.
    · 빌드 도구 없음: Firebase는 gstatic ESM CDN에서 동적 import.
-   · window.Cloud API를 노출하고, 메인 앱이 심은 window.WQ 훅으로 상태를 주고받음.
+   · window.Cloud API를 노출하고, 메인 앱의 window.WQ 훅으로 상태를 주고받음.
 
-   메인 앱(index.html)이 제공해야 하는 훅 (window.WQ):
+   [문서 구조 — schema 2]
+     users/{uid}                → 가벼운 공개 정보(선생님이 읽는 부분)
+        { schema, role, classId, className, profile{name,email,photo},
+          summary{ lastActive, ... }, updatedAt }
+     users/{uid}/private/state  → 무거운 학습 데이터(본인만)
+        { schema, words{ id: word }, meta{...} }
+     classes/{classId}          → 반(선생님 소유)
+        { ownerUid, name, code, createdAt }
+
+   메인 앱(index.html)이 제공하는 훅 (window.WQ):
      getState()      → { words:[...], meta:{...} }   (라이브 참조)
-     applyMerged(m)  → 병합 결과 { words:[...], meta:{...} } 를 로컬에 반영(+저장+재렌더)
+     applyMerged(m)  → 병합 결과 { words:[...], meta:{...} } 를 로컬 반영
      setSyncStatus(s)→ UI 상태 문자열 표시
      isBusy()        → 전투 중이면 true (전투 중 로컬 덮어쓰기 회피)
    ================================================================ */
@@ -17,15 +26,23 @@
   var FBVER = 'https://www.gstatic.com/firebasejs/10.12.2';
   var NOOP = {
     enabled: false,
-    signIn: function () { alert('클라우드 동기화가 아직 설정되지 않았어요. docs/firebase-setup.md 를 참고해 firebase-config.js 를 채워주세요.'); },
+    signInGoogle: function () { alert('클라우드 로그인이 아직 설정되지 않았어요. docs/firebase-setup.md 를 참고해 firebase-config.js 를 채워주세요.'); },
     signOutUser: function () {},
     syncNow: function () {},
     notifyChanged: function () {},
     wipeRemote: function () {},
-    currentEmail: function () { return null; }
+    currentEmail: function () { return null; },
+    currentUser: function () { return null; },
+    getProfile: function () { return null; },
+    chooseRole: function () {},
+    joinClassByCode: function () { return Promise.resolve({ ok: false }); },
+    createClass: function () { return Promise.resolve({ ok: false }); },
+    listMyClasses: function () { return Promise.resolve([]); },
+    onChange: function () {}
   };
 
   function ready() { try { document.dispatchEvent(new Event('cloud-ready')); } catch (e) {} }
+  function accountChanged() { try { document.dispatchEvent(new Event('cloud-account')); } catch (e) {} }
   function WQ() { return window.WQ || {}; }
   function status(s) { try { (WQ().setSyncStatus || function () {})(s); } catch (e) {} }
 
@@ -50,9 +67,15 @@
   var app = appMod.initializeApp(cfg);
   var auth = authMod.getAuth(app);
   var db = fsMod.getFirestore(app);
-  var docRef = function (uid) { return fsMod.doc(db, 'users', uid); };
 
-  var user = null;
+  // ── 문서 참조 헬퍼 ──
+  var userRef = function (uid) { return fsMod.doc(db, 'users', uid); };
+  var stateRef = function (uid) { return fsMod.doc(db, 'users', uid, 'private', 'state'); };
+  var classRef = function (cid) { return fsMod.doc(db, 'classes', cid); };
+  var classesCol = function () { return fsMod.collection(db, 'classes'); };
+
+  var user = null;      // Firebase 인증 사용자
+  var profile = null;   // users/{uid} 문서(역할/반/프로필)
   var debounce = null;
 
   function now() { return Date.now(); }
@@ -85,24 +108,67 @@
     return { map: mergedMap, arr: mergedArr, meta: mergedMeta };
   }
 
+  // ── 학습 데이터 동기화(private/state) + 상단 요약 갱신 ──
   async function syncNow() {
     if (!user) return;
     try {
       status('동기화 중…');
       var local = (WQ().getState || function () { return { words: [], meta: {} }; })();
-      var ref = docRef(user.uid);
-      var snap = await fsMod.getDoc(ref);
-      var remote = snap.exists() ? snap.data() : { words: {}, meta: {} };
+      var sRef = stateRef(user.uid);
+      var snap = await fsMod.getDoc(sRef);
+      var remote;
+      if (snap.exists()) {
+        remote = snap.data();
+      } else {
+        // 레거시(schema 1): users/{uid} 최상위에 words/meta 가 있던 시절 → 1회 이관
+        var legacy = await fsMod.getDoc(userRef(user.uid));
+        var ld = legacy.exists() ? legacy.data() : null;
+        remote = (ld && ld.words) ? { words: ld.words, meta: ld.meta || {} } : { words: {}, meta: {} };
+      }
       var m = merge(local, remote);
-      // 전투 중이 아니면 로컬에 반영(재렌더). 전투 중이면 로컬은 건드리지 않고 원격에만 반영.
       var busy = false; try { busy = !!(WQ().isBusy && WQ().isBusy()); } catch (e) {}
       if (!busy && WQ().applyMerged) WQ().applyMerged({ words: m.arr, meta: m.meta });
-      await fsMod.setDoc(ref, { schema: 1, words: m.map, meta: m.meta });
+      await fsMod.setDoc(sRef, { schema: 2, words: m.map, meta: m.meta, updatedAt: now() });
+      // 최상위 요약 갱신(선생님 대시보드용 — Phase 1은 최소한만)
+      await writeSummary(m.arr, m.meta);
       status('동기화됨 · ' + hhmm());
     } catch (e) {
       console.warn('[cloud] 동기화 실패', e);
       status('동기화 보류(오프라인?)');
     }
+  }
+
+  // ── users/{uid} 최상위 문서에 프로필/요약 기록(레거시 words 제거) ──
+  async function writeSummary(arr, meta) {
+    if (!user) return;
+    var cap = 0, i;
+    arr = arr || [];
+    for (i = 0; i < arr.length; i++) { if (arr[i] && arr[i].cap) cap++; }
+    var top = {
+      schema: 2,
+      profile: {
+        name: user.displayName || '',
+        email: user.email || '',
+        photo: user.photoURL || ''
+      },
+      summary: {
+        lastActive: now(),
+        streak: (meta && meta.streak) || 0,
+        lastDay: (meta && meta.lastDay) || null,
+        total: arr.length,
+        captured: cap
+      },
+      updatedAt: now()
+    };
+    try {
+      await fsMod.setDoc(userRef(user.uid), top, { merge: true });
+      // 레거시 words/meta 필드가 최상위에 남아 있으면 제거
+      try {
+        await fsMod.updateDoc(userRef(user.uid), {
+          words: fsMod.deleteField(), meta: fsMod.deleteField()
+        });
+      } catch (e2) { /* 필드 없으면 무시 */ }
+    } catch (e) { console.warn('[cloud] 요약 기록 실패', e); }
   }
 
   function notifyChanged() {
@@ -111,34 +177,19 @@
     debounce = setTimeout(function () { syncNow(); }, 3000);
   }
 
-  async function signIn(email) {
-    email = (email || '').trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('올바른 이메일을 입력해 주세요.'); return; }
-    var settings = { url: location.origin + location.pathname, handleCodeInApp: true };
+  // ── Google 로그인 (팝업 → 실패 시 리디렉트 폴백) ──
+  async function signInGoogle() {
+    var provider = new authMod.GoogleAuthProvider();
     try {
-      await authMod.sendSignInLinkToEmail(auth, email, settings);
-      try { localStorage.setItem('wq_emailForSignIn', email); } catch (e) {}
-      status('메일 전송됨 · 받은 편지함의 링크를 눌러주세요');
-      alert(email + ' 로 로그인 링크를 보냈어요.\n메일의 링크를 열면 로그인이 완료됩니다.');
+      await authMod.signInWithPopup(auth, provider);
     } catch (e) {
-      console.warn('[cloud] 링크 전송 실패', e);
-      alert('로그인 메일 전송에 실패했어요: ' + (e && e.message ? e.message : e));
-    }
-  }
-
-  async function completeLinkSignIn() {
-    try {
-      if (!authMod.isSignInWithEmailLink(auth, location.href)) return;
-      var email = null; try { email = localStorage.getItem('wq_emailForSignIn'); } catch (e) {}
-      if (!email) email = window.prompt('로그인에 사용한 이메일을 다시 입력해 주세요');
-      if (!email) return;
-      await authMod.signInWithEmailLink(auth, email, location.href);
-      try { localStorage.removeItem('wq_emailForSignIn'); } catch (e) {}
-      // URL에서 로그인 파라미터 제거
-      try { history.replaceState(null, '', location.origin + location.pathname); } catch (e) {}
-    } catch (e) {
-      console.warn('[cloud] 링크 로그인 실패', e);
-      alert('로그인 링크 처리에 실패했어요: ' + (e && e.message ? e.message : e));
+      // 팝업 차단/취소 등 → 리디렉트로 재시도
+      if (e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request' || e.code === 'auth/operation-not-supported-in-this-environment')) {
+        try { await authMod.signInWithRedirect(auth, provider); return; } catch (e2) { e = e2; }
+      }
+      if (e && e.code === 'auth/popup-closed-by-user') return; // 사용자가 닫음 — 조용히
+      console.warn('[cloud] Google 로그인 실패', e);
+      alert('구글 로그인에 실패했어요: ' + (e && e.message ? e.message : e));
     }
   }
 
@@ -148,26 +199,156 @@
 
   async function wipeRemote() {
     if (!user) return;
-    try { await fsMod.setDoc(docRef(user.uid), { schema: 1, words: {}, meta: { updatedAt: now() } }); } catch (e) {}
+    try { await fsMod.setDoc(stateRef(user.uid), { schema: 2, words: {}, meta: { updatedAt: now() }, updatedAt: now() }); } catch (e) {}
   }
 
-  // ── 인증 상태 변화 → 상태표시 + 최초 동기화 ──
-  authMod.onAuthStateChanged(auth, function (u) {
+  // ── 프로필 로드(users/{uid}) ──
+  async function loadProfile() {
+    if (!user) { profile = null; return; }
+    try {
+      var snap = await fsMod.getDoc(userRef(user.uid));
+      var d = snap.exists() ? snap.data() : {};
+      profile = {
+        role: d.role || null,
+        classId: d.classId || null,
+        className: d.className || null,
+        name: user.displayName || (d.profile && d.profile.name) || '',
+        email: user.email || (d.profile && d.profile.email) || ''
+      };
+    } catch (e) {
+      console.warn('[cloud] 프로필 로드 실패', e);
+      profile = { role: null, classId: null, className: null, name: user.displayName || '', email: user.email || '' };
+    }
+  }
+
+  // ── 역할 선택(학생/선생님) — 1회 ──
+  async function chooseRole(role) {
+    if (!user) return;
+    if (role !== 'student' && role !== 'teacher') return;
+    try {
+      await fsMod.setDoc(userRef(user.uid), {
+        schema: 2, role: role,
+        profile: { name: user.displayName || '', email: user.email || '', photo: user.photoURL || '' },
+        updatedAt: now()
+      }, { merge: true });
+      if (profile) profile.role = role; else await loadProfile();
+      accountChanged();
+    } catch (e) {
+      console.warn('[cloud] 역할 설정 실패', e);
+      alert('역할 저장에 실패했어요: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // ── 반 코드로 참여(학생) ──
+  async function joinClassByCode(code) {
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    code = (code || '').trim().toUpperCase();
+    if (!/^[A-Z0-9]{4,8}$/.test(code)) return { ok: false, msg: '올바른 반 코드를 입력해 주세요.' };
+    try {
+      var q = fsMod.query(classesCol(), fsMod.where('code', '==', code), fsMod.limit(1));
+      var res = await fsMod.getDocs(q);
+      if (res.empty) return { ok: false, msg: '그런 반 코드가 없어요.' };
+      var cdoc = res.docs[0];
+      var cls = cdoc.data();
+      await fsMod.setDoc(userRef(user.uid), {
+        schema: 2, role: 'student', classId: cdoc.id, className: cls.name || '',
+        updatedAt: now()
+      }, { merge: true });
+      if (profile) { profile.role = 'student'; profile.classId = cdoc.id; profile.className = cls.name || ''; }
+      accountChanged();
+      return { ok: true, name: cls.name || '', code: code };
+    } catch (e) {
+      console.warn('[cloud] 반 참여 실패', e);
+      return { ok: false, msg: (e && e.message ? e.message : '반 참여에 실패했어요.') };
+    }
+  }
+
+  // ── 반 생성(선생님) — 고유 코드 발급 ──
+  function genCode() {
+    var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 0/O/1/I 제외
+    var s = '';
+    for (var i = 0; i < 6; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+  async function createClass(name) {
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    name = (name || '').trim();
+    if (!name) return { ok: false, msg: '반 이름을 입력해 주세요.' };
+    try {
+      // 고유 코드 확보(최대 5회 재시도)
+      var code = null, tries = 0;
+      while (tries < 5) {
+        var c = genCode();
+        var q = fsMod.query(classesCol(), fsMod.where('code', '==', c), fsMod.limit(1));
+        var r = await fsMod.getDocs(q);
+        if (r.empty) { code = c; break; }
+        tries++;
+      }
+      if (!code) return { ok: false, msg: '코드 생성에 실패했어요. 다시 시도해 주세요.' };
+      var newRef = fsMod.doc(classesCol());
+      await fsMod.setDoc(newRef, {
+        ownerUid: user.uid, name: name, code: code, createdAt: now()
+      });
+      // 선생님 역할 보장
+      await fsMod.setDoc(userRef(user.uid), { schema: 2, role: 'teacher', updatedAt: now() }, { merge: true });
+      if (profile) profile.role = 'teacher';
+      accountChanged();
+      return { ok: true, id: newRef.id, name: name, code: code };
+    } catch (e) {
+      console.warn('[cloud] 반 생성 실패', e);
+      return { ok: false, msg: (e && e.message ? e.message : '반 생성에 실패했어요.') };
+    }
+  }
+
+  // ── 내가 만든 반 목록(선생님) ──
+  async function listMyClasses() {
+    if (!user) return [];
+    try {
+      var q = fsMod.query(classesCol(), fsMod.where('ownerUid', '==', user.uid));
+      var res = await fsMod.getDocs(q);
+      var out = [];
+      res.forEach(function (d) { var v = d.data(); out.push({ id: d.id, name: v.name || '', code: v.code || '' }); });
+      out.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+      return out;
+    } catch (e) {
+      console.warn('[cloud] 반 목록 조회 실패', e);
+      return [];
+    }
+  }
+
+  // ── 인증 상태 변화 → 프로필 로드 + 상태표시 + 최초 동기화 ──
+  authMod.onAuthStateChanged(auth, async function (u) {
     user = u || null;
-    if (user) { status('로그인됨 · ' + (user.email || '')); syncNow(); }
-    else { status('로그아웃'); }
+    if (user) {
+      status('로그인됨 · ' + (user.email || ''));
+      await loadProfile();
+      accountChanged();
+      syncNow();
+    } else {
+      profile = null;
+      status('로그아웃');
+      accountChanged();
+    }
   });
 
   window.Cloud = {
     enabled: true,
-    signIn: signIn,
+    signInGoogle: signInGoogle,
     signOutUser: signOutUser,
     syncNow: syncNow,
     notifyChanged: notifyChanged,
     wipeRemote: wipeRemote,
-    currentEmail: function () { return user ? user.email : null; }
+    currentEmail: function () { return user ? user.email : null; },
+    currentUser: function () { return user ? { uid: user.uid, email: user.email, name: user.displayName, photo: user.photoURL } : null; },
+    getProfile: function () { return profile; },
+    chooseRole: chooseRole,
+    joinClassByCode: joinClassByCode,
+    createClass: createClass,
+    listMyClasses: listMyClasses,
+    onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };
 
-  await completeLinkSignIn();
+  // 리디렉트 로그인 결과 처리(팝업 폴백 경로)
+  try { await authMod.getRedirectResult(auth); } catch (e) { /* 무시 */ }
   ready();
 })();
