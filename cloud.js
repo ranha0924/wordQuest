@@ -36,6 +36,7 @@
     getProfile: function () { return null; },
     chooseRole: function () {},
     joinClassByCode: function () { return Promise.resolve({ ok: false }); },
+    setDisplayName: function () { return Promise.resolve({ ok: false }); },
     createClass: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
     listStudents: function () { return Promise.resolve([]); },
@@ -239,12 +240,29 @@
         role: d.role || null,
         classId: d.classId || null,
         className: d.className || null,
-        name: user.displayName || (d.profile && d.profile.name) || '',
+        displayName: d.displayName || '',               // 사용자가 입력한 표시 이름(대시보드용)
+        name: user.displayName || (d.profile && d.profile.name) || '', // 구글 계정 이름
         email: user.email || (d.profile && d.profile.email) || ''
       };
     } catch (e) {
       console.warn('[cloud] 프로필 로드 실패', e);
-      profile = { role: null, classId: null, className: null, name: user.displayName || '', email: user.email || '' };
+      profile = { role: null, classId: null, className: null, displayName: '', name: user.displayName || '', email: user.email || '' };
+    }
+  }
+
+  // ── 표시 이름 설정(학생이 입력한 실명 등) ──
+  async function setDisplayName(name) {
+    if (!user) return { ok: false };
+    name = (name || '').trim().slice(0, 20);
+    if (!name) return { ok: false, msg: '이름을 입력해 주세요.' };
+    try {
+      await fsMod.setDoc(userRef(user.uid), { schema: 2, displayName: name, updatedAt: now() }, { merge: true });
+      if (profile) profile.displayName = name;
+      accountChanged();
+      return { ok: true, name: name };
+    } catch (e) {
+      console.warn('[cloud] 이름 저장 실패', e);
+      return { ok: false, msg: (e && e.message ? e.message : '이름 저장에 실패했어요.') };
     }
   }
 
@@ -266,9 +284,11 @@
     }
   }
 
-  // ── 반 코드로 참여(학생) ──
-  async function joinClassByCode(code) {
+  // ── 반 코드로 참여(학생) — 표시 이름과 함께 ──
+  async function joinClassByCode(code, name) {
     if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    name = (name || '').trim().slice(0, 20);
+    if (!name) return { ok: false, msg: '이름을 입력해 주세요.' };
     code = (code || '').trim().toUpperCase();
     if (!/^[A-Z0-9]{4,8}$/.test(code)) return { ok: false, msg: '올바른 반 코드를 입력해 주세요.' };
     try {
@@ -278,10 +298,10 @@
       var cdoc = res.docs[0];
       var cls = cdoc.data();
       await fsMod.setDoc(userRef(user.uid), {
-        schema: 2, role: 'student', classId: cdoc.id, className: cls.name || '',
+        schema: 2, role: 'student', classId: cdoc.id, className: cls.name || '', displayName: name,
         updatedAt: now()
       }, { merge: true });
-      if (profile) { profile.role = 'student'; profile.classId = cdoc.id; profile.className = cls.name || ''; }
+      if (profile) { profile.role = 'student'; profile.classId = cdoc.id; profile.className = cls.name || ''; profile.displayName = name; }
       accountChanged();
       return { ok: true, name: cls.name || '', code: code };
     } catch (e) {
@@ -355,7 +375,7 @@
         if (d.id === user.uid) return; // 선생님 본인 제외
         out.push({
           uid: d.id,
-          name: (v.profile && v.profile.name) || '',
+          name: v.displayName || (v.profile && v.profile.name) || '', // 입력한 이름 우선
           email: (v.profile && v.profile.email) || '',
           summary: v.summary || null
         });
@@ -398,6 +418,7 @@
     getProfile: function () { return profile; },
     chooseRole: chooseRole,
     joinClassByCode: joinClassByCode,
+    setDisplayName: setDisplayName,
     createClass: createClass,
     listMyClasses: listMyClasses,
     listStudents: listStudents,
