@@ -1,10 +1,46 @@
 rules_version = '2';
-// WordQuest — 사용자는 자기 문서(users/{uid})만 읽고 쓸 수 있다. 그 외 전면 거부.
+/* ================================================================
+   WordQuest Firestore 보안 규칙 (schema 2)
+   ----------------------------------------------------------------
+   users/{uid}                → 본인 read/write. 선생님은 자기 반 학생만 read.
+   users/{uid}/private/state  → 본인만 read/write (무거운 학습 데이터).
+   classes/{classId}          → 로그인 사용자 read(코드 조회용), 소유 선생님만 write.
+   그 외 전면 거부.
+   ================================================================ */
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    function signedIn() { return request.auth != null; }
+
+    // 이 문서(학생)의 소속 반을 요청자가 소유(담당 선생님)하는가
+    function ownsStudentClass(data) {
+      return signedIn()
+        && data.classId != null
+        && exists(/databases/$(database)/documents/classes/$(data.classId))
+        && get(/databases/$(database)/documents/classes/$(data.classId)).data.ownerUid == request.auth.uid;
     }
+
+    match /users/{uid} {
+      // 본인은 항상, 선생님은 자기 반 학생 문서를 읽을 수 있다.
+      allow read: if signedIn() && (request.auth.uid == uid || ownsStudentClass(resource.data));
+      // 쓰기는 본인만.
+      allow write: if signedIn() && request.auth.uid == uid;
+
+      // 무거운 학습 데이터: 본인만.
+      match /private/{docId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /classes/{classId} {
+      // 코드 조회·목록에 필요 → 로그인 사용자 read 허용(민감정보 없음: 이름/코드/소유자).
+      allow read: if signedIn();
+      // 생성: 로그인 사용자가 자신을 소유자로.
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      // 수정·삭제: 소유 선생님만.
+      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
