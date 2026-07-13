@@ -161,26 +161,29 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
   background:var(--night);border:5px solid transparent;border-image:var(--frame-steel) 3 fill;color:var(--gold);cursor:pointer;z-index:6;padding:0;}
 .homegear:active{transform:translateY(1px);}
 .homegear .ic{width:18px;height:18px;}
-/* 홈 학습 히트맵 — 상태칸과 같은 강철 프레임으로 통일 */
-.homeheat{margin-top:14px;width:100%;max-width:420px;align-self:center;
-  border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);padding:11px 10px 13px;}
-.homeheat .hh-lbl{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);text-align:center;margin-bottom:9px;letter-spacing:.5px;}
+/* 홈 학습 히트맵 — 상태칸과 같은 강철 프레임, 최근 28일 한 줄 스트립 */
+.homeheat{margin-top:8px;width:100%;max-width:420px;align-self:center;
+  border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);padding:7px 10px 9px;}
+.homeheat .hh-lbl{font-family:'Galmuri9',monospace;font-size:9px;color:var(--dim);text-align:center;margin-bottom:6px;letter-spacing:.5px;}
 .homeheat .hh-lbl b{color:var(--gold);font-weight:normal;}
+.heatstrip{display:flex;gap:2px;justify-content:center;flex-wrap:nowrap;width:100%;}
+.heatstrip i{flex:1 1 0;min-width:0;height:13px;border-radius:2px;display:block;}
+/* 대시보드용 7행 히트맵(주 단위 블록) */
 .heatgrid{display:grid;grid-auto-flow:column;gap:3px;justify-content:center;}
 .heatgrid i{width:12px;height:12px;border-radius:2px;display:block;}
-.titlelogo{text-align:center;margin:0 0 30px;user-select:none;}
+.titlelogo{text-align:center;margin:0 0 16px;user-select:none;}
 .tl-main{font-size:56px;line-height:1;letter-spacing:3px;
   background:linear-gradient(var(--tl1) 0%,var(--tl2) 40%,var(--tl3) 72%,var(--tl4) 100%);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
   filter:drop-shadow(2px 0 0 #000) drop-shadow(-2px 0 0 #000) drop-shadow(0 2px 0 #000) drop-shadow(0 -2px 0 #000) drop-shadow(2px 2px 0 #000) drop-shadow(-2px 2px 0 #000) drop-shadow(2px -2px 0 #000) drop-shadow(-2px -2px 0 #000) drop-shadow(5px 6px 0 rgba(0,0,0,.6));}
-.tl-en{margin-top:12px;font-size:16px;letter-spacing:7px;color:var(--gold);text-shadow:2px 2px 0 #000;padding-left:7px;}
-.tl-banner{position:relative;display:inline-block;margin-top:16px;padding:5px 18px;font-size:14px;color:#fff;background:var(--banner);letter-spacing:1px;text-shadow:1px 1px 0 #000;box-shadow:0 0 0 3px #000,4px 4px 0 rgba(0,0,0,.45);}
+.tl-en{margin-top:8px;font-size:16px;letter-spacing:7px;color:var(--gold);text-shadow:2px 2px 0 #000;padding-left:7px;}
+.tl-banner{position:relative;display:inline-block;margin-top:11px;padding:5px 18px;font-size:14px;color:#fff;background:var(--banner);letter-spacing:1px;text-shadow:1px 1px 0 #000;box-shadow:0 0 0 3px #000,4px 4px 0 rgba(0,0,0,.45);}
 .tl-tm{position:absolute;right:-20px;top:-4px;font-size:10px;color:var(--dim);}
-.titlemenu{display:inline-flex;flex-direction:column;gap:14px;align-self:center;margin:4px 0 24px;}
-.mrow{display:grid;grid-template-columns:28px auto;align-items:center;background:none;border:none;padding:2px 6px;cursor:pointer;color:#fff;font-size:22px;text-align:left;text-shadow:2px 2px 0 #000;transition:transform .07s steps(2);}
-.mrow .star{grid-column:1;grid-row:1;color:var(--star);font-size:17px;visibility:hidden;text-shadow:1px 1px 0 #000;}
+.titlemenu{display:inline-flex;flex-direction:column;gap:6px;align-self:center;margin:2px 0 16px;}
+.mrow{display:grid;grid-template-columns:24px auto;align-items:center;background:none;border:none;padding:2px 6px;cursor:pointer;color:#fff;font-size:19px;text-align:left;text-shadow:2px 2px 0 #000;transition:transform .07s steps(2);}
+.mrow .star{grid-column:1;grid-row:1;color:var(--star);font-size:15px;visibility:hidden;text-shadow:1px 1px 0 #000;}
 .mrow .mlabel{grid-column:2;grid-row:1;}
-.mrow .sub{grid-column:2;grid-row:2;display:block;font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);letter-spacing:.5px;margin-top:3px;text-shadow:1px 1px 0 #000;}
+.mrow .sub{grid-column:2;grid-row:2;display:block;font-family:'Galmuri9',monospace;font-size:9px;color:var(--dim);letter-spacing:.5px;margin-top:1px;text-shadow:1px 1px 0 #000;}
 .mrow:hover .mlabel,.mrow:focus-visible .mlabel{color:var(--gold);}
 .mrow:focus-visible{outline:none;}
 .mrow:active{transform:translateY(1px);}
@@ -190,8 +193,8 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .titlecopy{text-align:center;font-size:13px;letter-spacing:1px;color:var(--copy);text-shadow:2px 2px 0 #000;margin-top:4px;}
 .titlestat{text-align:center;font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);margin-top:14px;line-height:1.7;}
 .titlestat b{color:var(--gold);font-weight:normal;}
-.titlestatus{display:flex;justify-content:center;margin-top:20px;border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);overflow:hidden;width:100%;max-width:420px;align-self:center;}
-.ts-cell{flex:1;min-width:0;padding:11px 6px;text-align:center;display:flex;flex-direction:column;gap:5px;align-items:center;justify-content:flex-start;}
+.titlestatus{display:flex;justify-content:center;margin-top:12px;border:5px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);overflow:hidden;width:100%;max-width:420px;align-self:center;}
+.ts-cell{flex:1;min-width:0;padding:8px 6px;text-align:center;display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:flex-start;}
 .ts-cell + .ts-cell{border-left:2px solid var(--line);}
 .ts-cell b{font-size:19px;color:var(--gold);font-weight:normal;text-shadow:1px 1px 0 var(--ink);display:flex;align-items:center;gap:2px;line-height:1;}
 .ts-cell span{font-family:'Galmuri9',monospace;font-size:9px;color:var(--dim);letter-spacing:.5px;}
@@ -920,6 +923,19 @@ function heatmapHTML(dh,weeks){
   }
   return '<div class="heatgrid" style="grid-template-rows:repeat(7,12px);">'+cells.join('')+'</div>';
 }
+// 최근 days일을 한 줄 스트립으로(홈 압축용). dh: dailyHistory 맵.
+function heatStripHTML(dh,days){
+  dh=dh||{}; days=days||28;
+  const t=today(); const cells=[];
+  for(let i=days-1;i>=0;i--){
+    const ds=addDays(t,-i);
+    const e=dh[ds]; const a=e?e.a:0;
+    let lv=0; if(a>0)lv=1; if(a>=5)lv=2; if(a>=15)lv=3; if(a>=30)lv=4;
+    const col=['#1b1b2e','#274a2a','#2f7a37','#3fae46','#5fe06a'][lv];
+    cells.push('<i title="'+ds+' · '+a+'문제'+(a&&e?(' · 정답 '+e.ok):'')+'" style="background:'+col+';"></i>');
+  }
+  return '<div class="heatstrip">'+cells.join('')+'</div>';
+}
 
 /* ================= rarity ================= */
 function rarity(w){
@@ -1113,8 +1129,8 @@ function renderHomeHeat(){
   if(!keys.length){ box.style.display='none'; return; }
   box.style.display='';
   const te=dh[today()];
-  $('home-heat-lbl').innerHTML='최근 학습 · 오늘 '+(te?('<b style="color:#5fe06a;">'+te.a+'문제</b> (정답 '+te.ok+')'):'<b style="color:#8a8ab0;">아직 안 함</b>');
-  $('home-heat-grid').innerHTML=heatmapHTML(dh,5);
+  $('home-heat-lbl').innerHTML='최근 28일 · 오늘 '+(te?('<b style="color:#5fe06a;">'+te.a+'문제</b> (정답 '+te.ok+')'):'<b style="color:#8a8ab0;">아직 안 함</b>');
+  $('home-heat-grid').innerHTML=heatStripHTML(dh,28);
 }
 function homeMsg(m){$('h-msg').textContent=m;$('h-msg').style.display='block';}
 
