@@ -788,11 +788,12 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
   </div>
 </div>
 
-<script src="words.js"></script>
-<script src="pack-hs1.js"></script>
-<script src="pack-confuse.js"></script>
-<script src="pack-vacation.js"></script>
-<script src="firebase-config.js"></script>
+<!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
+<script src="words.js?v=12"></script>
+<script src="pack-hs1.js?v=12"></script>
+<script src="pack-confuse.js?v=12"></script>
+<script src="pack-vacation.js?v=12"></script>
+<script src="firebase-config.js?v=12"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2094,7 +2095,8 @@ async function renderTeacherStudents(){
   // 학생 제외 버튼(반 문서 removed 목록에 추가 → 대시보드에서 숨김)
   Array.from(document.querySelectorAll('#tc-students .tcx')).forEach(btn=>{
     btn.addEventListener('click',async()=>{
-      const uid=btn.dataset.uid; if(!uid||!C.removeStudent)return;
+      const uid=btn.dataset.uid; if(!uid)return;
+      if(!C.removeStudent){ alert('앱 업데이트가 필요해요. 새로고침(또는 앱을 닫았다 다시 열기) 후 다시 시도해 주세요.'); return; }
       if(!window.confirm('이 학생을 반에서 제외할까요?\n(학생의 학습 데이터는 삭제되지 않고, 대시보드에서만 숨겨집니다.)'))return;
       const r=await C.removeStudent(cid,uid);
       if(r&&r.ok) renderTeacherStudents();
@@ -2154,7 +2156,8 @@ function renderCloudNotify(){
   on('tc-class','change',()=>{ renderTeacherStudents(); });
   on('tc-refresh','click',()=>{ renderTeacher(); });
   on('tc-delclass','click',async()=>{
-    const sel=$('tc-class'); const cid=sel&&sel.value; if(!cid||!C()||!C().deleteClass)return;
+    const sel=$('tc-class'); const cid=sel&&sel.value; if(!cid)return;
+    if(!C()||!C().deleteClass){ alert('앱 업데이트가 필요해요. 새로고침(또는 앱을 닫았다 다시 열기) 후 다시 시도해 주세요.'); return; }
     const cls=(typeof tcClasses!=='undefined')?tcClasses.find(c=>c.id===cid):null;
     if(!window.confirm('“'+((cls&&cls.name)||'이 반')+'”을(를) 삭제할까요?\n반 코드가 무효화되고 대시보드에서 사라집니다. (학생들의 학습 데이터 자체는 지워지지 않아요.)'))return;
     const r=await C().deleteClass(cid);
@@ -2239,7 +2242,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js"></script>
+<script type="module" src="cloud.js?v=12"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
