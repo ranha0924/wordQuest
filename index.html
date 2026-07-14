@@ -128,7 +128,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;border:6px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);position:relative;}
 .hdr .t1{font-size:13px;color:var(--gold);text-shadow:2px 2px 0 var(--ink);letter-spacing:1px;line-height:1.25;}
 .hdr .t2{font-family:'Galmuri9',monospace;font-size:9px;color:var(--dim);margin-top:2px;}
-.mutebtn{font-family:'Galmuri9',monospace;background:var(--night);border:5px solid transparent;border-image:var(--frame-steel) 3 fill;color:var(--dim);font-size:10px;padding:6px 8px;cursor:pointer;min-height:30px;transition:transform .08s steps(2);}
+.mutebtn{font-family:'Galmuri9',monospace;background:var(--night);border:5px solid transparent;border-image:var(--frame-steel) 3 fill;color:var(--dim);font-size:10px;padding:6px 10px;cursor:pointer;min-height:44px;transition:transform .08s steps(2);}
 .mutebtn:hover{border-image:var(--frame-gold) 3 fill;color:var(--gold);}
 .mutebtn:active{transform:translateY(1px);}
 .wq-col:has(#scr-home.on){padding-top:6px;}
@@ -160,7 +160,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 /* ===== title screen (Famicom style) ===== */
 #scr-home{align-items:center;gap:0;justify-content:center;flex:1;position:relative;}
 /* 우측 상단 설정 톱니(메뉴에서 분리해 타이틀을 깔끔하게) */
-.homegear{position:absolute;top:2px;right:2px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+.homegear{position:absolute;top:2px;right:2px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;
   background:var(--night);border:5px solid transparent;border-image:var(--frame-steel) 3 fill;color:var(--gold);cursor:pointer;z-index:6;padding:0;}
 .homegear:active{transform:translateY(1px);}
 .homegear .ic{width:18px;height:18px;}
@@ -234,8 +234,10 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 #bgcv{position:absolute;inset:0;width:100%;height:100%;image-rendering:pixelated;z-index:0;}
 .vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%, transparent 52%, rgba(4,5,16,.62));pointer-events:none;z-index:1;}
 .arena>.monhp,.arena>.monstage,.arena>.remain{position:relative;z-index:2;width:100%;}
+.arena>.monhp{z-index:6;}
 /* enemy HP/EXP panel — anchored at top of the stage, own layer */
-.monstage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+/* 콘텐츠가 무대보다 커도 위(HP 바)로 넘치지 않게 상단 정렬 + 스프라이트는 남는 높이에 맞춰 축소 */
+.monstage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden;}
 /* independent pixel nameplate directly above the sprite; rarity badge to the left */
 .nameplate{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 6px;margin-bottom:14px;max-width:94%;
   border:6px solid transparent;border-image:var(--frame-steel) 3 fill;background:var(--night);box-shadow:0 4px 0 rgba(0,0,0,.55);}
@@ -248,8 +250,8 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .nameplate .spk{margin-left:1px;}
 .dexcard .nm{display:flex;align-items:center;justify-content:center;gap:5px;}
 .dexcard .spk{padding:1px 4px;}
-.monbox{position:relative;width:156px;height:142px;display:flex;align-items:center;justify-content:center;}
-.monbox img{width:144px;height:132px;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 12px 8px rgba(0,0,0,.55));}
+.monbox{position:relative;width:156px;height:142px;min-height:0;flex-shrink:1;display:flex;align-items:center;justify-content:center;}
+.monbox img{width:144px;height:132px;max-height:100%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 12px 8px rgba(0,0,0,.55));}
 .arena.hasbg #bgcv,.arena.hasbg .torch{display:none;}
 .monbox .part{position:absolute;pointer-events:none;}
 /* 무리 조우: 작은 monbox 대신 넓은 무대 폭에 몬스터를 가로 한 줄로 세운다 */
@@ -260,8 +262,8 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .qpips i{width:7px;height:7px;display:block;background:var(--steel);box-shadow:0 0 0 1px var(--ink);}
 .qpips i.cur{background:var(--gold);box-shadow:0 0 0 1px var(--ink),0 0 6px rgba(232,193,90,.5);animation:wqStart 1.1s steps(1) infinite;}
 .qtext{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);text-shadow:1px 1px 0 var(--ink);}
-.monhp{z-index:3;display:flex;flex-direction:column;gap:4px;align-items:center;margin-bottom:4px;flex-shrink:0;}
-.hpline{display:flex;align-items:center;gap:6px;background:rgba(8,8,20,.85);border:2px solid var(--ink);box-shadow:0 0 0 2px var(--steel);padding:3px 8px;}
+.monhp{z-index:6;display:flex;flex-direction:column;gap:4px;align-items:center;margin-bottom:6px;flex-shrink:0;}
+.hpline{display:flex;align-items:center;gap:6px;background:var(--night);border:2px solid var(--ink);box-shadow:0 0 0 2px var(--steel);padding:3px 8px;}
 .hpline .lb{font-family:'Galmuri9',monospace;font-size:10px;color:#fff;text-shadow:1px 1px 0 var(--ink);min-width:32px;}
 .hpbar{width:130px;height:10px;background:var(--track);border:1px solid var(--ink);box-shadow:inset 0 0 0 1px var(--steel);overflow:hidden;}
 .hpbar i{display:block;height:100%;transition:width .35s steps(6);}
@@ -296,7 +298,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .matchbox .mhint{text-align:center;color:var(--gold);font-size:11px;text-shadow:1px 1px 0 rgba(0,0,0,.5);}
 .matchgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
 .mcol{display:flex;flex-direction:column;gap:6px;}
-.mitem{display:flex;align-items:center;justify-content:center;text-align:center;background:var(--win);border:2px solid var(--ink);color:#fff;font-size:13px;padding:8px 6px;min-height:42px;cursor:pointer;text-shadow:1px 1px 0 rgba(0,0,0,.5);line-height:1.2;word-break:keep-all;}
+.mitem{display:flex;align-items:center;justify-content:center;text-align:center;background:var(--win);border:2px solid var(--ink);color:#fff;font-size:13px;padding:8px 6px;min-height:44px;cursor:pointer;text-shadow:1px 1px 0 rgba(0,0,0,.5);line-height:1.2;word-break:keep-all;}
 .mitem:active{transform:translateY(1px);}
 .mitem.sel{background:var(--gold);color:var(--ink);text-shadow:none;}
 .mitem.matched{background:rgba(26,90,46,.65);color:#8ff0a8;border-color:var(--ok);cursor:default;}
@@ -322,7 +324,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .bar .tr{flex:1;max-width:190px;height:9px;background:var(--track);border:1px solid var(--ink);box-shadow:inset 0 0 0 1px var(--steel);overflow:hidden;}
 .bar .tr i{display:block;height:100%;transition:width .35s steps(6);}
 .pcombo{font-family:'Galmuri9',monospace;font-size:12px;text-align:right;min-width:80px;color:var(--gold);}
-.fleebtn{align-self:center;background:none;border:none;color:var(--flee);font-family:'Galmuri9',monospace;font-size:11px;cursor:pointer;padding:4px 12px;flex-shrink:0;}
+.fleebtn{align-self:center;display:flex;align-items:center;justify-content:center;min-height:44px;background:none;border:none;color:var(--flee);font-family:'Galmuri9',monospace;font-size:11px;cursor:pointer;padding:4px 16px;flex-shrink:0;}
 .fleebtn:hover{color:var(--gold);}
 
 /* ===== register ===== */
@@ -455,7 +457,7 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
 .hurtflash.go{animation:wqHurtFlash .45s;}
 @media (max-width:520px){
   .pcombo{display:none;}
-  .choice{font-size:13px;min-height:40px;padding:7px 6px;}
+  .choice{font-size:13px;min-height:44px;padding:8px 6px;}
   .nameplate{padding:4px 10px 5px;}
   .monname{font-size:15px;}
 }
@@ -469,6 +471,10 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
   .mrow{font-size:17px;}
   .hdr .t1{font-size:12px;}
   .grid2{gap:6px;}
+  /* 이름표: 배지·여백을 줄여 몬스터 이름이 잘리지 않도록 폭 확보 */
+  .nameplate{gap:5px;padding:4px 8px 5px;max-width:99%;}
+  .rtag{font-size:9px;padding:2px 4px;letter-spacing:0;}
+  .monname{font-size:14px;}
 }
 /* 데스크톱: 화면을 꽉 쓰는 전투 연출 */
 @media (min-width:760px){
