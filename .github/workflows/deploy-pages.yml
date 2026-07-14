@@ -34,10 +34,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure Pages
-        # enablement: Pages 소스를 "GitHub Actions" 로 자동 전환(설정 UI 안 만져도 됨).
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
