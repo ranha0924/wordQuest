@@ -804,11 +804,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=18"></script>
-<script src="pack-hs1.js?v=18"></script>
-<script src="pack-confuse.js?v=18"></script>
-<script src="pack-vacation.js?v=18"></script>
-<script src="firebase-config.js?v=18"></script>
+<script src="words.js?v=19"></script>
+<script src="pack-hs1.js?v=19"></script>
+<script src="pack-confuse.js?v=19"></script>
+<script src="pack-vacation.js?v=19"></script>
+<script src="firebase-config.js?v=19"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2312,14 +2312,23 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=18"></script>
+<script type="module" src="cloud.js?v=19"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
   'use strict';
   if('serviceWorker' in navigator){
+    // 새 버전 자동 반영: 새 SW가 제어권을 잡으면(=배포됨) 1회 자동 새로고침.
+    // 첫 설치(이전 컨트롤러 없음)는 리로드하지 않는다.
+    var hadController=!!navigator.serviceWorker.controller, reloaded=false;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(!hadController||reloaded)return; reloaded=true; location.reload();
+    });
     addEventListener('load',function(){
-      navigator.serviceWorker.register('sw.js').catch(function(e){console.warn('[pwa] SW 등록 실패',e);});
+      navigator.serviceWorker.register('sw.js').then(function(reg){
+        // 탭이 다시 보일 때마다 업데이트 확인(새 배포를 빨리 감지)
+        addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'){ try{reg.update();}catch(e){} } });
+      }).catch(function(e){console.warn('[pwa] SW 등록 실패',e);});
     });
   }
   // 설치 프롬프트: beforeinstallprompt 를 잡아뒀다가 사용자가 버튼을 누를 때 띄운다(Android/데스크톱 Chromium).
