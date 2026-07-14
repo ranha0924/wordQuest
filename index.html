@@ -770,6 +770,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="regmsg" id="cloud-hint" style="display:block;">구글 로그인은 선택이며, 안 하면 지금처럼 이 기기에만 저장됩니다. 로그인하면 기기 간 진도 동기화와 매일 복습 알림을 받을 수 있어요.</div>
       </div>
       <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
+      <div id="buildver" style="text-align:center;color:#6a6a8a;font-size:11px;margin-top:6px;">빌드 확인 중…</div>
     </div>
 
     <!-- 선생님 대시보드 -->
@@ -826,11 +827,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=31"></script>
-<script src="pack-hs1.js?v=31"></script>
-<script src="pack-confuse.js?v=31"></script>
-<script src="pack-vacation.js?v=31"></script>
-<script src="firebase-config.js?v=31"></script>
+<script src="words.js?v=32"></script>
+<script src="pack-hs1.js?v=32"></script>
+<script src="pack-confuse.js?v=32"></script>
+<script src="pack-vacation.js?v=32"></script>
+<script src="firebase-config.js?v=32"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1453,9 +1454,12 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v31: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v32: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
+// 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
+var BUILD='v32';
+try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
 $('ocralbum').addEventListener('click',()=>{ if(!_ocrBusy)$('ocralbumfile').click(); });
@@ -2548,7 +2552,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=31"></script>
+<script type="module" src="cloud.js?v=32"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
