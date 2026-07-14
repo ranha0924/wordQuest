@@ -881,6 +881,14 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
           <button class="subbtn" id="tc-refresh"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>새로고침</button>
         </div>
         <div id="tc-codeline" class="regmsg" style="display:none;"></div>
+        <div class="flabel">📦 반에 단어 배포 <span class="sub">이 반 학생 전원에게 전송</span></div>
+        <div class="regmsg" id="tc-packinfo" style="display:block;">아직 배포한 단어가 없어요.</div>
+        <textarea class="reg" id="tc-packtext" placeholder="apple - 사과&#10;banana - 바나나&#10;(한 줄에 하나, '단어 - 뜻')" style="min-height:88px;"></textarea>
+        <div class="regfoot">
+          <div class="regdetect" id="tc-packdetect"><b>0</b>개</div>
+          <button class="parsebtn" id="tc-packsend">▶ 이 반에 배포</button>
+        </div>
+        <div class="regmsg" id="tc-packmsg" style="display:none;"></div>
         <button class="subbtn" id="tc-delclass" style="width:100%;border-color:#5a2a2a;color:#e57373;">🗑 이 반 삭제</button>
         <div id="tc-students"></div>
       </div>
@@ -914,11 +922,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=46"></script>
-<script src="pack-hs1.js?v=46"></script>
-<script src="pack-confuse.js?v=46"></script>
-<script src="pack-vacation.js?v=46"></script>
-<script src="firebase-config.js?v=46"></script>
+<script src="words.js?v=47"></script>
+<script src="pack-hs1.js?v=47"></script>
+<script src="pack-confuse.js?v=47"></script>
+<script src="pack-vacation.js?v=47"></script>
+<script src="firebase-config.js?v=47"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1556,11 +1564,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v46: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v47: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v46';
+var BUILD='v47';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2622,6 +2630,53 @@ async function renderTeacher(){
   if(prev&&tcClasses.some(c=>c.id===prev))sel.value=prev;
   await renderTeacherStudents();
 }
+/* ===== 반에 단어 배포(선생님) + 학생 자동 수신 ===== */
+let tcPackCid=null; // 텍스트영역 프리필은 반이 바뀔 때만(선생님이 입력 중이던 걸 덮지 않게)
+function updateTcPackDetect(){ const el=$('tc-packdetect'); if(el){ const n=parseText(($('tc-packtext')||{}).value||'').length; el.innerHTML='<b>'+n+'</b>개'; } }
+async function loadTcPack(cid){
+  const C=window.Cloud, info=$('tc-packinfo'), ta=$('tc-packtext');
+  const changed=(tcPackCid!==cid); tcPackCid=cid;
+  if(!C||!C.getClassPack||!cid){ if(info)info.textContent='아직 배포한 단어가 없어요.'; return; }
+  let pack=null; try{ pack=await C.getClassPack(cid); }catch(e){}
+  if(pack&&pack.words&&pack.words.length){
+    if(info)info.textContent='현재 배포됨: '+pack.words.length+'개 · 수정 후 다시 배포하면 학생에게 갱신돼요.';
+    if(changed&&ta) ta.value=pack.words.map(x=>x.w+' - '+x.m).join('\n');
+  }else{
+    if(info)info.textContent='아직 배포한 단어가 없어요. 아래에 붙여넣고 배포하세요.';
+    if(changed&&ta) ta.value='';
+  }
+  updateTcPackDetect();
+}
+async function doTcSend(){
+  const C=window.Cloud, sel=$('tc-class'), msg=$('tc-packmsg');
+  const cid=sel&&sel.value;
+  const show=(t)=>{ if(msg){ msg.textContent=t; msg.style.display='block'; } };
+  if(!C||!C.setClassPack||!cid){ show('반을 먼저 선택하세요.'); return; }
+  const words=parseText(($('tc-packtext')||{}).value||'');
+  if(!words.length){ show('배포할 단어가 없어요. (예: apple - 사과)'); return; }
+  show('배포 중…');
+  const r=await C.setClassPack(cid, words);
+  if(r&&r.ok){ show('✅ '+r.count+'개 단어를 이 반 학생 전원에게 배포했어요! (학생이 앱을 열면 자동으로 추가돼요)'); sfx('capture'); tcPackCid=null; try{loadTcPack(cid);}catch(e){} }
+  else{ show('배포 실패: '+((r&&r.msg)||'알 수 없는 오류')); }
+}
+// 학생: 자기 반의 배포 단어를 확인해 새 버전이면 자동으로 담는다(중복 제외).
+async function checkClassPack(){
+  const C=window.Cloud;
+  if(!C||!C.enabled||!C.getClassPack) return;
+  const p=C.getProfile?C.getProfile():null;
+  if(!p||p.role!=='student'||!p.classId) return;
+  let pack=null; try{ pack=await C.getClassPack(p.classId); }catch(e){ return; }
+  if(!pack||!pack.words||!pack.words.length) return;
+  const imp=S.meta.impPack||{};
+  const already=(imp.cid===p.classId && (imp.ver||0)>=(pack.ver||0));
+  if(already) return;
+  const existing=new Set(S.words.map(w=>w.w.toLowerCase()));
+  let added=0;
+  pack.words.forEach(function(e){ if(!e||!e.w||!e.m)return; const k=String(e.w).toLowerCase(); if(existing.has(k))return; existing.add(k); S.words.push({id:k,w:String(e.w),m:String(e.m),stage:0,wrong:0,seen:0,cap:false,due:today(),created:today()}); added++; });
+  S.meta.impPack={cid:p.classId,ver:pack.ver||0}; S.meta.updatedAt=Date.now();
+  persist();
+  if(added){ try{ homeMsg('선생님이 단어 '+added+'개를 보냈어요! 던전에서 만나요.'); }catch(e){} try{ if(S.screen==='home')renderHome(); }catch(e){} }
+}
 async function renderTeacherStudents(){
   const C=window.Cloud;
   const sel=$('tc-class'),stu=$('tc-students'),cl=$('tc-codeline'),del=$('tc-delclass');
@@ -2629,6 +2684,7 @@ async function renderTeacherStudents(){
   if(cl&&cls){ cl.style.display='block'; cl.innerHTML='반 코드: <b style="letter-spacing:2px;color:#ffc63a;">'+esc(cls.code)+'</b> · 학생에게 알려주세요.'; }
   if(del) del.style.display=cid?'':'none';
   if(!cid){ stu.innerHTML=''; return; }
+  try{ loadTcPack(cid); }catch(e){}
   stu.innerHTML='<div class="regmsg" style="display:block;">불러오는 중…</div>';
   const list=await C.listStudents(cid);
   const t=today(), y=addDays(t,-1);
@@ -2743,6 +2799,8 @@ async function renderTeacherStudents(){
   on('acct-go-teacher','click',()=>show('teacher'));
   on('tc-class','change',()=>{ renderTeacherStudents(); });
   on('tc-refresh','click',()=>{ renderTeacher(); });
+  on('tc-packtext','input',updateTcPackDetect);
+  on('tc-packsend','click',doTcSend);
   on('tc-delclass','click',async()=>{
     const sel=$('tc-class'); const cid=sel&&sel.value; if(!cid)return;
     if(!C()||!C().deleteClass){ alert('앱 업데이트가 필요해요. 새로고침(또는 앱을 닫았다 다시 열기) 후 다시 시도해 주세요.'); return; }
@@ -2789,7 +2847,7 @@ document.addEventListener('cloud-ready',()=>{
   // 모달은 여기서 띄우지 않는다 — 인증 상태(cloud-account)가 확정된 뒤에 결정(재방문 시 깜빡임 방지)
 });
 // 로그인/역할/반 상태가 바뀌면 계정 영역 다시 그림 + 모달 갱신(인증 상태 확정 시점)
-document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); });
+document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); try{ checkClassPack(); }catch(e){} });
 // 탭을 벗어나기 직전 마지막 변경분 동기화(로그인 시)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&window.Cloud&&window.Cloud.currentEmail&&window.Cloud.currentEmail()&&window.Cloud.syncNow)window.Cloud.syncNow();
@@ -2843,7 +2901,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=46"></script>
+<script type="module" src="cloud.js?v=47"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

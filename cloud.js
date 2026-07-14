@@ -44,6 +44,8 @@
     unremoveStudent: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
     listStudents: function () { return Promise.resolve([]); },
+    setClassPack: function () { return Promise.resolve({ ok: false }); },
+    getClassPack: function () { return Promise.resolve(null); },
     isMaster: function () { return false; },
     onChange: function () {}
   };
@@ -81,6 +83,7 @@
   var classRef = function (cid) { return fsMod.doc(db, 'classes', cid); };
   var classesCol = function () { return fsMod.collection(db, 'classes'); };
   var codeRef = function (code) { return fsMod.doc(db, 'classCodes', code); }; // 코드→반 매핑(코드 유일성·비열거)
+  var packRef = function (cid) { return fsMod.doc(db, 'classPacks', cid); };   // 반 배포 단어(선생님→반 학생 전원)
 
   // ── 마스터(운영자): 모든 반·학생 열람 권한. ★서버 강제는 firestore.rules 의 isMaster() 로.
   //   여기 이메일과 firestore.rules 의 이메일을 반드시 동일하게 유지할 것.
@@ -453,6 +456,36 @@
     }
   }
 
+  // ── 반에 단어 배포(선생님) — classPacks/{classId} 에 전체 교체 저장. ver=타임스탬프(학생 감지용) ──
+  async function setClassPack(classId, words, name) {
+    if (!user || !classId) return { ok: false, msg: '로그인이 필요해요.' };
+    var w = (words || []).filter(function (x) { return x && x.w && x.m; })
+      .slice(0, 500)
+      .map(function (x) { return { w: String(x.w).slice(0, 60), m: String(x.m).slice(0, 160) }; });
+    try {
+      await fsMod.setDoc(packRef(classId), {
+        words: w, ver: now(), name: name || '', ownerUid: user.uid, updatedAt: now()
+      });
+      return { ok: true, count: w.length };
+    } catch (e) {
+      console.warn('[cloud] 단어 배포 실패', e);
+      return { ok: false, msg: (e && e.message) || '배포에 실패했어요.' };
+    }
+  }
+  // ── 반 배포 단어 조회(선생님=편집용, 학생=가져오기용, 마스터) ──
+  async function getClassPack(classId) {
+    if (!user || !classId) return null;
+    try {
+      var snap = await fsMod.getDoc(packRef(classId));
+      if (!snap.exists()) return null;
+      var d = snap.data() || {};
+      return { words: d.words || [], ver: d.ver || 0, name: d.name || '' };
+    } catch (e) {
+      console.warn('[cloud] 배포 단어 조회 실패', e);
+      return null;
+    }
+  }
+
   // ── 반 삭제(소유 선생님) — 반 문서 먼저, 코드 매핑은 있으면 정리(없어도 무시) ──
   // (배치로 묶으면 옛 반처럼 코드 문서가 없을 때 배치 전체가 실패하므로 분리한다)
   async function deleteClass(classId, code) {
@@ -525,6 +558,8 @@
     unremoveStudent: unremoveStudent,
     listMyClasses: listMyClasses,
     listStudents: listStudents,
+    setClassPack: setClassPack,
+    getClassPack: getClassPack,
     isMaster: isMaster,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };

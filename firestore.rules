@@ -91,6 +91,25 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
+    // 반 배포 단어: 선생님이 자기 반에 배포하고, 그 반 학생·소유 선생님·마스터가 읽는다.
+    match /classPacks/{cid} {
+      allow read: if signedIn() && (
+        isMaster()
+        || (exists(/databases/$(database)/documents/classes/$(cid))
+            && get(/databases/$(database)/documents/classes/$(cid)).data.ownerUid == request.auth.uid)
+        || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId == cid)
+      );
+      // 쓰기: 그 반 소유 선생님(또는 마스터)만. words 는 배열이어야.
+      allow write: if signedIn()
+        && request.resource.data.words is list
+        && (
+          isMaster()
+          || (exists(/databases/$(database)/documents/classes/$(cid))
+              && get(/databases/$(database)/documents/classes/$(cid)).data.ownerUid == request.auth.uid)
+        );
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
