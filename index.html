@@ -822,11 +822,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=24"></script>
-<script src="pack-hs1.js?v=24"></script>
-<script src="pack-confuse.js?v=24"></script>
-<script src="pack-vacation.js?v=24"></script>
-<script src="firebase-config.js?v=24"></script>
+<script src="words.js?v=25"></script>
+<script src="pack-hs1.js?v=25"></script>
+<script src="pack-confuse.js?v=25"></script>
+<script src="pack-vacation.js?v=25"></script>
+<script src="firebase-config.js?v=25"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1309,31 +1309,80 @@ function ocrParse(text){
   (text||'').split(/\r?\n/).forEach(l=>{ const r=ocrParseLine(l); if(r){ const k=r.split(' - ')[0]; if(!seen.has(k)){seen.add(k); out.push(r);} } });
   return out;
 }
+// 파일 → 컬러 축소 JPEG dataURI (Claude 비전용 — 색/디테일 보존)
+function fileToJpegDataUri(file,maxDim,quality){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file); const img=new Image();
+    img.onload=()=>{ let w=img.naturalWidth,h=img.naturalHeight; const sc=Math.min(1,(maxDim||1600)/Math.max(w,h));
+      w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url); res(cv.toDataURL('image/jpeg',quality||0.82));
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('image')); };
+    img.src=url;
+  });
+}
+// 학생 1인당 하루 AI 스캔 제한(localStorage). 남은 횟수 반환/차감.
+function ocrQuotaKey(){ const u=(window.Cloud&&window.Cloud.currentUser&&window.Cloud.currentUser())||null; return 'wq_ocr_'+((u&&u.uid)||'anon')+'_'+today(); }
+function ocrQuotaLeft(){ const lim=window.OCR_DAILY_LIMIT||8; let n=0; try{n=parseInt(localStorage.getItem(ocrQuotaKey())||'0',10)||0;}catch(e){} return Math.max(0,lim-n); }
+function ocrQuotaUse(){ try{ const k=ocrQuotaKey(); const n=parseInt(localStorage.getItem(k)||'0',10)||0; localStorage.setItem(k,String(n+1)); }catch(e){} }
+
+// AI(Claude 비전) 경로 — 프록시 워커 경유
+async function runOCRApi(file,endpoint){
+  if(ocrQuotaLeft()<=0){ ocrStatus('오늘 AI 사진 인식 횟수를 다 썼어요(하루 '+(window.OCR_DAILY_LIMIT||8)+'장). 내일 다시 이용하거나, 아래 칸에 직접 입력해 주세요.'); return true; }
+  let token=null; try{ token=await window.Cloud.getIdToken(); }catch(e){}
+  if(!token){ return false; } // 로그인 안 됨 → 폴백
+  ocrStatus('사진 준비 중…');
+  const dataUri=await fileToJpegDataUri(file,1600,0.82);
+  ocrStatus('AI가 사진을 읽는 중… 잠시만요');
+  let r;
+  try{
+    r=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({image:dataUri}) });
+  }catch(e){ ocrStatus('서버에 연결하지 못했어요. 기기 내 인식으로 대신 시도할게요…'); return false; }
+  if(!r.ok){
+    let msg='인식 서버 오류'; try{ const j=await r.json(); if(j.error==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(j.error==='unauthorized')msg='로그인이 필요해요.'; else if(j.error==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
+    // 서버 설정 미완(502/500) 등은 기기 내 OCR로 폴백
+    if(r.status>=500){ ocrStatus('서버가 준비 중이에요. 기기 내 인식으로 대신 시도할게요…'); return false; }
+    ocrStatus(msg); return true;
+  }
+  const j=await r.json();
+  const lines=ocrParse(j.text||'');
+  if(!lines.length){ ocrStatus('단어를 찾지 못했어요. “단어 + 뜻”이 보이게 밝고 반듯하게 다시 찍어보세요.'); return true; }
+  ocrQuotaUse();
+  const ta=$('regtext'); const cur=(ta.value||'').trim();
+  ta.value=(cur?cur+'\n':'')+lines.join('\n'); updateDetect();
+  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 확인·수정 후 “몬스터 영입!”을 누르세요. (오늘 남은 횟수 '+ocrQuotaLeft()+'장)');
+  return true;
+}
+// 기기 내(Tesseract) 경로 — 무료·폴백
+async function runOCRTesseract(file){
+  ocrStatus('사진 준비 중…');
+  const cv=await fileToCanvas(file,2200);
+  ocrStatus('글자 인식 준비 중… (처음엔 인식 데이터를 받느라 시간이 좀 걸려요)');
+  let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
+  const worker=await T.createWorker('kor+eng',1,{ langPath:'https://tessdata.projectnaptha.com/4.0.0_best',
+    logger:m=>{ if(m.status==='recognizing text'){ ocrStatus('글자 인식 중… '+Math.round((m.progress||0)*100)+'%'); } } });
+  let text='';
+  try{ try{ await worker.setParameters({ tessedit_pageseg_mode:'6', preserve_interword_spaces:'1' }); }catch(e){}
+    const ret=await worker.recognize(cv); text=(ret&&ret.data&&ret.data.text)||''; }
+  finally{ try{await worker.terminate();}catch(e){} }
+  const lines=ocrParse(text);
+  if(!lines.length){ ocrStatus('단어를 찾지 못했어요. 표보다는 “단어 + 뜻”이 한 줄에 오도록 밝고 반듯하게 찍어 다시 시도해 보세요.'); return; }
+  const ta=$('regtext'); const cur=(ta.value||'').trim();
+  ta.value=(cur?cur+'\n':'')+lines.join('\n'); updateDetect();
+  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 아래 칸에서 확인·수정한 뒤 “몬스터 영입!”을 누르세요.');
+}
 async function runOCR(file){
   if(_ocrBusy) return; _ocrBusy=true;
   const btn=$('ocrbtn'); if(btn)btn.disabled=true;
   try{
-    ocrStatus('사진 준비 중…');
-    const cv=await fileToCanvas(file,2200);
-    ocrStatus('글자 인식 준비 중… (처음엔 고정밀 한국어 데이터를 받느라 시간이 좀 걸려요)');
-    let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
-    // 고정밀(best) 학습데이터 사용 → 정확도↑ (조금 느려짐)
-    const worker=await T.createWorker('kor+eng',1,{
-      langPath:'https://tessdata.projectnaptha.com/4.0.0_best',
-      logger:m=>{ if(m.status==='recognizing text'){ ocrStatus('글자 인식 중… '+Math.round((m.progress||0)*100)+'%'); } }
-    });
-    let text='';
-    try{
-      try{ await worker.setParameters({ tessedit_pageseg_mode:'6', preserve_interword_spaces:'1' }); }catch(e){} // 단일 블록 가정 + 단어 간격 보존
-      const ret=await worker.recognize(cv); text=(ret&&ret.data&&ret.data.text)||'';
+    const ep=(window.OCR_ENDPOINT||'').trim();
+    let handled=false;
+    if(ep && window.Cloud && window.Cloud.getIdToken){
+      handled=await runOCRApi(file,ep);   // true=처리됨(성공/한도/안내), false=폴백 필요
     }
-    finally{ try{await worker.terminate();}catch(e){} }
-    const lines=ocrParse(text);
-    if(!lines.length){ ocrStatus('단어를 찾지 못했어요. 표보다는 “단어 + 뜻”이 한 줄에 오도록, 밝고 반듯하게 찍어 다시 시도해 보세요.'); return; }
-    const ta=$('regtext'); const cur=(ta.value||'').trim();
-    ta.value=(cur?cur+'\n':'')+lines.join('\n');
-    updateDetect();
-    ocrStatus('사진에서 '+lines.length+'개 인식했어요! 아래 칸에서 확인·수정한 뒤 “몬스터 영입!”을 누르세요.');
+    if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e); ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요.');
   }finally{ _ocrBusy=false; if(btn)btn.disabled=false; }
@@ -2427,7 +2476,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=24"></script>
+<script type="module" src="cloud.js?v=25"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

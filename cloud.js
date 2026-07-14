@@ -33,6 +33,7 @@
     wipeRemote: function () {},
     currentEmail: function () { return null; },
     currentUser: function () { return null; },
+    getIdToken: function () { return Promise.resolve(null); },
     getProfile: function () { return null; },
     chooseRole: function () {},
     joinClassByCode: function () { return Promise.resolve({ ok: false }); },
@@ -505,6 +506,8 @@
     wipeRemote: wipeRemote,
     currentEmail: function () { return user ? user.email : null; },
     currentUser: function () { return user ? { uid: user.uid, email: user.email, name: user.displayName, photo: user.photoURL } : null; },
+    getIdToken: function () { return user ? user.getIdToken() : Promise.resolve(null); }, // OCR 프록시 인증용
+
     getProfile: function () { return profile; },
     chooseRole: chooseRole,
     joinClassByCode: joinClassByCode,

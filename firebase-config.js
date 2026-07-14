@@ -16,3 +16,10 @@ window.FIREBASE_CONFIG = {
   messagingSenderId: "363343730753",
   appId: "1:363343730753:web:8d580304c92874405e0ec0"
 };
+
+/* 사진 OCR 프록시(Cloudflare Worker) 주소.
+   비어 있으면 기기 내 무료 OCR(Tesseract)로 동작. 워커 배포 후 주소를 넣으면
+   Claude 비전으로 고품질 인식(로그인 학생만·하루 제한). 예: "https://wordquest-ocr.xxx.workers.dev" */
+window.OCR_ENDPOINT = "";
+/* 학생 1인당 하루 AI 스캔 제한(비용 통제). */
+window.OCR_DAILY_LIMIT = 8;
