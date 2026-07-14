@@ -273,6 +273,15 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .choice.no .arrow{opacity:1;color:var(--hp);animation:none;}
 .choice.dim{color:var(--dim);background:var(--win);box-shadow:none;}
 .choice:disabled{cursor:default;}
+.matchbox{padding:8px;border:8px solid transparent;border-image:var(--frame-gold) 3 fill;background:var(--win);flex-direction:column;gap:6px;}
+.matchbox .mhint{text-align:center;color:var(--gold);font-size:11px;text-shadow:1px 1px 0 rgba(0,0,0,.5);}
+.matchgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.mcol{display:flex;flex-direction:column;gap:6px;}
+.mitem{display:flex;align-items:center;justify-content:center;text-align:center;background:var(--win);border:2px solid var(--ink);color:#fff;font-size:13px;padding:8px 6px;min-height:42px;cursor:pointer;text-shadow:1px 1px 0 rgba(0,0,0,.5);line-height:1.2;word-break:keep-all;}
+.mitem:active{transform:translateY(1px);}
+.mitem.sel{background:var(--gold);color:var(--ink);text-shadow:none;}
+.mitem.matched{background:rgba(26,90,46,.65);color:#8ff0a8;border-color:var(--ok);cursor:default;}
+.mitem.miss{background:rgba(90,18,28,.65);color:#f09a9a;border-color:var(--hp);}
 /* 타이핑 철자 입력 (k2e·cloze) */
 .spellbox{padding:10px;border:8px solid transparent;border-image:var(--frame-gold) 3 fill;background:var(--win);flex-direction:column;gap:7px;}
 .spellhint{font-family:'Press Start 2P','Galmuri11',monospace;font-size:15px;letter-spacing:3px;color:var(--gold);text-align:center;text-shadow:2px 2px 0 var(--ink);word-break:break-all;line-height:1.4;}
@@ -609,6 +618,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <div class="btmzone">
         <div class="choices" id="choices"></div>
         <div class="spellbox" id="spellbox" style="display:none;"></div>
+        <div class="matchbox" id="matchbox" style="display:none;"></div>
         <div class="goldbox party">
           <img id="heroface" src="" alt="hero">
           <div class="pbars">
@@ -830,11 +840,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=36"></script>
-<script src="pack-hs1.js?v=36"></script>
-<script src="pack-confuse.js?v=36"></script>
-<script src="pack-vacation.js?v=36"></script>
-<script src="firebase-config.js?v=36"></script>
+<script src="words.js?v=37"></script>
+<script src="pack-hs1.js?v=37"></script>
+<script src="pack-confuse.js?v=37"></script>
+<script src="pack-vacation.js?v=37"></script>
+<script src="firebase-config.js?v=37"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -883,6 +893,7 @@ function bankSenses(w){
 const MASTER_MAX=6, CAPTURE_STAGE=3;
 const LADDER=[0,1,3,7,16,35,75]; // days until next review, indexed by resulting stage
 const LISTEN_P=0.35; // 생산 단계(stage>=2)에서 '듣고 받아쓰기'가 등장할 확률
+const SWARM_SIZE=4, SWARM_P=0.22; // '무리 조우'(짝 맞추기): due N마리 이상일 때 등장 확률
 function ttsOK(){return !!(window.speechSynthesis);} // 음성 합성 가능 여부
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;}return a;}
 
@@ -1462,11 +1473,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v36: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v37: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v36';
+var BUILD='v37';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -1773,6 +1784,11 @@ function burst(color){
 function nextMon(){
   const s=S.session;
   if(!s||!s.q.length||s.hearts<=0){endBattle();return;}
+  // 가끔 '무리 조우'(짝 맞추기): due 가 충분할 때 확률적으로 등장.
+  if(s.q.length>=SWARM_SIZE&&Math.random()<SWARM_P){
+    const ws=s.q.slice(0,SWARM_SIZE).map(byId).filter(Boolean);
+    if(ws.length>=2){ nextSwarm(ws); return; }
+  }
   const w=byId(s.q[0]);
   const r=rarity(w);
   const name=w.w.toUpperCase()+'몬';
@@ -1798,8 +1814,9 @@ function nextMon(){
   });
   renderMonHP(w);renderParty();
   renderRemain(s);
-  $('choices').innerHTML='';
+  $('choices').innerHTML='';$('choices').style.display='';
   const sbx=$('spellbox');if(sbx){sbx.innerHTML='';sbx.style.display='none';}
+  const mbx=$('matchbox');if(mbx){mbx.innerHTML='';mbx.style.display='none';}
   setMsg(showName?('야생의 '+name+'이 나타났다!'):'야생의 몬스터가 나타났다!');
   sfx('appear');
   wait(()=>{
@@ -1809,6 +1826,107 @@ function nextMon(){
     if(typing)renderSpellInput(w);else renderChoices();
     if(mode==='listen')wait(()=>speak(w.w),350); // 듣기: 문제 제시 직후 발음 자동 재생
   },1000);
+}
+
+/* ===== 짝 맞추기(무리 조우) — 영어↔뜻 여러 쌍을 한 화면에서 매칭 =====
+   정답 쌍 → 그 단어를 '정답'으로 처리(SRS 정착·포획·경험치), 오답 쌍 → 하트 감소.
+   기존 단일 전투와 같은 포획/하트/콤보 규칙을 공유한다. */
+function renderSwarmHP(matched,total){
+  const rem=total-matched;
+  $('mon-hp').style.width=Math.round(rem/total*100)+'%';
+  $('mon-hp-t').textContent=rem+'/'+total;
+  const exp=S.meta.exp||0;$('exp-bar').style.width=(exp%100)+'%';$('exp-t').textContent=exp;
+}
+function nextSwarm(ws){
+  const s=S.session;
+  S.mode='match';S.curId=null;
+  S.swarm={total:ws.length,matched:new Set(),selEng:null,selEngEl:null,selKo:null,selKoEl:null,busy:false};
+  S.phase='appear';
+  $('b-rtag').textContent='무리';$('b-rtag').style.color='var(--gold)';$('b-rtag').style.borderColor='var(--gold)';$('b-rtag').style.animation='none';
+  $('b-name').textContent='몬스터 무리';$('b-name').style.color='var(--gold)';
+  $('b-speak').style.display='none';
+  const img=$('b-spr');img.style.animation='none';img.style.opacity='0';
+  setMonImg(img,ws[0],function(){img.style.animation='none';void img.offsetWidth;img.style.animation='wqAppear .7s ease-out';img.style.opacity='1';});
+  renderSwarmHP(0,ws.length);renderParty();renderRemain(s);
+  $('choices').innerHTML='';$('choices').style.display='none';
+  const sbx=$('spellbox');if(sbx){sbx.innerHTML='';sbx.style.display='none';}
+  const mbx=$('matchbox');if(mbx){mbx.innerHTML='';mbx.style.display='none';}
+  setMsg('야생 몬스터 '+ws.length+'마리가 무리로 나타났다!');
+  sfx('appear');
+  wait(()=>{
+    if(S.phase!=='appear')return;
+    S.phase='ask';setMsg('영어와 뜻을 짝지어라!');renderSwarm(ws);
+  },1000);
+}
+function renderSwarm(ws){
+  const mbx=$('matchbox');mbx.style.display='flex';
+  const eng=shuffle(ws.map(w=>({id:w.id,t:w.w})));
+  const ko=shuffle(ws.map(w=>({id:w.id,t:firstSense(w.m)})));
+  const col=(side,arr)=>arr.map(o=>'<button class="mitem" type="button" data-id="'+esc(o.id)+'" data-side="'+side+'">'+esc(o.t)+'</button>').join('');
+  mbx.innerHTML='<div class="mhint">영어와 뜻을 짝지어 몬스터를 진정시켜라</div>'
+    +'<div class="matchgrid"><div class="mcol">'+col('eng',eng)+'</div><div class="mcol">'+col('ko',ko)+'</div></div>';
+  mbx.querySelectorAll('.mitem').forEach(b=>b.addEventListener('click',()=>matchPick(b.getAttribute('data-side'),b.getAttribute('data-id'),b)));
+}
+function matchPick(side,id,el){
+  const sw=S.swarm;if(!sw||S.phase!=='ask'||sw.busy||el.classList.contains('matched'))return;
+  if(side==='eng'){ if(sw.selEngEl)sw.selEngEl.classList.remove('sel'); sw.selEng=id;sw.selEngEl=el; }
+  else{ if(sw.selKoEl)sw.selKoEl.classList.remove('sel'); sw.selKo=id;sw.selKoEl=el; }
+  el.classList.add('sel');
+  if(sw.selEng!=null&&sw.selKo!=null)matchEval();
+}
+function matchApplyCorrect(w){
+  const t=today(),s=S.session;
+  w.seen=(w.seen||0)+1;if(w.sample)delete w.sample;w.updatedAt=Date.now();
+  recordStudy(true);
+  const wasCap=w.cap;
+  w.stage=Math.min(MASTER_MAX,(w.stage||0)+1);
+  w.due=addDays(t,LADDER[w.stage]);
+  S.meta.exp=(S.meta.exp||0)+10;s.win++;
+  let captured=false;
+  if(!wasCap&&w.stage>=CAPTURE_STAGE){w.cap=true;w.capAt=t;s.cap++;S.meta.exp=(S.meta.exp||0)+40;captured=true;}
+  return captured;
+}
+function matchEval(){
+  const sw=S.swarm,s=S.session;
+  const engEl=sw.selEngEl,koEl=sw.selKoEl,ok=(sw.selEng===sw.selKo),wid=sw.selEng;
+  sw.busy=true;engEl.classList.remove('sel');koEl.classList.remove('sel');
+  sw.selEng=sw.selKo=sw.selEngEl=sw.selKoEl=null;
+  if(ok){
+    const w=byId(wid);
+    engEl.classList.add('matched');koEl.classList.add('matched');engEl.disabled=true;koEl.disabled=true;
+    const cap=matchApplyCorrect(w);
+    sw.matched.add(wid);
+    s.combo++;s.best=Math.max(s.best,s.combo);if(s.combo>(S.meta.bestCombo||0))S.meta.bestCombo=s.combo;
+    renderSwarmHP(sw.matched.size,sw.total);renderParty();persist();
+    sfx(cap?'capture':'correct');
+    sw.busy=false;
+    if(sw.matched.size>=sw.total)finishSwarm();
+    else setMsg(cap?'포획! 하나를 도감에 넣었다.':'명중! ('+(sw.total-sw.matched.size)+'마리 남음)');
+  }else{
+    s.combo=0;s.hurt++;s.hearts--;
+    engEl.classList.add('miss');koEl.classList.add('miss');
+    sfx('wrong');
+    $('col').classList.remove('shake');void $('col').offsetWidth;$('col').classList.add('shake');
+    const hf=$('hurtflash');if(hf){hf.classList.remove('go');void hf.offsetWidth;hf.classList.add('go');}
+    recordStudy(false);renderParty();persist();
+    wait(()=>{if(engEl)engEl.classList.remove('miss');if(koEl)koEl.classList.remove('miss');},520);
+    if(s.hearts<=0){
+      S.phase='dying';
+      s.q=s.q.filter(id=>!sw.matched.has(id)); // 맞춘 것만 제거, 나머지는 다음 입장 때 다시
+      setMsg('용사는 눈앞이 캄캄해졌다… 남은 몬스터는 다음 입장 때 기다린다.');
+      wait(()=>sfx('die'),200);wait(()=>endBattle(),1800);
+    }else{
+      setMsg('짝이 아니다! (하트 '+s.hearts+'칸 남음)');
+      wait(()=>{if(S.swarm)S.swarm.busy=false;},520);
+    }
+  }
+}
+function finishSwarm(){
+  const sw=S.swarm,s=S.session;
+  s.q=s.q.filter(id=>!sw.matched.has(id));
+  S.phase='resolve';S.swarm=null;
+  setMsg('무리를 모두 짝지어 정리했다!');sfx('correct');persist();
+  wait(()=>{const mbx=$('matchbox');if(mbx)mbx.style.display='none';$('choices').style.display='';nextMon();},1400);
 }
 
 // 4지선다(e2k=영어→뜻, k2e4=뜻→영어) 선택 응답
@@ -2580,7 +2698,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=36"></script>
+<script type="module" src="cloud.js?v=37"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
