@@ -734,14 +734,10 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
             </div>
             <div id="acct-hasclass" class="regmsg" style="display:none;"></div>
           </div>
-          <!-- 선생님: 반 관리(최소) -->
+          <!-- 선생님: 반 관리는 대시보드에서 -->
           <div id="acct-teacher" style="display:none;">
-            <div class="regmsg" style="display:block;margin-bottom:6px;">반을 만들면 코드가 발급됩니다. 학생에게 코드를 알려주세요.</div>
-            <div class="grid2">
-              <input id="acct-clsname" placeholder="반 이름 (예: 3학년 2반)" maxlength="20" style="height:34px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
-              <button class="subbtn" id="acct-create">반 만들기</button>
-            </div>
-            <div id="acct-classlist" style="margin-top:8px;"></div>
+            <div class="regmsg" style="display:block;margin-bottom:6px;">반 만들기·코드 확인·학생 관리는 <b style="color:#ffc63a;">선생님 대시보드</b>에서 해요.</div>
+            <button class="subbtn" id="acct-go-teacher" style="width:100%;">🧑‍🏫 선생님 대시보드 열기</button>
           </div>
           <div class="grid2" style="margin-top:8px;">
             <button class="subbtn" id="cloud-syncnow"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>지금 동기화</button>
@@ -760,15 +756,24 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="scr-head-t">선생님 대시보드</div>
         <div class="scr-head-b">반별 학생 학습 현황</div>
       </div>
-      <div class="flabel">반 선택 <span class="sub" id="tc-count"></span></div>
+      <div class="regmsg" style="display:block;">① 반을 만들고 → ② 발급된 코드를 학생에게 알려주면 → ③ 참여한 학생 학습현황이 여기 표시됩니다.</div>
+      <div class="flabel">새 반 만들기</div>
       <div class="grid2">
-        <select id="tc-class" style="height:34px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;"></select>
-        <button class="subbtn" id="tc-refresh"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>새로고침</button>
+        <input id="tc-newname" placeholder="반 이름 (예: 3학년 2반)" maxlength="20" style="height:34px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
+        <button class="subbtn" id="tc-create">＋ 반 만들기</button>
       </div>
-      <div id="tc-codeline" class="regmsg" style="display:none;"></div>
-      <button class="subbtn" id="tc-delclass" style="display:none;width:100%;border-color:#5a2a2a;color:#e57373;">🗑 이 반 삭제</button>
-      <div id="tc-empty" class="dexempty" style="display:none;">아직 만든 반이 없어요.<br>설정에서 반을 먼저 만들어 주세요.</div>
-      <div id="tc-students"></div>
+      <div id="tc-empty" class="dexempty" style="display:none;">아직 만든 반이 없어요.<br>위에서 첫 반을 만들어 시작하세요.</div>
+      <!-- 반이 하나라도 있을 때만 보이는 영역 -->
+      <div id="tc-hasclass" style="display:none;flex-direction:column;gap:9px;">
+        <div class="flabel">반 선택 <span class="sub" id="tc-count"></span></div>
+        <div class="grid2">
+          <select id="tc-class" style="height:34px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;"></select>
+          <button class="subbtn" id="tc-refresh"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>새로고침</button>
+        </div>
+        <div id="tc-codeline" class="regmsg" style="display:none;"></div>
+        <button class="subbtn" id="tc-delclass" style="width:100%;border-color:#5a2a2a;color:#e57373;">🗑 이 반 삭제</button>
+        <div id="tc-students"></div>
+      </div>
       <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
     </div>
 
@@ -778,22 +783,32 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
   <div class="hurtflash" id="hurtflash"></div>
 </div>
 
-<!-- 시작 시 로그인 안내 모달 -->
+<!-- 시작 시 로그인 안내 모달 (로그인 → 역할 선택 2단계) -->
 <div id="login-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(4,4,10,.86);align-items:center;justify-content:center;padding:24px;">
   <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:22px 20px;max-width:340px;width:100%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.6);">
-    <div style="font-size:17px;font-weight:700;color:#ffe08a;margin-bottom:6px;">단어도감에 오신 걸 환영합니다</div>
-    <div style="font-size:12.5px;color:#b7b7d8;line-height:1.6;margin-bottom:16px;">구글로 로그인하면 진도가 여러 기기에 저장되고,<br>선생님이 학습을 확인할 수 있어요.</div>
-    <button class="subbtn" id="login-modal-google" style="width:100%;justify-content:center;"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path fill="#4285F4" d="M15.5 8.2c0-.5 0-1-.1-1.5H8v2.9h4.2a3.6 3.6 0 0 1-1.6 2.3v1.9h2.6c1.5-1.4 2.3-3.4 2.3-5.6z"/><path fill="#34A853" d="M8 16c2.2 0 4-.7 5.3-1.9l-2.6-2c-.7.5-1.6.8-2.7.8-2.1 0-3.9-1.4-4.5-3.3H.8v2.1A8 8 0 0 0 8 16z"/><path fill="#FBBC05" d="M3.5 9.5a4.8 4.8 0 0 1 0-3.1V4.3H.8a8 8 0 0 0 0 7.2l2.7-2z"/><path fill="#EA4335" d="M8 3.2c1.2 0 2.2.4 3 1.2l2.3-2.3A8 8 0 0 0 .8 4.3l2.7 2.1C4.1 4.6 5.9 3.2 8 3.2z"/></svg>구글로 로그인</button>
-    <button id="login-modal-skip" style="margin-top:10px;background:none;border:none;color:#8a8ab0;font-family:inherit;font-size:12px;cursor:pointer;text-decoration:underline;">로그인 없이 둘러보기</button>
+    <!-- 1단계: 로그인 -->
+    <div id="lm-login">
+      <div style="font-size:17px;font-weight:700;color:#ffe08a;margin-bottom:6px;">단어도감에 오신 걸 환영합니다</div>
+      <div style="font-size:12.5px;color:#b7b7d8;line-height:1.6;margin-bottom:16px;">구글로 로그인하면 진도가 여러 기기에 저장되고,<br>선생님이 학습을 확인할 수 있어요.</div>
+      <button class="subbtn" id="login-modal-google" style="width:100%;justify-content:center;"><svg class="ic" viewBox="0 0 16 16" aria-hidden="true"><path fill="#4285F4" d="M15.5 8.2c0-.5 0-1-.1-1.5H8v2.9h4.2a3.6 3.6 0 0 1-1.6 2.3v1.9h2.6c1.5-1.4 2.3-3.4 2.3-5.6z"/><path fill="#34A853" d="M8 16c2.2 0 4-.7 5.3-1.9l-2.6-2c-.7.5-1.6.8-2.7.8-2.1 0-3.9-1.4-4.5-3.3H.8v2.1A8 8 0 0 0 8 16z"/><path fill="#FBBC05" d="M3.5 9.5a4.8 4.8 0 0 1 0-3.1V4.3H.8a8 8 0 0 0 0 7.2l2.7-2z"/><path fill="#EA4335" d="M8 3.2c1.2 0 2.2.4 3 1.2l2.3-2.3A8 8 0 0 0 .8 4.3l2.7 2.1C4.1 4.6 5.9 3.2 8 3.2z"/></svg>구글로 로그인</button>
+      <button id="login-modal-skip" style="margin-top:10px;background:none;border:none;color:#8a8ab0;font-family:inherit;font-size:12px;cursor:pointer;text-decoration:underline;">로그인 없이 둘러보기</button>
+    </div>
+    <!-- 2단계: 역할 선택 -->
+    <div id="lm-role" style="display:none;">
+      <div style="font-size:17px;font-weight:700;color:#ffe08a;margin-bottom:4px;">어떻게 사용하시나요?</div>
+      <div style="font-size:12px;color:#b7b7d8;line-height:1.6;margin-bottom:16px;">한 번만 고르면 돼요.</div>
+      <button class="subbtn" id="lm-teacher" style="width:100%;justify-content:center;margin-bottom:10px;padding:14px;">🧑‍🏫 선생님<br><span style="font-size:10px;color:#8a8ab0;">반을 만들고 학생 학습 현황 보기</span></button>
+      <button class="subbtn" id="lm-student" style="width:100%;justify-content:center;padding:14px;">🎒 학생<br><span style="font-size:10px;color:#8a8ab0;">반 코드로 참여해 단어 학습하기</span></button>
+    </div>
   </div>
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=14"></script>
-<script src="pack-hs1.js?v=14"></script>
-<script src="pack-confuse.js?v=14"></script>
-<script src="pack-vacation.js?v=14"></script>
-<script src="firebase-config.js?v=14"></script>
+<script src="words.js?v=15"></script>
+<script src="pack-hs1.js?v=15"></script>
+<script src="pack-confuse.js?v=15"></script>
+<script src="pack-vacation.js?v=15"></script>
+<script src="firebase-config.js?v=15"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2042,12 +2057,21 @@ function toggleTeacherBtn(){
 let tcClasses=[]; // 캐시된 내 반 목록
 async function renderTeacher(){
   const C=window.Cloud;
-  const sel=$('tc-class'),empty=$('tc-empty'),stu=$('tc-students'),cl=$('tc-codeline');
-  if(!C||!C.enabled||!C.currentUser||!C.currentUser()){ if(stu)stu.innerHTML=''; if(empty){empty.style.display='';empty.innerHTML='로그인이 필요해요. 설정에서 구글로 로그인하세요.';} return; }
+  const sel=$('tc-class'),empty=$('tc-empty'),stu=$('tc-students'),has=$('tc-hasclass');
+  if(!C||!C.enabled||!C.currentUser||!C.currentUser()){
+    if(has)has.style.display='none';
+    if(empty){empty.style.display='';empty.innerHTML='로그인이 필요해요. 설정(⚙)에서 구글로 로그인하세요.';}
+    return;
+  }
   tcClasses=await C.listMyClasses();
-  $('tc-count').textContent='반 '+tcClasses.length+'개';
-  if(!tcClasses.length){ if(empty){empty.style.display='';empty.innerHTML='아직 만든 반이 없어요.<br>설정에서 반을 먼저 만들어 주세요.';} if(sel)sel.innerHTML=''; if(stu)stu.innerHTML=''; if(cl)cl.style.display='none'; return; }
+  if(!tcClasses.length){
+    if(empty){empty.style.display='';empty.innerHTML='아직 만든 반이 없어요.<br>위에서 첫 반을 만들어 시작하세요.';}
+    if(has)has.style.display='none';
+    return;
+  }
   if(empty)empty.style.display='none';
+  if(has)has.style.display='flex';
+  $('tc-count').textContent='반 '+tcClasses.length+'개';
   const prev=sel.value;
   sel.innerHTML=tcClasses.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
   if(prev&&tcClasses.some(c=>c.id===prev))sel.value=prev;
@@ -2152,7 +2176,16 @@ function renderCloudNotify(){
   };
   on('acct-create','click',doCreate);
   on('acct-clsname','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doCreate();}});
-  // 선생님 대시보드: 반 전환·새로고침·반 삭제
+  // 선생님 대시보드: 반 만들기·전환·새로고침·반 삭제
+  const doTcCreate=async()=>{
+    const inp=$('tc-newname'); if(!inp||!C()||!C().createClass)return;
+    const r=await C().createClass(inp.value);
+    if(r&&r.ok){ inp.value=''; alert('“'+r.name+'” 반이 만들어졌어요.\n반 코드: '+r.code+'\n학생에게 이 코드를 알려주세요.'); renderTeacher(); }
+    else alert((r&&r.msg)||'반 생성에 실패했어요.');
+  };
+  on('tc-create','click',doTcCreate);
+  on('tc-newname','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doTcCreate();}});
+  on('acct-go-teacher','click',()=>show('teacher'));
   on('tc-class','change',()=>{ renderTeacherStudents(); });
   on('tc-refresh','click',()=>{ renderTeacher(); });
   on('tc-delclass','click',async()=>{
@@ -2167,16 +2200,29 @@ function renderCloudNotify(){
   // 시작 로그인 모달
   on('login-modal-google','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
   on('login-modal-skip','click',()=>{ try{sessionStorage.setItem('wq_login_skipped','1');}catch(e){} hideLoginModal(); });
+  // 역할 선택(로그인 후) — 선택 즉시 역할 저장 + 역할별 화면으로 자동 이동
+  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; await C().chooseRole('teacher'); hideLoginModal(); show('teacher'); });
+  on('lm-student','click',async()=>{ if(!C()||!C().chooseRole)return; await C().chooseRole('student'); hideLoginModal(); show('settings'); });
 })();
-// 시작 시 로그인 안내 모달 — 클라우드 사용 가능 & 미로그인 & 이번 세션에 건너뛰지 않았을 때만
+// 시작 모달 상태 갱신: 미로그인→로그인 안내, 로그인+역할없음→역할 선택(건너뛰기 무시)
 function updateLoginModal(){
   const m=$('login-modal'); if(!m) return;
   const C=window.Cloud;
   const enabled=!!(C&&C.enabled);
   const user=(C&&C.currentUser)?C.currentUser():null;
+  const p=(C&&C.getProfile)?C.getProfile():null;
+  const loginView=$('lm-login'), roleView=$('lm-role');
   let skipped=false; try{skipped=sessionStorage.getItem('wq_login_skipped')==='1';}catch(e){}
-  if(enabled && !user && !skipped){ m.style.display='flex'; }
-  else { m.style.display='none'; }
+  if(enabled && user && !(p&&p.role)){
+    // 로그인했지만 역할 미선택 → 역할 선택 단계(건너뛰기와 무관하게 항상)
+    if(loginView)loginView.style.display='none'; if(roleView)roleView.style.display='';
+    m.style.display='flex'; return;
+  }
+  if(enabled && !user && !skipped){
+    if(loginView)loginView.style.display=''; if(roleView)roleView.style.display='none';
+    m.style.display='flex'; return;
+  }
+  m.style.display='none';
 }
 function hideLoginModal(){ const m=$('login-modal'); if(m) m.style.display='none'; }
 document.addEventListener('cloud-ready',()=>{
@@ -2242,7 +2288,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=14"></script>
+<script type="module" src="cloud.js?v=15"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
