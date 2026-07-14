@@ -882,6 +882,13 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         </div>
         <div id="tc-codeline" class="regmsg" style="display:none;"></div>
         <div class="flabel">📦 반에 단어 배포 <span class="sub">이 반 학생 전원에게 전송</span></div>
+        <div style="display:flex;gap:8px;">
+          <button class="samplebtn" id="tc-ocrcam" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 2h6l1 2h2v9H2V4h2zM8 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>사진 찍기</button>
+          <button class="samplebtn" id="tc-ocralbum" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12v10H2z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="5.5" cy="6.5" r="1.2"/><path d="M3 12l3.5-3.5L9 11l2-2 2 2v1H3z"/></svg>앨범에서</button>
+        </div>
+        <input type="file" id="tc-ocrfile" accept="image/*" capture="environment" style="display:none;">
+        <input type="file" id="tc-ocralbumfile" accept="image/*" style="display:none;">
+        <div id="tc-ocrstatus" class="regmsg" style="display:none;"></div>
         <div class="regmsg" id="tc-packinfo" style="display:block;">아직 배포한 단어가 없어요.</div>
         <textarea class="reg" id="tc-packtext" placeholder="apple - 사과&#10;banana - 바나나&#10;(한 줄에 하나, '단어 - 뜻')" style="min-height:88px;"></textarea>
         <div class="regfoot">
@@ -922,11 +929,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=47"></script>
-<script src="pack-hs1.js?v=47"></script>
-<script src="pack-confuse.js?v=47"></script>
-<script src="pack-vacation.js?v=47"></script>
-<script src="firebase-config.js?v=47"></script>
+<script src="words.js?v=48"></script>
+<script src="pack-hs1.js?v=48"></script>
+<script src="pack-confuse.js?v=48"></script>
+<script src="pack-vacation.js?v=48"></script>
+<script src="firebase-config.js?v=48"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1355,7 +1362,13 @@ $('samplebtn').addEventListener('click',()=>{
 });
 
 /* ================= 사진 OCR (기기 내 · Tesseract.js) ================= */
-function ocrStatus(msg,show){ const el=$('ocrstatus'); if(!el)return; el.textContent=msg; el.style.display=(show===false)?'none':'block'; }
+// OCR 대상 컨텍스트(영입소 / 선생님 배포) — 대상 textarea·상태표시·인식수 갱신·버튼을 바꿔 재사용.
+var OCR_TARGETS={
+  reg:{ ta:'regtext', status:'ocrstatus', detect:function(){updateDetect();}, btns:['ocrcam','ocralbum'], done:'“몬스터 영입!”을 누르세요.' },
+  pack:{ ta:'tc-packtext', status:'tc-ocrstatus', detect:function(){try{updateTcPackDetect();}catch(e){}}, btns:['tc-ocrcam','tc-ocralbum'], done:'“이 반에 배포”를 누르세요.' }
+};
+var ocrCtx=OCR_TARGETS.reg;
+function ocrStatus(msg,show){ const el=$(ocrCtx.status); if(!el)return; el.textContent=msg; el.style.display=(show===false)?'none':'block'; }
 let _ocrBusy=false;
 // Tesseract.js 지연 로딩(처음 사용할 때만)
 function ensureTesseract(){
@@ -1528,9 +1541,9 @@ async function runOCRApi(file,endpoint){
   let left;
   if(j && typeof j.remaining==='number'){ const lim=j.limit||window.OCR_DAILY_LIMIT||8; left=Math.max(0,j.remaining); try{ localStorage.setItem(ocrQuotaKey(),String(Math.max(0,lim-left))); }catch(e){} }
   else { ocrQuotaUse(); left=ocrQuotaLeft(); }
-  const ta=$('regtext'); const cur=(ta.value||'').trim();
-  ta.value=(cur?cur+'\n':'')+lines.join('\n'); updateDetect();
-  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 확인·수정 후 “몬스터 영입!”을 누르세요. (오늘 남은 횟수 '+left+'장)');
+  const ta=$(ocrCtx.ta); const cur=(ta.value||'').trim();
+  ta.value=(cur?cur+'\n':'')+lines.join('\n'); ocrCtx.detect();
+  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 확인·수정 후 '+ocrCtx.done+' (오늘 남은 횟수 '+left+'장)');
   return true;
 }
 // 기기 내(Tesseract) 경로 — 무료·폴백
@@ -1548,13 +1561,13 @@ async function runOCRTesseract(file){
   finally{ try{await worker.terminate();}catch(e){} }
   const lines=ocrParse(text);
   if(!lines.length){ ocrStatus('단어를 찾지 못했어요. 표보다는 “단어 + 뜻”이 한 줄에 오도록 밝고 반듯하게 찍어 다시 시도해 보세요.'); return; }
-  const ta=$('regtext'); const cur=(ta.value||'').trim();
-  ta.value=(cur?cur+'\n':'')+lines.join('\n'); updateDetect();
-  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 아래 칸에서 확인·수정한 뒤 “몬스터 영입!”을 누르세요.');
+  const ta=$(ocrCtx.ta); const cur=(ta.value||'').trim();
+  ta.value=(cur?cur+'\n':'')+lines.join('\n'); ocrCtx.detect();
+  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 아래 칸에서 확인·수정한 뒤 '+ocrCtx.done);
 }
 async function runOCR(file){
   if(_ocrBusy) return; _ocrBusy=true;
-  const btns=[$('ocrcam'),$('ocralbum')]; btns.forEach(b=>{ if(b)b.disabled=true; });
+  const btns=(ocrCtx.btns||[]).map(id=>$(id)); btns.forEach(b=>{ if(b)b.disabled=true; });
   try{
     const ep=(window.OCR_ENDPOINT||'').trim();
     let handled=false;
@@ -1564,17 +1577,22 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v47: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v48: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v47';
+var BUILD='v48';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
-$('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
-$('ocralbum').addEventListener('click',()=>{ if(!_ocrBusy)$('ocralbumfile').click(); });
+$('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
+$('ocralbum').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocralbumfile').click(); } });
 $('ocrfile').addEventListener('change',_ocrPick);
 $('ocralbumfile').addEventListener('change',_ocrPick);
+// 선생님 배포용 OCR — 같은 엔진, 대상만 tc-packtext 로.
+$('tc-ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.pack; $('tc-ocrfile').click(); } });
+$('tc-ocralbum').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.pack; $('tc-ocralbumfile').click(); } });
+$('tc-ocrfile').addEventListener('change',_ocrPick);
+$('tc-ocralbumfile').addEventListener('change',_ocrPick);
 // 어휘 팩을 하루 20개씩 순차 담기 — 주제 순서대로 출현
 function seedPack(pack){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
@@ -2901,7 +2919,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=47"></script>
+<script type="module" src="cloud.js?v=48"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
