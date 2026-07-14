@@ -84,7 +84,7 @@
 
   // ── 마스터(운영자): 모든 반·학생 열람 권한. ★서버 강제는 firestore.rules 의 isMaster() 로.
   //   여기 이메일과 firestore.rules 의 이메일을 반드시 동일하게 유지할 것.
-  var MASTER_EMAIL = 'ranha.projects@gmail.com';
+  var MASTER_EMAIL = 'ranha.park@gmail.com';
   function isMaster() { return !!(user && user.email && user.email.toLowerCase() === MASTER_EMAIL); }
 
   var user = null;      // Firebase 인증 사용자
