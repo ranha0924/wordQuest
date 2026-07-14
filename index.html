@@ -830,11 +830,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=35"></script>
-<script src="pack-hs1.js?v=35"></script>
-<script src="pack-confuse.js?v=35"></script>
-<script src="pack-vacation.js?v=35"></script>
-<script src="firebase-config.js?v=35"></script>
+<script src="words.js?v=36"></script>
+<script src="pack-hs1.js?v=36"></script>
+<script src="pack-confuse.js?v=36"></script>
+<script src="pack-vacation.js?v=36"></script>
+<script src="firebase-config.js?v=36"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1462,11 +1462,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v35: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v36: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v35';
+var BUILD='v36';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2277,6 +2277,15 @@ function setCloudStatus(s){
 }
 // 로그인 후 계정 영역: 역할 선택 / 학생 반 참여 / 선생님 반 관리
 let roleEditing=false; // '역할 바꾸기'를 눌러 선택 UI를 다시 연 상태
+// 선생님 역할은 비밀번호로 보호(학생의 임의 승격 방지). ※ 클라이언트 소프트 게이트.
+const TEACHER_PW='8889';
+function teacherGate(){
+  const pw=window.prompt('선생님 전용 비밀번호를 입력하세요.');
+  if(pw===null)return false;              // 취소
+  if(pw.trim()===TEACHER_PW)return true;
+  alert('비밀번호가 올바르지 않습니다.');
+  return false;
+}
 function renderAccount(){
   const C=window.Cloud; if(!C||!C.enabled) return;
   const u=C.currentUser?C.currentUser():null;
@@ -2427,7 +2436,7 @@ function renderCloudNotify(){
   on('cloud-notify','click',()=>{ S.meta.notify=!(S.meta&&S.meta.notify); persist(); renderCloudNotify(); });
   // 역할 선택
   on('acct-role-student','click',async()=>{ if(C()&&C().chooseRole){ await C().chooseRole('student'); roleEditing=false; try{renderAccount();}catch(e){} } });
-  on('acct-role-teacher','click',async()=>{ if(C()&&C().chooseRole){ await C().chooseRole('teacher'); roleEditing=false; try{renderAccount();}catch(e){} } });
+  on('acct-role-teacher','click',async()=>{ if(!teacherGate())return; if(C()&&C().chooseRole){ await C().chooseRole('teacher'); roleEditing=false; try{renderAccount();}catch(e){} } });
   on('acct-rolechange','click',()=>{ roleEditing=true; try{renderAccount();}catch(e){} });
   on('acct-role-cancel','click',()=>{ roleEditing=false; try{renderAccount();}catch(e){} });
   // 학생: 이름 저장
@@ -2484,7 +2493,7 @@ function renderCloudNotify(){
   on('login-modal-google','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
   on('login-modal-skip','click',()=>{ try{sessionStorage.setItem('wq_login_skipped','1');}catch(e){} hideLoginModal(); });
   // 역할 선택(로그인 후) — 선택 즉시 역할 저장 + 역할별 화면으로 자동 이동
-  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; await C().chooseRole('teacher'); hideLoginModal(); show('teacher'); });
+  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; if(!teacherGate())return; await C().chooseRole('teacher'); hideLoginModal(); show('teacher'); });
   on('lm-student','click',async()=>{ if(!C()||!C().chooseRole)return; await C().chooseRole('student'); hideLoginModal(); show('settings'); });
 })();
 // 시작 모달 상태 갱신: 미로그인→로그인 안내, 로그인+역할없음→역할 선택(건너뛰기 무시)
@@ -2571,7 +2580,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=35"></script>
+<script type="module" src="cloud.js?v=36"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
