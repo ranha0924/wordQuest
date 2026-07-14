@@ -628,9 +628,13 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="scr-head-t">영입소</div>
         <div class="scr-head-b">단어를 몬스터로 영입한다</div>
       </div>
-      <div class="flabel">📷 사진으로 담기 <span class="sub">교재 사진에서 자동 인식(기기 내 처리·무료)</span></div>
-      <button class="samplebtn" id="ocrbtn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 2h6l1 2h2v9H2V4h2zM8 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>사진 찍기 / 앨범에서 고르기</button>
-      <input type="file" id="ocrfile" accept="image/*" style="display:none;">
+      <div class="flabel">📷 사진으로 담기 <span class="sub">교재 사진에서 단어 자동 인식</span></div>
+      <div style="display:flex;gap:8px;">
+        <button class="samplebtn" id="ocrcam" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 2h6l1 2h2v9H2V4h2zM8 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>사진 찍기</button>
+        <button class="samplebtn" id="ocralbum" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3h12v10H2z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="5.5" cy="6.5" r="1.2"/><path d="M3 12l3.5-3.5L9 11l2-2 2 2v1H3z"/></svg>앨범에서 고르기</button>
+      </div>
+      <input type="file" id="ocrfile" accept="image/*" capture="environment" style="display:none;">
+      <input type="file" id="ocralbumfile" accept="image/*" style="display:none;">
       <div id="ocrstatus" class="regmsg" style="display:none;"></div>
       <div class="flabel">단어 붙여넣기 <span class="sub">직접 입력·수정</span></div>
       <div class="regex">
@@ -822,11 +826,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=28"></script>
-<script src="pack-hs1.js?v=28"></script>
-<script src="pack-confuse.js?v=28"></script>
-<script src="pack-vacation.js?v=28"></script>
-<script src="firebase-config.js?v=28"></script>
+<script src="words.js?v=29"></script>
+<script src="pack-hs1.js?v=29"></script>
+<script src="pack-confuse.js?v=29"></script>
+<script src="pack-vacation.js?v=29"></script>
+<script src="firebase-config.js?v=29"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1258,40 +1262,78 @@ function ensureTesseract(){
     document.head.appendChild(s);
   });
 }
-// 파일 → 전처리 캔버스: (필요시) 확대 + 그레이스케일 + Otsu 이진화(흑백)
-// Tesseract는 깨끗한 흑백 이미지에서 정확도가 가장 높다.
-function fileToCanvas(file,maxDim){
+// HEIC/HEIF(아이폰 카메라 기본 포맷) 지연 로딩 변환기 — 브라우저가 canvas로 못 여는 사진을 JPEG로.
+let _heic=null;
+function ensureHeic(){
+  if(_heic) return Promise.resolve(_heic);
+  if(window.heic2any){ _heic=window.heic2any; return Promise.resolve(_heic); }
   return new Promise((res,rej)=>{
-    const url=URL.createObjectURL(file);
-    const img=new Image();
-    img.onload=()=>{
-      let w=img.naturalWidth,h=img.naturalHeight;
-      // 너무 크면 줄이고, 너무 작으면 살짝 키움(작은 글자 인식 도움) — 목표 긴 변 ~2200
-      const target=maxDim||2200, sc=target/Math.max(w,h);
-      w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
-      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-      const g=cv.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
-      g.drawImage(img,0,0,w,h);
-      try{
-        const d=g.getImageData(0,0,w,h),a=d.data,n=w*h;
-        // 1) 그레이스케일 + 히스토그램
-        const gray=new Uint8Array(n),hist=new Uint32Array(256);
-        for(let i=0,p=0;i<a.length;i+=4,p++){ const v=(0.299*a[i]+0.587*a[i+1]+0.114*a[i+2])|0; gray[p]=v; hist[v]++; }
-        // 2) Otsu 임계값
-        let sum=0; for(let t=0;t<256;t++)sum+=t*hist[t];
-        let sumB=0,wB=0,maxVar=-1,thr=127;
-        for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB)continue; const wF=n-wB; if(!wF)break; sumB+=t*hist[t];
-          const mB=sumB/wB,mF=(sum-sumB)/wF,between=wB*wF*(mB-mF)*(mB-mF); if(between>maxVar){maxVar=between;thr=t;} }
-        // 3) 이진화(글자=검정, 배경=흰색). 약간 여유(thr+8)로 옅은 글자 살림
-        const cut=Math.min(255,thr+8);
-        for(let i=0,p=0;i<a.length;i+=4,p++){ const v=gray[p]<cut?0:255; a[i]=a[i+1]=a[i+2]=v; }
-        g.putImageData(d,0,0);
-      }catch(e){}
-      URL.revokeObjectURL(url); res(cv);
-    };
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    s.onload=()=>{ _heic=window.heic2any||null; _heic?res(_heic):rej(new Error('load')); };
+    s.onerror=()=>rej(new Error('network'));
+    document.head.appendChild(s);
+  });
+}
+function looksHeic(file){
+  const t=((file&&file.type)||'').toLowerCase(), n=((file&&file.name)||'').toLowerCase();
+  return t.indexOf('heic')>=0 || t.indexOf('heif')>=0 || /\.(heic|heif)$/.test(n);
+}
+async function heicToJpegBlob(file){
+  const lib=await ensureHeic();
+  const out=await lib({ blob:file, toType:'image/jpeg', quality:0.9 });
+  return Array.isArray(out) ? out[0] : out;
+}
+function loadImgFromBlob(blob){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(blob), img=new Image();
+    img.onload=()=>res({img,url});
     img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('image')); };
     img.src=url;
   });
+}
+// 파일 → 로드 완료된 <img>. HEIC면 자동 변환, 그 외 디코드 실패 시에도 HEIC 변환으로 한 번 더 구제.
+async function decodeImageFromFile(file){
+  let blob=file, converted=false;
+  if(looksHeic(file)){ try{ blob=await heicToJpegBlob(file); converted=true; }catch(e){ blob=file; } }
+  try{ return await loadImgFromBlob(blob); }
+  catch(e){
+    if(!converted){ // 타입/확장자엔 안 잡혔지만 실제 HEIC일 수 있음 → 강제 변환 재시도
+      try{ const b=await heicToJpegBlob(file); return await loadImgFromBlob(b); }catch(e2){}
+    }
+    throw e;
+  }
+}
+
+// 파일 → 전처리 캔버스: (필요시) 확대 + 그레이스케일 + Otsu 이진화(흑백)
+// Tesseract는 깨끗한 흑백 이미지에서 정확도가 가장 높다.
+async function fileToCanvas(file,maxDim){
+  const {img,url}=await decodeImageFromFile(file);
+  try{
+    let w=img.naturalWidth,h=img.naturalHeight;
+    // 너무 크면 줄이고, 너무 작으면 살짝 키움(작은 글자 인식 도움) — 목표 긴 변 ~2200
+    const target=maxDim||2200, sc=target/Math.max(w,h);
+    w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    const g=cv.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+    g.drawImage(img,0,0,w,h);
+    try{
+      const d=g.getImageData(0,0,w,h),a=d.data,n=w*h;
+      // 1) 그레이스케일 + 히스토그램
+      const gray=new Uint8Array(n),hist=new Uint32Array(256);
+      for(let i=0,p=0;i<a.length;i+=4,p++){ const v=(0.299*a[i]+0.587*a[i+1]+0.114*a[i+2])|0; gray[p]=v; hist[v]++; }
+      // 2) Otsu 임계값
+      let sum=0; for(let t=0;t<256;t++)sum+=t*hist[t];
+      let sumB=0,wB=0,maxVar=-1,thr=127;
+      for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB)continue; const wF=n-wB; if(!wF)break; sumB+=t*hist[t];
+        const mB=sumB/wB,mF=(sum-sumB)/wF,between=wB*wF*(mB-mF)*(mB-mF); if(between>maxVar){maxVar=between;thr=t;} }
+      // 3) 이진화(글자=검정, 배경=흰색). 약간 여유(thr+8)로 옅은 글자 살림
+      const cut=Math.min(255,thr+8);
+      for(let i=0,p=0;i<a.length;i+=4,p++){ const v=gray[p]<cut?0:255; a[i]=a[i+1]=a[i+2]=v; }
+      g.putImageData(d,0,0);
+    }catch(e){}
+    return cv;
+  } finally { URL.revokeObjectURL(url); }
 }
 // OCR 텍스트 한 줄 → "영어단어 - 한국어뜻" (없으면 null)
 function ocrParseLine(line){
@@ -1310,18 +1352,15 @@ function ocrParse(text){
   return out;
 }
 // 파일 → 컬러 축소 JPEG dataURI (Claude 비전용 — 색/디테일 보존)
-function fileToJpegDataUri(file,maxDim,quality){
-  return new Promise((res,rej)=>{
-    const url=URL.createObjectURL(file); const img=new Image();
-    img.onload=()=>{ let w=img.naturalWidth,h=img.naturalHeight; const sc=Math.min(1,(maxDim||1600)/Math.max(w,h));
-      w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
-      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-      cv.getContext('2d').drawImage(img,0,0,w,h);
-      URL.revokeObjectURL(url); res(cv.toDataURL('image/jpeg',quality||0.82));
-    };
-    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('image')); };
-    img.src=url;
-  });
+async function fileToJpegDataUri(file,maxDim,quality){
+  const {img,url}=await decodeImageFromFile(file);
+  try{
+    let w=img.naturalWidth,h=img.naturalHeight; const sc=Math.min(1,(maxDim||1600)/Math.max(w,h));
+    w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    return cv.toDataURL('image/jpeg',quality||0.82);
+  } finally { URL.revokeObjectURL(url); }
 }
 // 학생 1인당 하루 AI 스캔 제한(localStorage). 남은 횟수 반환/차감.
 function ocrQuotaKey(){ const u=(window.Cloud&&window.Cloud.currentUser&&window.Cloud.currentUser())||null; return 'wq_ocr_'+((u&&u.uid)||'anon')+'_'+today(); }
@@ -1379,7 +1418,7 @@ async function runOCRTesseract(file){
 }
 async function runOCR(file){
   if(_ocrBusy) return; _ocrBusy=true;
-  const btn=$('ocrbtn'); if(btn)btn.disabled=true;
+  const btns=[$('ocrcam'),$('ocralbum')]; btns.forEach(b=>{ if(b)b.disabled=true; });
   try{
     const ep=(window.OCR_ENDPOINT||'').trim();
     let handled=false;
@@ -1389,11 +1428,14 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v28: '+String((e&&e.message)||e).slice(0,80)+']');
-  }finally{ _ocrBusy=false; if(btn)btn.disabled=false; }
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v29: '+String((e&&e.message)||e).slice(0,80)+']');
+  }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
-$('ocrbtn').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
-$('ocrfile').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); });
+function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
+$('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
+$('ocralbum').addEventListener('click',()=>{ if(!_ocrBusy)$('ocralbumfile').click(); });
+$('ocrfile').addEventListener('change',_ocrPick);
+$('ocralbumfile').addEventListener('change',_ocrPick);
 // 어휘 팩을 하루 20개씩 순차 담기 — 주제 순서대로 출현
 function seedPack(pack){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
@@ -2481,7 +2523,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=28"></script>
+<script type="module" src="cloud.js?v=29"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
