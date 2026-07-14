@@ -804,11 +804,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=16"></script>
-<script src="pack-hs1.js?v=16"></script>
-<script src="pack-confuse.js?v=16"></script>
-<script src="pack-vacation.js?v=16"></script>
-<script src="firebase-config.js?v=16"></script>
+<script src="words.js?v=17"></script>
+<script src="pack-hs1.js?v=17"></script>
+<script src="pack-confuse.js?v=17"></script>
+<script src="pack-vacation.js?v=17"></script>
+<script src="firebase-config.js?v=17"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -923,7 +923,17 @@ function recordStudy(correct){
   const e=S.meta.dailyHistory[t]||{a:0,ok:0};
   e.a++; if(correct)e.ok++;
   S.meta.dailyHistory[t]=e;
+  // 연속(streak)은 '실제로 문제를 푼 날' 기준으로 갱신(입장만 하고 도망친 날은 제외)
+  if(S.meta.lastDay!==t){
+    S.meta.streak=(S.meta.lastDay===addDays(t,-1))?((S.meta.streak||0)+1):1;
+    S.meta.lastDay=t;
+  }
   S.meta.updatedAt=Date.now(); // 클라우드 동기화 대상
+}
+// 표시용 연속일수: 마지막 학습일이 오늘/어제가 아니면 이미 끊긴 것 → 0
+function liveStreak(){
+  const t=today(),ld=S.meta.lastDay;
+  return (ld===t||ld===addDays(t,-1))?(S.meta.streak||0):0;
 }
 // 최근 weeks*7일 히트맵 SVG-less 그리드 HTML. dh: dailyHistory 맵.
 function heatmapHTML(dh,weeks){
@@ -1129,7 +1139,7 @@ function renderHome(){
   $('h-cap').textContent=cap+' / '+total;
   $('h-dex-sub').textContent='포획 '+cap+' / '+total;
   $('h-bar').style.width=pct+'%';
-  $('h-streak').textContent=(S.meta.streak||0)+'일';
+  $('h-streak').textContent=liveStreak()+'일';
   $('h-best').textContent=(S.meta.bestCombo||0);
   const counts={common:0,rare:0,epic:0,legend:0};
   S.words.forEach(w=>counts[rarity(w).key]++);
@@ -1347,12 +1357,7 @@ $('enterbtn').addEventListener('click',()=>{
     return;
   }
   for(let i=q.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=q[i];q[i]=q[j];q[j]=t;}
-  const t=today();
-  if(S.meta.lastDay!==t){
-    S.meta.streak=(S.meta.lastDay===addDays(t,-1))?(S.meta.streak||0)+1:1;
-    S.meta.lastDay=t;
-  }
-  persist();
+  // 연속(streak)은 입장이 아니라 '실제 문제를 푼 날' 기준으로 recordStudy에서 갱신한다.
   S.session={q,hearts:HEARTS_MAX,maxH:HEARTS_MAX,combo:0,best:0,win:0,hurt:0,cap:0};
   sfx('select');
   show('battle');
@@ -1582,6 +1587,7 @@ function resolveAnswer(correct){
   const name=w.w.toUpperCase()+'몬';
   const t=today();
   w.seen=(w.seen||0)+1; // 정답률 추적: 시도 횟수
+  if(w.sample)delete w.sample; // 한 번이라도 학습하면 '샘플' 딱지 제거 → 병합 시 유실 방지
   w.updatedAt=Date.now(); // 클라우드 병합용: 이 단어가 방금 변경됨(기기 간 최신 우선)
   recordStudy(correct); // 날짜별 학습 기록(오늘 시도/정답 수)
   S.phase='resolve';
@@ -2086,22 +2092,21 @@ async function renderTeacherStudents(){
   if(!cid){ stu.innerHTML=''; return; }
   stu.innerHTML='<div class="regmsg" style="display:block;">불러오는 중…</div>';
   const list=await C.listStudents(cid);
-  if(!list.length){ stu.innerHTML='<div class="dexempty">아직 이 반에 참여한 학생이 없어요.</div>'; return; }
-  const t=today();
+  const t=today(), y=addDays(t,-1);
+  const active=list.filter(s=>!s.removed), removed=list.filter(s=>s.removed);
   // 학생 요약은 학생이 직접 쓸 수 있는(위조 가능) 값 → 전부 정수 강제변환/이스케이프 후 삽입(XSS 차단)
   const int=v=>{const n=Math.trunc(Number(v));return Number.isFinite(n)?n:0;};
-  stu.innerHTML=list.map(s=>{
+  const card=s=>{
     const sm=s.summary||{};
-    // '오늘' 여부·문제수는 저장된 스냅샷(동기화 시점)이 아니라 실제 날짜별 기록에서 오늘 날짜로 직접 조회
-    // → 어제 공부한 값이 오늘로 잘못 표시되던 문제 방지
+    // '오늘'·연속은 저장된 스냅샷이 아니라 실제 날짜 기준으로 계산(어제값이 오늘로 표시되던 문제 방지)
     const todayE=(sm.daily&&sm.daily[t])||null;
     const studied=!!todayE;
     const todayCount=todayE?int(todayE.a):0;
+    const streak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0; // 어제/오늘 학습했을 때만 유효
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';
-    const streak=int(sm.streak);
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
     const nm=esc(s.name||s.email||'(이름 없음)');
-    const heat=heatStripHTML(sm.daily||{},28); // 홈처럼 가로 스트립(최근 28일)
+    const heat=heatStripHTML(sm.daily||{},28);
     const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
     return '<div style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
@@ -2118,16 +2123,32 @@ async function renderTeacherStudents(){
       +'</div>'
       +'<div style="overflow-x:auto;">'+heat+'</div>'
     +'</div>';
-  }).join('');
-  // 학생 제외 버튼(반 문서 removed 목록에 추가 → 대시보드에서 숨김)
+  };
+  let html='';
+  if(!active.length) html+='<div class="dexempty">'+(removed.length?'활성 학생이 없어요.':'아직 이 반에 참여한 학생이 없어요.')+'</div>';
+  else html+=active.map(card).join('');
+  if(removed.length){
+    html+='<div class="flabel" style="margin-top:6px;">제외된 학생 <span class="sub">'+removed.length+'명 · 복구 가능</span></div>';
+    html+=removed.map(s=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#0d0d1a;border:2px solid #34345a;border-radius:6px;margin-bottom:6px;font-size:13px;color:#9a9ac0;"><span>'+esc(s.name||s.email||'(이름 없음)')+'</span><button class="tcr" data-uid="'+esc(s.uid)+'" style="background:none;border:1px solid #2a5a3a;color:#6ee08a;border-radius:4px;font-size:10px;padding:3px 9px;cursor:pointer;font-family:inherit;">↩ 복구</button></div>').join('');
+  }
+  stu.innerHTML=html;
+  // 제외 버튼
   Array.from(document.querySelectorAll('#tc-students .tcx')).forEach(btn=>{
     btn.addEventListener('click',async()=>{
       const uid=btn.dataset.uid; if(!uid)return;
-      if(!C.removeStudent){ alert('앱 업데이트가 필요해요. 새로고침(또는 앱을 닫았다 다시 열기) 후 다시 시도해 주세요.'); return; }
-      if(!window.confirm('이 학생을 반에서 제외할까요?\n(학생의 학습 데이터는 삭제되지 않고, 대시보드에서만 숨겨집니다.)'))return;
+      if(!C.removeStudent){ alert('앱 업데이트가 필요해요. 새로고침 후 다시 시도해 주세요.'); return; }
+      if(!window.confirm('이 학생을 반에서 제외할까요?\n(학습 데이터는 지워지지 않고 대시보드에서만 숨겨져요. 아래 "제외된 학생"에서 복구할 수 있어요.)'))return;
       const r=await C.removeStudent(cid,uid);
-      if(r&&r.ok) renderTeacherStudents();
-      else alert((r&&r.msg)||'제외에 실패했어요.');
+      if(r&&r.ok) renderTeacherStudents(); else alert((r&&r.msg)||'제외에 실패했어요.');
+    });
+  });
+  // 복구 버튼
+  Array.from(document.querySelectorAll('#tc-students .tcr')).forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const uid=btn.dataset.uid; if(!uid)return;
+      if(!C.unremoveStudent){ alert('앱 업데이트가 필요해요. 새로고침 후 다시 시도해 주세요.'); return; }
+      const r=await C.unremoveStudent(cid,uid);
+      if(r&&r.ok) renderTeacherStudents(); else alert((r&&r.msg)||'복구에 실패했어요.');
     });
   });
 }
@@ -2196,7 +2217,7 @@ function renderCloudNotify(){
     if(!C()||!C().deleteClass){ alert('앱 업데이트가 필요해요. 새로고침(또는 앱을 닫았다 다시 열기) 후 다시 시도해 주세요.'); return; }
     const cls=(typeof tcClasses!=='undefined')?tcClasses.find(c=>c.id===cid):null;
     if(!window.confirm('“'+((cls&&cls.name)||'이 반')+'”을(를) 삭제할까요?\n반 코드가 무효화되고 대시보드에서 사라집니다. (학생들의 학습 데이터 자체는 지워지지 않아요.)'))return;
-    const r=await C().deleteClass(cid);
+    const r=await C().deleteClass(cid, cls&&cls.code);
     if(r&&r.ok){ renderTeacher(); }
     else alert((r&&r.msg)||'반 삭제에 실패했어요.');
   });
@@ -2234,9 +2255,9 @@ document.addEventListener('cloud-ready',()=>{
     if(lab)lab.style.display=''; if(box)box.style.display='';
     setCloudStatus(null); // 로그인 여부에 맞게 로그인/로그아웃 뷰 토글
   }
-  updateLoginModal();
+  // 모달은 여기서 띄우지 않는다 — 인증 상태(cloud-account)가 확정된 뒤에 결정(재방문 시 깜빡임 방지)
 });
-// 로그인/역할/반 상태가 바뀌면 계정 영역 다시 그림 + 모달 갱신
+// 로그인/역할/반 상태가 바뀌면 계정 영역 다시 그림 + 모달 갱신(인증 상태 확정 시점)
 document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); });
 // 탭을 벗어나기 직전 마지막 변경분 동기화(로그인 시)
 document.addEventListener('visibilitychange',()=>{
@@ -2291,7 +2312,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=16"></script>
+<script type="module" src="cloud.js?v=17"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

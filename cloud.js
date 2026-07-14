@@ -40,6 +40,7 @@
     createClass: function () { return Promise.resolve({ ok: false }); },
     deleteClass: function () { return Promise.resolve({ ok: false }); },
     removeStudent: function () { return Promise.resolve({ ok: false }); },
+    unremoveStudent: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
     listStudents: function () { return Promise.resolve([]); },
     onChange: function () {}
@@ -77,6 +78,7 @@
   var stateRef = function (uid) { return fsMod.doc(db, 'users', uid, 'private', 'state'); };
   var classRef = function (cid) { return fsMod.doc(db, 'classes', cid); };
   var classesCol = function () { return fsMod.collection(db, 'classes'); };
+  var codeRef = function (code) { return fsMod.doc(db, 'classCodes', code); }; // 코드→반 매핑(코드 유일성·비열거)
 
   var user = null;      // Firebase 인증 사용자
   var profile = null;   // users/{uid} 문서(역할/반/프로필)
@@ -139,6 +141,13 @@
       if (!dh[d2] || ((ldh[d2] && ldh[d2].a) || 0) >= ((dh[d2] && dh[d2].a) || 0)) dh[d2] = ldh[d2];
     }
     if (Object.keys(dh).length) mergedMeta.dailyHistory = dh;
+    // 최고기록성 값은 LWW가 아니라 max로 보존(다른 기기에서 사소한 저장에 덮이지 않게)
+    mergedMeta.bestCombo = Math.max((lm.bestCombo || 0), (rm.bestCombo || 0));
+    mergedMeta.exp = Math.max((lm.exp || 0), (rm.exp || 0));
+    // streak/lastDay는 더 최근에 학습한(lastDay가 큰) 쪽을 채택
+    var lDay = lm.lastDay || '', rDay = rm.lastDay || '';
+    if (rDay > lDay) { mergedMeta.streak = rm.streak || 0; mergedMeta.lastDay = rm.lastDay || null; }
+    else if (lDay) { mergedMeta.streak = lm.streak || 0; mergedMeta.lastDay = lm.lastDay || null; }
     return { map: mergedMap, arr: mergedArr, meta: mergedMeta };
   }
 
@@ -307,7 +316,7 @@
     }
   }
 
-  // ── 반 코드로 참여(학생) — 표시 이름과 함께 ──
+  // ── 반 코드로 참여(학생) — 코드→반 매핑(classCodes) 조회 ──
   async function joinClassByCode(code, name) {
     if (!user) return { ok: false, msg: '로그인이 필요해요.' };
     name = (name || '').trim().slice(0, 20);
@@ -315,25 +324,25 @@
     code = (code || '').trim().toUpperCase();
     if (!/^[A-Z0-9]{4,8}$/.test(code)) return { ok: false, msg: '올바른 반 코드를 입력해 주세요.' };
     try {
-      var q = fsMod.query(classesCol(), fsMod.where('code', '==', code), fsMod.limit(1));
-      var res = await fsMod.getDocs(q);
-      if (res.empty) return { ok: false, msg: '그런 반 코드가 없어요.' };
-      var cdoc = res.docs[0];
-      var cls = cdoc.data();
+      var snap = await fsMod.getDoc(codeRef(code)); // 코드 doc-id로 O(1) 조회(열거 불가)
+      if (!snap.exists()) return { ok: false, msg: '그런 반 코드가 없어요.' };
+      var m = snap.data() || {};
+      var cid = m.classId, cname = m.name || '';
+      if (!cid) return { ok: false, msg: '반 정보를 찾을 수 없어요.' };
       await fsMod.setDoc(userRef(user.uid), {
-        schema: 2, role: 'student', classId: cdoc.id, className: cls.name || '', displayName: name,
+        schema: 2, role: 'student', classId: cid, className: cname, displayName: name,
         updatedAt: now()
       }, { merge: true });
-      if (profile) { profile.role = 'student'; profile.classId = cdoc.id; profile.className = cls.name || ''; profile.displayName = name; }
+      if (profile) { profile.role = 'student'; profile.classId = cid; profile.className = cname; profile.displayName = name; }
       accountChanged();
-      return { ok: true, name: cls.name || '', code: code };
+      return { ok: true, name: cname, code: code };
     } catch (e) {
       console.warn('[cloud] 반 참여 실패', e);
       return { ok: false, msg: (e && e.message ? e.message : '반 참여에 실패했어요.') };
     }
   }
 
-  // ── 반 생성(선생님) — 고유 코드 발급 ──
+  // ── 반 생성(선생님) — 코드 유일성 보장(classCodes 생성 전용) ──
   function genCode() {
     var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 0/O/1/I 제외
     var s = '';
@@ -342,23 +351,24 @@
   }
   async function createClass(name) {
     if (!user) return { ok: false, msg: '로그인이 필요해요.' };
-    name = (name || '').trim();
+    name = (name || '').trim().slice(0, 20);
     if (!name) return { ok: false, msg: '반 이름을 입력해 주세요.' };
     try {
-      // 고유 코드 확보(최대 5회 재시도)
+      // 아직 안 쓰인 코드 확보(최대 6회 시도). classCodes 는 get 가능하므로 존재 확인.
       var code = null, tries = 0;
-      while (tries < 5) {
+      while (tries < 6) {
         var c = genCode();
-        var q = fsMod.query(classesCol(), fsMod.where('code', '==', c), fsMod.limit(1));
-        var r = await fsMod.getDocs(q);
-        if (r.empty) { code = c; break; }
+        var ex = await fsMod.getDoc(codeRef(c));
+        if (!ex.exists()) { code = c; break; }
         tries++;
       }
       if (!code) return { ok: false, msg: '코드 생성에 실패했어요. 다시 시도해 주세요.' };
       var newRef = fsMod.doc(classesCol());
-      await fsMod.setDoc(newRef, {
-        ownerUid: user.uid, name: name, code: code, createdAt: now()
-      });
+      // classCodes 는 '생성 전용' 규칙 → 동시에 같은 코드가 만들어지면 한쪽만 성공(유일성 보장)
+      var batch = fsMod.writeBatch(db);
+      batch.set(codeRef(code), { classId: newRef.id, ownerUid: user.uid, name: name, createdAt: now() });
+      batch.set(newRef, { ownerUid: user.uid, name: name, code: code, removed: [], createdAt: now() });
+      await batch.commit();
       // 선생님 역할 보장
       await fsMod.setDoc(userRef(user.uid), { schema: 2, role: 'teacher', updatedAt: now() }, { merge: true });
       if (profile) profile.role = 'teacher';
@@ -366,7 +376,7 @@
       return { ok: true, id: newRef.id, name: name, code: code };
     } catch (e) {
       console.warn('[cloud] 반 생성 실패', e);
-      return { ok: false, msg: (e && e.message ? e.message : '반 생성에 실패했어요.') };
+      return { ok: false, msg: (e && e.message ? e.message : '반 생성에 실패했어요. 코드가 겹쳤을 수 있어요, 다시 시도해 주세요.') };
     }
   }
 
@@ -386,11 +396,10 @@
     }
   }
 
-  // ── 반 학생 목록 + 요약(선생님) — 제외 목록(removed) 반영 ──
+  // ── 반 학생 목록 + 요약(선생님) — 제외 목록(removed) 은 flag 로 반환(복구 UI용) ──
   async function listStudents(classId) {
     if (!user || !classId) return [];
     try {
-      // 반 문서의 제외 목록을 먼저 읽어 숨길 학생 uid 집합 구성
       var removed = {};
       try {
         var cs = await fsMod.getDoc(classRef(classId));
@@ -403,12 +412,12 @@
       res.forEach(function (d) {
         var v = d.data() || {};
         if (d.id === user.uid) return; // 선생님 본인 제외
-        if (removed[d.id]) return;     // 반에서 제외된 학생 숨김
         out.push({
           uid: d.id,
-          name: v.displayName || (v.profile && v.profile.name) || '', // 입력한 이름 우선
+          name: v.displayName || (v.profile && v.profile.name) || '',
           email: (v.profile && v.profile.email) || '',
-          summary: v.summary || null
+          summary: v.summary || null,
+          removed: !!removed[d.id]     // 제외 여부(대시보드가 활성/제외로 분리)
         });
       });
       out.sort(function (a, b) {
@@ -422,11 +431,14 @@
     }
   }
 
-  // ── 반 삭제(소유 선생님) ──
-  async function deleteClass(classId) {
+  // ── 반 삭제(소유 선생님) — 반 문서 + 코드 매핑 함께 삭제 ──
+  async function deleteClass(classId, code) {
     if (!user || !classId) return { ok: false, msg: '로그인이 필요해요.' };
     try {
-      await fsMod.deleteDoc(classRef(classId));
+      var batch = fsMod.writeBatch(db);
+      batch.delete(classRef(classId));
+      if (code) batch.delete(codeRef((code || '').toUpperCase()));
+      await batch.commit();
       return { ok: true };
     } catch (e) {
       console.warn('[cloud] 반 삭제 실패', e);
@@ -434,7 +446,7 @@
     }
   }
 
-  // ── 학생을 반에서 제외(반 문서의 removed 목록에 추가 → 대시보드에서 숨김) ──
+  // ── 학생 제외 / 복구(반 문서의 removed 목록) ──
   async function removeStudent(classId, studentUid) {
     if (!user || !classId || !studentUid) return { ok: false, msg: '잘못된 요청이에요.' };
     try {
@@ -443,6 +455,16 @@
     } catch (e) {
       console.warn('[cloud] 학생 제외 실패', e);
       return { ok: false, msg: (e && e.message ? e.message : '학생 제외에 실패했어요.') };
+    }
+  }
+  async function unremoveStudent(classId, studentUid) {
+    if (!user || !classId || !studentUid) return { ok: false, msg: '잘못된 요청이에요.' };
+    try {
+      await fsMod.updateDoc(classRef(classId), { removed: fsMod.arrayRemove(studentUid) });
+      return { ok: true };
+    } catch (e) {
+      console.warn('[cloud] 학생 복구 실패', e);
+      return { ok: false, msg: (e && e.message ? e.message : '학생 복구에 실패했어요.') };
     }
   }
 
@@ -477,6 +499,7 @@
     createClass: createClass,
     deleteClass: deleteClass,
     removeStudent: removeStudent,
+    unremoveStudent: unremoveStudent,
     listMyClasses: listMyClasses,
     listStudents: listStudents,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
