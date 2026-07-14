@@ -822,11 +822,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=26"></script>
-<script src="pack-hs1.js?v=26"></script>
-<script src="pack-confuse.js?v=26"></script>
-<script src="pack-vacation.js?v=26"></script>
-<script src="firebase-config.js?v=26"></script>
+<script src="words.js?v=27"></script>
+<script src="pack-hs1.js?v=27"></script>
+<script src="pack-confuse.js?v=27"></script>
+<script src="pack-vacation.js?v=27"></script>
+<script src="firebase-config.js?v=27"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1334,20 +1334,23 @@ async function runOCRApi(file,endpoint){
   let token=null; try{ token=await window.Cloud.getIdToken(); }catch(e){}
   if(!token){ return false; } // 로그인 안 됨 → 폴백
   ocrStatus('사진 준비 중…');
-  const dataUri=await fileToJpegDataUri(file,1600,0.82);
+  // 사진 변환 실패(HEIC 등 미지원 포맷)는 예외로 끝내지 말고 기기 내 인식으로 폴백.
+  let dataUri; try{ dataUri=await fileToJpegDataUri(file,1600,0.82); }
+  catch(e){ ocrStatus('사진을 여는 중 문제가 생겨 기기 내 인식으로 대신 시도할게요…'); return false; }
   ocrStatus('AI가 사진을 읽는 중… 잠시만요');
   let r;
   try{
     r=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({image:dataUri}) });
   }catch(e){ ocrStatus('서버에 연결하지 못했어요. 기기 내 인식으로 대신 시도할게요…'); return false; }
   if(!r.ok){
-    let msg='인식 서버 오류'; try{ const j=await r.json(); if(j.error==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(j.error==='unauthorized')msg='로그인이 필요해요.'; else if(j.error==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
-    // 서버 설정 미완(502/500) 등은 기기 내 OCR로 폴백
-    if(r.status>=500){ ocrStatus('서버가 준비 중이에요. 기기 내 인식으로 대신 시도할게요…'); return false; }
-    ocrStatus(msg); return true;
+    let msg='인식 서버 오류', code=''; try{ const j=await r.json(); code=(j&&j.error)||''; if(code==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(code==='unauthorized')msg='로그인이 필요해요. 로그아웃 후 다시 로그인해 주세요.'; else if(code==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
+    // 서버 설정 미완(500/502) 등은 기기 내 OCR로 폴백
+    if(r.status>=500 || code==='server_misconfig' || code==='upstream_error'){ ocrStatus('AI 서버가 아직 준비 중이라 기기 내 인식으로 대신 시도할게요… (원인: '+(code||('HTTP '+r.status))+')'); return false; }
+    ocrStatus(msg+' (오류: '+(code||('HTTP '+r.status))+')'); return true;
   }
-  const j=await r.json();
-  const lines=ocrParse(j.text||'');
+  // 정상 응답이지만 본문 파싱이 실패하면(중간 프록시 HTML 등) 폴백.
+  let j; try{ j=await r.json(); }catch(e){ ocrStatus('응답을 읽지 못해 기기 내 인식으로 대신 시도할게요…'); return false; }
+  const lines=ocrParse((j&&j.text)||'');
   if(!lines.length){ ocrStatus('단어를 찾지 못했어요. “단어 + 뜻”이 보이게 밝고 반듯하게 다시 찍어보세요.'); return true; }
   ocrQuotaUse();
   const ta=$('regtext'); const cur=(ta.value||'').trim();
@@ -2476,7 +2479,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=26"></script>
+<script type="module" src="cloud.js?v=27"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
