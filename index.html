@@ -822,11 +822,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=27"></script>
-<script src="pack-hs1.js?v=27"></script>
-<script src="pack-confuse.js?v=27"></script>
-<script src="pack-vacation.js?v=27"></script>
-<script src="firebase-config.js?v=27"></script>
+<script src="words.js?v=28"></script>
+<script src="pack-hs1.js?v=28"></script>
+<script src="pack-confuse.js?v=28"></script>
+<script src="pack-vacation.js?v=28"></script>
+<script src="firebase-config.js?v=28"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1361,7 +1361,8 @@ async function runOCRApi(file,endpoint){
 // 기기 내(Tesseract) 경로 — 무료·폴백
 async function runOCRTesseract(file){
   ocrStatus('사진 준비 중…');
-  const cv=await fileToCanvas(file,2200);
+  let cv; try{ cv=await fileToCanvas(file,2200); }
+  catch(e){ ocrStatus('사진을 열지 못했어요. 갤러리의 다른 사진이나 JPG로 다시 시도해 주세요. (사진 형식 문제)'); return; }
   ocrStatus('글자 인식 준비 중… (처음엔 인식 데이터를 받느라 시간이 좀 걸려요)');
   let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
   const worker=await T.createWorker('kor+eng',1,{ langPath:'https://tessdata.projectnaptha.com/4.0.0_best',
@@ -1387,7 +1388,8 @@ async function runOCR(file){
     }
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
-    console.warn('[ocr] 실패',e); ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요.');
+    console.warn('[ocr] 실패',e);
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v28: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; if(btn)btn.disabled=false; }
 }
 $('ocrbtn').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2479,7 +2481,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=27"></script>
+<script type="module" src="cloud.js?v=28"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
