@@ -826,11 +826,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=30"></script>
-<script src="pack-hs1.js?v=30"></script>
-<script src="pack-confuse.js?v=30"></script>
-<script src="pack-vacation.js?v=30"></script>
-<script src="firebase-config.js?v=30"></script>
+<script src="words.js?v=31"></script>
+<script src="pack-hs1.js?v=31"></script>
+<script src="pack-confuse.js?v=31"></script>
+<script src="pack-vacation.js?v=31"></script>
+<script src="firebase-config.js?v=31"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1288,42 +1288,60 @@ async function heicToJpegBlob(file){
   const out=await withTimeout(lib({ blob:file, toType:'image/jpeg', quality:0.9 }),25000,'heic-convert'); // 변환 상한 25초
   return Array.isArray(out) ? out[0] : out;
 }
-function loadImgFromBlob(blob){
-  return new Promise((res,rej)=>{
+// 파일 진단 문구(형식·크기·확장자) — 실패 원인 파악용.
+function fileDesc(file){
+  try{
+    const t=(file&&file.type)||'(형식없음)';
+    const mb=file&&file.size?(file.size/1048576).toFixed(1)+'MB':'?';
+    const n=(file&&file.name)||''; const ext=(n.match(/\.[a-z0-9]+$/i)||[''])[0].toLowerCase();
+    return t+(ext?' '+ext:'')+' · '+mb;
+  }catch(e){ return '?'; }
+}
+// 디코더 결과 표준형: { src(그릴수있는 소스), w, h, cleanup() }
+// 1) createImageBitmap(안드로이드 크롬이 <img>보다 폭넓게 디코드) → 2) <img> 순으로 시도. 실패 시 null.
+async function tryBitmap(blob){
+  if(!window.createImageBitmap) return null;
+  try{ const bmp=await createImageBitmap(blob);
+    return { src:bmp, w:bmp.width, h:bmp.height, cleanup:function(){ try{bmp.close&&bmp.close();}catch(e){} } };
+  }catch(e){ return null; }
+}
+function tryImg(blob){
+  return new Promise(function(res){
     const url=URL.createObjectURL(blob), img=new Image();
-    img.onload=()=>res({img,url});
-    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('image')); };
+    img.onload=function(){ res({ src:img, w:img.naturalWidth, h:img.naturalHeight, cleanup:function(){ URL.revokeObjectURL(url); } }); };
+    img.onerror=function(){ URL.revokeObjectURL(url); res(null); };
     img.src=url;
   });
 }
-// 파일 → 로드 완료된 <img>. HEIC면 자동 변환, 그 외 디코드 실패 시에도 HEIC 변환으로 한 번 더 구제.
+// 파일 → 그릴 수 있는 디코더 결과. HEIC 자동 변환 + 이중 디코더 + 미감지 HEIC 강제변환 구제.
 async function decodeImageFromFile(file){
   let blob=file, converted=false;
   if(looksHeic(file)){
-    try{ ocrStatus('아이폰 사진(HEIC) 변환 중… 처음 한 장은 조금 걸려요'); blob=await heicToJpegBlob(file); converted=true; }
+    try{ ocrStatus('사진(고효율/HEIC) 변환 중… 처음 한 장은 조금 걸려요'); blob=await heicToJpegBlob(file); converted=true; }
     catch(e){ blob=file; }
   }
-  try{ return await loadImgFromBlob(blob); }
-  catch(e){
-    if(!converted){ // 타입/확장자엔 안 잡혔지만 실제 HEIC일 수 있음 → 강제 변환 재시도
-      try{ ocrStatus('사진 변환 중… 잠시만요'); const b=await heicToJpegBlob(file); return await loadImgFromBlob(b); }catch(e2){}
-    }
-    throw e;
+  let d=await tryBitmap(blob); if(d) return d;
+  d=await tryImg(blob);        if(d) return d;
+  if(!converted){ // 타입/확장자엔 안 잡혔지만 실제 HEIC일 수 있음 → 강제 변환 후 재시도
+    try{ ocrStatus('사진 변환 중… 잠시만요'); const b=await heicToJpegBlob(file);
+      d=await tryBitmap(b)||await tryImg(b); if(d) return d;
+    }catch(e){}
   }
+  const err=new Error('사진을 디코드하지 못함'); err.desc=fileDesc(file); throw err;
 }
 
 // 파일 → 전처리 캔버스: (필요시) 확대 + 그레이스케일 + Otsu 이진화(흑백)
 // Tesseract는 깨끗한 흑백 이미지에서 정확도가 가장 높다.
 async function fileToCanvas(file,maxDim){
-  const {img,url}=await decodeImageFromFile(file);
+  const {src,w:iw,h:ih,cleanup}=await decodeImageFromFile(file);
   try{
-    let w=img.naturalWidth,h=img.naturalHeight;
+    let w=iw,h=ih;
     // 너무 크면 줄이고, 너무 작으면 살짝 키움(작은 글자 인식 도움) — 목표 긴 변 ~2200
     const target=maxDim||2200, sc=target/Math.max(w,h);
     w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
     const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
     const g=cv.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
-    g.drawImage(img,0,0,w,h);
+    g.drawImage(src,0,0,w,h);
     try{
       const d=g.getImageData(0,0,w,h),a=d.data,n=w*h;
       // 1) 그레이스케일 + 히스토그램
@@ -1340,7 +1358,7 @@ async function fileToCanvas(file,maxDim){
       g.putImageData(d,0,0);
     }catch(e){}
     return cv;
-  } finally { URL.revokeObjectURL(url); }
+  } finally { cleanup&&cleanup(); }
 }
 // OCR 텍스트 한 줄 → "영어단어 - 한국어뜻" (없으면 null)
 function ocrParseLine(line){
@@ -1360,14 +1378,14 @@ function ocrParse(text){
 }
 // 파일 → 컬러 축소 JPEG dataURI (Claude 비전용 — 색/디테일 보존)
 async function fileToJpegDataUri(file,maxDim,quality){
-  const {img,url}=await decodeImageFromFile(file);
+  const {src,w:iw,h:ih,cleanup}=await decodeImageFromFile(file);
   try{
-    let w=img.naturalWidth,h=img.naturalHeight; const sc=Math.min(1,(maxDim||1600)/Math.max(w,h));
+    let w=iw,h=ih; const sc=Math.min(1,(maxDim||1600)/Math.max(w,h));
     w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
     const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-    cv.getContext('2d').drawImage(img,0,0,w,h);
+    cv.getContext('2d').drawImage(src,0,0,w,h);
     return cv.toDataURL('image/jpeg',quality||0.82);
-  } finally { URL.revokeObjectURL(url); }
+  } finally { cleanup&&cleanup(); }
 }
 // 학생 1인당 하루 AI 스캔 제한(localStorage). 남은 횟수 반환/차감.
 function ocrQuotaKey(){ const u=(window.Cloud&&window.Cloud.currentUser&&window.Cloud.currentUser())||null; return 'wq_ocr_'+((u&&u.uid)||'anon')+'_'+today(); }
@@ -1382,7 +1400,7 @@ async function runOCRApi(file,endpoint){
   ocrStatus('사진 준비 중…');
   // 사진 변환 실패(HEIC 등 미지원 포맷)는 예외로 끝내지 말고 기기 내 인식으로 폴백.
   let dataUri; try{ dataUri=await fileToJpegDataUri(file,1600,0.82); }
-  catch(e){ ocrStatus('사진을 여는 중 문제가 생겨 기기 내 인식으로 대신 시도할게요…'); return false; }
+  catch(e){ ocrStatus('사진을 여는 중 문제가 생겨 기기 내 인식으로 대신 시도할게요… ['+((e&&e.desc)||fileDesc(file))+']'); return false; }
   ocrStatus('AI가 사진을 읽는 중… 잠시만요');
   let r;
   try{
@@ -1408,7 +1426,7 @@ async function runOCRApi(file,endpoint){
 async function runOCRTesseract(file){
   ocrStatus('사진 준비 중…');
   let cv; try{ cv=await fileToCanvas(file,2200); }
-  catch(e){ ocrStatus('사진을 열지 못했어요. 갤러리의 다른 사진이나 JPG로 다시 시도해 주세요. (사진 형식 문제)'); return; }
+  catch(e){ ocrStatus('사진을 열지 못했어요. 갤러리의 다른 사진이나 JPG로 다시 시도해 주세요. [형식: '+((e&&e.desc)||fileDesc(file))+']'); return; }
   ocrStatus('글자 인식 준비 중… (처음엔 인식 데이터를 받느라 시간이 좀 걸려요)');
   let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
   const worker=await T.createWorker('kor+eng',1,{ langPath:'https://tessdata.projectnaptha.com/4.0.0_best',
@@ -1435,7 +1453,7 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v30: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v31: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
@@ -2530,7 +2548,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=30"></script>
+<script type="module" src="cloud.js?v=31"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
