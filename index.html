@@ -133,15 +133,21 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .mutebtn:active{transform:translateY(1px);}
 .wq-col:has(#scr-home.on){padding-top:6px;}
 .wq-col:has(#scr-home.on) .hdr{display:none;}
-/* battle = fixed-height, no-scroll stage inside the bezel */
+/* battle = 큰 화면에선 한 화면에 꽉 차는 무대, 작은 화면·긴 문제에선 스크롤.
+   (예전엔 overflow:hidden + arena min-height:0 이라, 문제 글자가 길어질수록
+    무대가 찌그러지며 몬스터가 작아지다 못해 아예 사라졌다) */
 .wq-root:has(#scr-battle.on){align-items:center;padding:12px;}
-.wq-col:has(#scr-battle.on){height:calc(100dvh - 24px);max-height:calc(100dvh - 24px);overflow:hidden;gap:6px;padding:10px 12px 12px;}
+.wq-col:has(#scr-battle.on){height:calc(100dvh - 24px);max-height:calc(100dvh - 24px);overflow-x:hidden;overflow-y:auto;gap:6px;padding:10px 12px 12px;}
 .wq-col:has(#scr-battle.on) .foot{display:none;}
 .wq-col:has(#scr-battle.on) .hdr{padding:5px 10px;flex-shrink:0;}
 .wq-col:has(#scr-battle.on) .hdr .t1{font-size:12px;}
 .wq-col:has(#scr-battle.on) .hdr .t2{display:none;}
 #scr-battle.on{flex:1;min-height:0;gap:6px;}
-.wq-col:has(#scr-battle.on) .arena{flex:1 1 auto;min-height:0;}
+/* arena 는 남는 공간을 채우되(큰 화면), 내용(몬스터)보다 작게 찌그러지지는 않는다.
+   overflow:visible 이어야 min-height:auto 가 살아난다(hidden 이면 스크롤 컨테이너가
+   되어 min-height:auto→0 으로 계산돼 무대가 0까지 접히며 몬스터가 잘려 사라졌다). */
+.wq-col:has(#scr-battle.on) .arena{flex:1 1 auto;min-height:auto;overflow:visible;}
+.wq-col:has(#scr-battle.on) .monstage{overflow:visible;}
 
 /* ===== home ===== */
 .bigbtn{position:relative;color:#fff;font-size:16px;padding:14px 14px;cursor:pointer;text-shadow:2px 2px 0 var(--ink);min-height:52px;width:100%;transition:transform .08s steps(2);}
@@ -250,7 +256,10 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .nameplate .spk{margin-left:1px;}
 .dexcard .nm{display:flex;align-items:center;justify-content:center;gap:5px;}
 .dexcard .spk{padding:1px 4px;}
-.monbox{position:relative;width:156px;height:142px;min-height:0;flex-shrink:1;display:flex;align-items:center;justify-content:center;}
+/* 단일 몬스터: 크기를 '뷰포트 높이' 기준(clamp)으로만 정해, 문제 글자 길이가
+   늘어도 절대 작아지지 않게 한다(flex-shrink:0). 큰 폰은 크게·작은 폰은 조금 작게
+   하되 항상 100px↑ 은 보장 → 예전처럼 글자가 길어질수록 쪼그라들지 않는다. */
+.monbox{position:relative;width:156px;height:clamp(104px,17vh,140px);min-height:0;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
 .monbox img{width:144px;height:132px;max-height:100%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 12px 8px rgba(0,0,0,.55));}
 .arena.hasbg #bgcv,.arena.hasbg .torch{display:none;}
 .monbox .part{position:absolute;pointer-events:none;}
