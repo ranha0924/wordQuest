@@ -431,19 +431,18 @@
     }
   }
 
-  // ── 반 삭제(소유 선생님) — 반 문서 + 코드 매핑 함께 삭제 ──
+  // ── 반 삭제(소유 선생님) — 반 문서 먼저, 코드 매핑은 있으면 정리(없어도 무시) ──
+  // (배치로 묶으면 옛 반처럼 코드 문서가 없을 때 배치 전체가 실패하므로 분리한다)
   async function deleteClass(classId, code) {
     if (!user || !classId) return { ok: false, msg: '로그인이 필요해요.' };
     try {
-      var batch = fsMod.writeBatch(db);
-      batch.delete(classRef(classId));
-      if (code) batch.delete(codeRef((code || '').toUpperCase()));
-      await batch.commit();
-      return { ok: true };
+      await fsMod.deleteDoc(classRef(classId));
     } catch (e) {
       console.warn('[cloud] 반 삭제 실패', e);
       return { ok: false, msg: (e && e.message ? e.message : '반 삭제에 실패했어요.') };
     }
+    if (code) { try { await fsMod.deleteDoc(codeRef((code || '').toUpperCase())); } catch (e2) { /* 옛 반은 코드 문서 없음 — 무시 */ } }
+    return { ok: true };
   }
 
   // ── 학생 제외 / 복구(반 문서의 removed 목록) ──
