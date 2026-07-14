@@ -276,6 +276,13 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .choice.no .arrow{opacity:1;color:var(--hp);animation:none;}
 .choice.dim{color:var(--dim);background:var(--win);box-shadow:none;}
 .choice:disabled{cursor:default;}
+/* 마나 필살기/회복 버튼 (마나 가득 찼을 때만 표시) */
+.ultbar{display:flex;gap:6px;}
+.ultbtn{flex:1;padding:9px 6px;background:linear-gradient(var(--gold),#c9971f);border:2px solid var(--ink);color:#1a1200;font-family:inherit;font-size:13px;font-weight:bold;cursor:pointer;text-shadow:none;box-shadow:0 0 8px rgba(255,198,58,.5);animation:wqUlt 1s infinite;}
+.ultbtn small{font-weight:normal;font-size:10px;opacity:.85;}
+.ultbtn.heal{background:linear-gradient(#e07a7a,#b23c3c);color:#fff;box-shadow:0 0 8px rgba(224,106,106,.5);}
+.ultbtn:active{transform:translateY(1px);}
+@keyframes wqUlt{0%,100%{filter:brightness(1)}50%{filter:brightness(1.22)}}
 .matchbox{padding:8px;border:8px solid transparent;border-image:var(--frame-gold) 3 fill;background:var(--win);flex-direction:column;gap:6px;}
 .matchbox .mhint{text-align:center;color:var(--gold);font-size:11px;text-shadow:1px 1px 0 rgba(0,0,0,.5);}
 .matchgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
@@ -619,6 +626,10 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       </div>
       <div class="goldbox msgbox"><span id="b-msg"></span><span class="cur">▼</span></div>
       <div class="btmzone">
+        <div class="ultbar" id="ult-bar" style="display:none;">
+          <button class="ultbtn" id="ult-blast" type="button">⚡ 필살기 <small>복습 소탕</small></button>
+          <button class="ultbtn heal" id="ult-heal" type="button">❤️ 체력 회복</button>
+        </div>
         <div class="choices" id="choices"></div>
         <div class="spellbox" id="spellbox" style="display:none;"></div>
         <div class="matchbox" id="matchbox" style="display:none;"></div>
@@ -843,11 +854,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=41"></script>
-<script src="pack-hs1.js?v=41"></script>
-<script src="pack-confuse.js?v=41"></script>
-<script src="pack-vacation.js?v=41"></script>
-<script src="firebase-config.js?v=41"></script>
+<script src="words.js?v=42"></script>
+<script src="pack-hs1.js?v=42"></script>
+<script src="pack-confuse.js?v=42"></script>
+<script src="pack-vacation.js?v=42"></script>
+<script src="firebase-config.js?v=42"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1476,11 +1487,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v41: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v42: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v41';
+var BUILD='v42';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -1612,6 +1623,7 @@ $('resetbtn').addEventListener('click',()=>{
 
 /* ================= battle ================= */
 const HEARTS_MAX=3;
+const MANA_FULL=5, ULT_CLEAR=3; // 마나 가득(콤보 5) 시 필살기/회복 가능, 소탕 마리수
 $('enterbtn').addEventListener('click',()=>{
   const q=dueIds();
   if(!q.length){
@@ -1629,6 +1641,8 @@ $('fleebtn').addEventListener('click',()=>{
   if(!window.confirm('도망칠까? 남은 몬스터는 그대로 던전에 남는다.'))return;
   endBattle();
 });
+$('ult-blast').addEventListener('click',useBlast);
+$('ult-heal').addEventListener('click',useHeal);
 window.addEventListener('keydown',e=>{
   if(S.screen==='battle'&&S.phase==='ask'&&(S.mode==='e2k'||S.mode==='k2e4')){
     const n=parseInt(e.key,10);
@@ -1715,9 +1729,41 @@ function renderParty(){
   const s=S.session;
   if(!s)return;
   $('hero-hp').style.width=Math.round(s.hearts/s.maxH*100)+'%';
-  $('hero-mp').style.width=Math.min(10,s.combo)*10+'%';
+  $('hero-mp').style.width=Math.min(MANA_FULL,s.combo)/MANA_FULL*100+'%';
   $('b-combo').textContent=s.combo>=2?(s.combo+' COMBO!'):'';
   $('b-combo').style.color='var(--gold)';
+  // 마나 가득(콤보 MANA_FULL 이상) + 일반 전투일 때만 마나 버튼 노출
+  const ub=$('ult-bar'); if(ub) ub.style.display=(s.combo>=MANA_FULL&&S.mode!=='match')?'flex':'none';
+}
+// 마나 필살기: 큐의 '복습(이미 포획된) 몬스터'를 앞에서부터 최대 ULT_CLEAR 마리 즉시 정리(정답 처리).
+//   새(미포획) 단어는 제외 → 실제 학습은 계속 직접 풀게 한다.
+function useBlast(){
+  const s=S.session;
+  if(!s||s.combo<MANA_FULL||S.phase!=='ask'||S.mode==='match')return;
+  const targets=[];
+  for(let i=0;i<s.q.length&&targets.length<ULT_CLEAR;i++){const w=byId(s.q[i]);if(w&&w.cap)targets.push(w);}
+  if(!targets.length){ setMsg('소탕할 복습 몬스터가 없다! 새 단어는 직접 풀어야 한다.'); return; }
+  s.combo=0; // 마나 소모
+  targets.forEach(w=>matchApplyCorrect(w));
+  const ids=new Set(targets.map(w=>w.id));
+  s.q=s.q.filter(id=>!ids.has(id));
+  S.phase='resolve';
+  sfx('capture');burst('#8fd0ff');
+  setMsg('마나 필살기! 복습 몬스터 '+targets.length+'마리를 소탕했다!');
+  $('choices').innerHTML='';const sbx=$('spellbox');if(sbx){sbx.innerHTML='';sbx.style.display='none';}
+  renderParty();persist();
+  wait(()=>nextMon(),1400);
+}
+// 마나로 하트 1 회복(가득이면 소모 안 함). 현재 문제는 그대로 이어서 푼다.
+function useHeal(){
+  const s=S.session;
+  if(!s||s.combo<MANA_FULL||S.phase!=='ask'||S.mode==='match')return;
+  if(s.hearts>=s.maxH){ setMsg('체력이 이미 가득 찼다!'); return; }
+  s.combo=0;s.hearts=Math.min(s.maxH,s.hearts+1);
+  sfx('correct');
+  setMsg('마나로 체력을 회복했다! (하트 +1)');
+  renderParty();persist();
+  wait(()=>{ if(S.phase==='ask'&&S.curId){ const w=byId(S.curId); if(w)setMsg(askText(w,S.mode,S.clozePick)); } },1200);
 }
 function renderMonHP(w){
   // HP바 = 남은 야생성(정착도의 역) — 맞힐수록 줄어들고, 완전 정착(stage MASTER_MAX)에서 0
@@ -2724,7 +2770,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=41"></script>
+<script type="module" src="cloud.js?v=42"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
