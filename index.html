@@ -804,11 +804,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=15"></script>
-<script src="pack-hs1.js?v=15"></script>
-<script src="pack-confuse.js?v=15"></script>
-<script src="pack-vacation.js?v=15"></script>
-<script src="firebase-config.js?v=15"></script>
+<script src="words.js?v=16"></script>
+<script src="pack-hs1.js?v=16"></script>
+<script src="pack-confuse.js?v=16"></script>
+<script src="pack-vacation.js?v=16"></script>
+<script src="firebase-config.js?v=16"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2092,11 +2092,14 @@ async function renderTeacherStudents(){
   const int=v=>{const n=Math.trunc(Number(v));return Number.isFinite(n)?n:0;};
   stu.innerHTML=list.map(s=>{
     const sm=s.summary||{};
-    const studied=!!(sm.studiedToday||(sm.lastDay===t));
+    // '오늘' 여부·문제수는 저장된 스냅샷(동기화 시점)이 아니라 실제 날짜별 기록에서 오늘 날짜로 직접 조회
+    // → 어제 공부한 값이 오늘로 잘못 표시되던 문제 방지
+    const todayE=(sm.daily&&sm.daily[t])||null;
+    const studied=!!todayE;
+    const todayCount=todayE?int(todayE.a):0;
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';
     const streak=int(sm.streak);
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
-    const todayCount=int(sm.todayCount);
     const nm=esc(s.name||s.email||'(이름 없음)');
     const heat=heatStripHTML(sm.daily||{},28); // 홈처럼 가로 스트립(최근 28일)
     const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
@@ -2288,7 +2291,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=15"></script>
+<script type="module" src="cloud.js?v=16"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
