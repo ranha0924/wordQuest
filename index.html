@@ -840,11 +840,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=37"></script>
-<script src="pack-hs1.js?v=37"></script>
-<script src="pack-confuse.js?v=37"></script>
-<script src="pack-vacation.js?v=37"></script>
-<script src="firebase-config.js?v=37"></script>
+<script src="words.js?v=38"></script>
+<script src="pack-hs1.js?v=38"></script>
+<script src="pack-confuse.js?v=38"></script>
+<script src="pack-vacation.js?v=38"></script>
+<script src="firebase-config.js?v=38"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1473,11 +1473,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v37: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v38: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v37';
+var BUILD='v38';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2440,8 +2440,12 @@ async function renderClassList(){
 // 홈 메뉴의 선생님 대시보드 버튼: 선생님 로그인 시에만 노출
 function toggleTeacherBtn(){
   const btn=$('h-teacher-btn'); if(!btn) return;
-  const p=(window.Cloud&&window.Cloud.getProfile)?window.Cloud.getProfile():null;
-  btn.style.display=(p&&p.role==='teacher')?'':'none';
+  const C=window.Cloud;
+  const p=(C&&C.getProfile)?C.getProfile():null;
+  const master=!!(C&&C.isMaster&&C.isMaster());
+  btn.style.display=((p&&p.role==='teacher')||master)?'':'none';
+  // 마스터는 전체 학생 열람이므로 버튼 문구를 구분.
+  if(master){const l=btn.querySelector('.mlabel'),s=btn.querySelector('.sub');if(l)l.textContent='전체 학생 대시보드';if(s)s.textContent='마스터 · 모든 반 학생 현황';}
 }
 /* ===== 선생님 대시보드 ===== */
 let tcClasses=[]; // 캐시된 내 반 목록
@@ -2455,13 +2459,15 @@ async function renderTeacher(){
   }
   tcClasses=await C.listMyClasses();
   if(!tcClasses.length){
-    if(empty){empty.style.display='';empty.innerHTML='아직 만든 반이 없어요.<br>위에서 첫 반을 만들어 시작하세요.';}
+    const isM=!!(C.isMaster&&C.isMaster());
+    if(empty){empty.style.display='';empty.innerHTML=isM?'아직 개설된 반이 없어요. 선생님이 반을 만들면 여기 전부 표시됩니다.':'아직 만든 반이 없어요.<br>위에서 첫 반을 만들어 시작하세요.';}
     if(has)has.style.display='none';
     return;
   }
   if(empty)empty.style.display='none';
   if(has)has.style.display='flex';
-  $('tc-count').textContent='반 '+tcClasses.length+'개';
+  const master=!!(C.isMaster&&C.isMaster());
+  $('tc-count').textContent=(master?'전체 반 ':'반 ')+tcClasses.length+'개'+(master?' · 마스터':'');
   const prev=sel.value;
   sel.innerHTML=tcClasses.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');
   if(prev&&tcClasses.some(c=>c.id===prev))sel.value=prev;
@@ -2698,7 +2704,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=37"></script>
+<script type="module" src="cloud.js?v=38"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

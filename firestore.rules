@@ -13,6 +13,14 @@ service cloud.firestore {
 
     function signedIn() { return request.auth != null; }
 
+    // 마스터(운영자): 지정 이메일 계정은 모든 학생·반을 읽을 수 있다(전체 열람 전용).
+    // ★ cloud.js 의 MASTER_EMAIL 과 반드시 동일하게 유지. 쓰기 권한은 부여하지 않음.
+    function isMaster() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'ranha.projects@gmail.com';
+    }
+
     // 이 문서(학생)의 소속 반을 요청자가 소유(담당 선생님)하는가
     function ownsStudentClass(data) {
       return signedIn()
@@ -43,20 +51,21 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      // 본인은 항상, 선생님은 자기 반 학생 문서를 읽을 수 있다.
-      allow read: if signedIn() && (request.auth.uid == uid || ownsStudentClass(resource.data));
-      // 쓰기는 본인만 + 필드 타입/크기 검증.
+      // 본인은 항상, 선생님은 자기 반 학생, 마스터는 전체를 읽을 수 있다.
+      allow read: if signedIn() && (request.auth.uid == uid || ownsStudentClass(resource.data) || isMaster());
+      // 쓰기는 본인만 + 필드 타입/크기 검증(마스터도 읽기 전용).
       allow write: if signedIn() && request.auth.uid == uid && validUserDoc(request.resource.data);
 
-      // 무거운 학습 데이터: 본인만.
+      // 무거운 학습 데이터: 본인, 그리고 마스터(전체 열람).
       match /private/{docId} {
-        allow read, write: if signedIn() && request.auth.uid == uid;
+        allow read: if signedIn() && (request.auth.uid == uid || isMaster());
+        allow write: if signedIn() && request.auth.uid == uid;
       }
     }
 
     match /classes/{classId} {
-      // 소유 선생님만 읽는다(학생은 classCodes 로만 참여, 반 문서를 직접 못 봄 → 열거·PII 차단).
-      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      // 소유 선생님(그리고 마스터)만 읽는다(학생은 classCodes 로만 참여, 반 문서를 직접 못 봄 → 열거·PII 차단).
+      allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || isMaster());
       // 생성: 로그인 사용자가 자신을 소유자로.
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       // 수정: 소유자만 + 소유자·코드·이름 불변, removed 는 배열(제외/복구용 removed 만 바꿀 수 있게).

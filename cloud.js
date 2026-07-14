@@ -44,6 +44,7 @@
     unremoveStudent: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
     listStudents: function () { return Promise.resolve([]); },
+    isMaster: function () { return false; },
     onChange: function () {}
   };
 
@@ -80,6 +81,11 @@
   var classRef = function (cid) { return fsMod.doc(db, 'classes', cid); };
   var classesCol = function () { return fsMod.collection(db, 'classes'); };
   var codeRef = function (code) { return fsMod.doc(db, 'classCodes', code); }; // 코드→반 매핑(코드 유일성·비열거)
+
+  // ── 마스터(운영자): 모든 반·학생 열람 권한. ★서버 강제는 firestore.rules 의 isMaster() 로.
+  //   여기 이메일과 firestore.rules 의 이메일을 반드시 동일하게 유지할 것.
+  var MASTER_EMAIL = 'ranha.projects@gmail.com';
+  function isMaster() { return !!(user && user.email && user.email.toLowerCase() === MASTER_EMAIL); }
 
   var user = null;      // Firebase 인증 사용자
   var profile = null;   // users/{uid} 문서(역할/반/프로필)
@@ -397,13 +403,14 @@
   async function listMyClasses() {
     if (!user) return [];
     try {
-      var q = fsMod.query(classesCol(), fsMod.where('ownerUid', '==', user.uid));
+      // 마스터는 전체 반, 일반 선생님은 자기 소유 반만.
+      var q = isMaster() ? classesCol() : fsMod.query(classesCol(), fsMod.where('ownerUid', '==', user.uid));
       var res = await fsMod.getDocs(q);
       var out = [];
-      res.forEach(function (d) { var v = d.data(); out.push({ id: d.id, name: v.name || '', code: v.code || '' }); });
+      res.forEach(function (d) { var v = d.data(); out.push({ id: d.id, name: v.name || '', code: v.code || '', ownerUid: v.ownerUid || '' }); });
       out.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
-      // 옛 반들의 코드 매핑을 백그라운드로 보강(이미 배포한 코드가 계속 동작하도록)
-      for (var i = 0; i < out.length; i++) { ensureCode(out[i]); }
+      // 옛 반들의 코드 매핑을 백그라운드로 보강(내 반에 한함 — 마스터는 남의 반 코드에 손대지 않음)
+      if (!isMaster()) { for (var i = 0; i < out.length; i++) { ensureCode(out[i]); } }
       return out;
     } catch (e) {
       console.warn('[cloud] 반 목록 조회 실패', e);
@@ -518,6 +525,7 @@
     unremoveStudent: unremoveStudent,
     listMyClasses: listMyClasses,
     listStudents: listStudents,
+    isMaster: isMaster,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };
 
