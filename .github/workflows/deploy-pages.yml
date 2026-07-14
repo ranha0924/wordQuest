@@ -1,0 +1,47 @@
+# WordQuest 배포 — main 에 push 될 때마다 저장소 루트를 GitHub Pages 로 게시.
+# 왜 필요한가: 배포가 "됐는지/실패했는지"를 Actions 탭에서 눈으로 확인할 수 있게 하려고.
+#   (기존 자동 게시는 실행 기록이 안 보여, 반영 안 될 때 원인 파악이 불가능했음.)
+#
+# ⚠️ 한 번만 해야 하는 설정(코드로는 못 바꿈):
+#   저장소 Settings → Pages → Build and deployment → Source 를 "GitHub Actions" 로 변경.
+#   (현재 "Deploy from a branch" 로 되어 있으면 이 워크플로가 무시됨.)
+name: deploy-pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # Actions 탭에서 수동 재배포용
+
+# Pages 게시에 필요한 최소 권한.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 동시에 여러 배포가 겹치지 않게(최신 것만 살림).
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # 저장소 루트를 통째로 게시(빌드 단계 없는 정적 사이트).
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
