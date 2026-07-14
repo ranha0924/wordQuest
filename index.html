@@ -827,11 +827,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=33"></script>
-<script src="pack-hs1.js?v=33"></script>
-<script src="pack-confuse.js?v=33"></script>
-<script src="pack-vacation.js?v=33"></script>
-<script src="firebase-config.js?v=33"></script>
+<script src="words.js?v=34"></script>
+<script src="pack-hs1.js?v=34"></script>
+<script src="pack-confuse.js?v=34"></script>
+<script src="pack-vacation.js?v=34"></script>
+<script src="firebase-config.js?v=34"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1459,11 +1459,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v33: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v34: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v33';
+var BUILD='v34';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -1613,7 +1613,7 @@ $('fleebtn').addEventListener('click',()=>{
   endBattle();
 });
 window.addEventListener('keydown',e=>{
-  if(S.screen==='battle'&&S.phase==='ask'&&S.mode==='e2k'){
+  if(S.screen==='battle'&&S.phase==='ask'&&(S.mode==='e2k'||S.mode==='k2e4')){
     const n=parseInt(e.key,10);
     if(n>=1&&n<=4)answer(n-1);
   }
@@ -1623,7 +1623,9 @@ $('b-speak').addEventListener('click',()=>{const w=byId(S.curId);if(w)speak(w.w)
 
 /* ===== 출제 모드 =====
    e2k  : 영어 → 한국어 뜻 (재인, 가장 쉬움)      · stage 0~1
-   k2e  : 한국어 뜻 → 영어 단어 (역방향 인출)       · stage 2
+   k2e4 : 한국어 뜻 → 영어 단어 4지선다 (역방향 재인)· stage 2 (k2e 타이핑의 다리)
+   k2e  : 한국어 뜻 → 영어 단어 타이핑 (역방향 인출) · stage 2
+   listen: 발음 듣고 영어 철자 타이핑 (청취+철자)   · stage 2+ (TTS 가능할 때)
    cloze: 예문 빈칸에 영어 단어 채우기 (문맥 인출)   · stage 3+ (예문 있을 때)
    단계가 오를수록 어려워져 "재인만으로 포획되는" 문제를 막는다. */
 // 예문에 단어 원형이 \b경계로 실제 들어있는 센스만 빈칸 출제 가능(정답 노출 방지)
@@ -1637,7 +1639,8 @@ function pickMode(w){
   // 듣기(받아쓰기): 생산 단계에서 가끔 등장 — 청취+철자 훈련(TTS 가능할 때만)
   if(st>=2&&ttsOK()&&Math.random()<LISTEN_P)return 'listen';
   if(st>=CAPTURE_STAGE&&clozable(w).length)return 'cloze';
-  if(st>=2)return 'k2e';
+  // 생산 단계: 뜻→영어 '4지선다(재인)'와 '타이핑(인출)'을 번갈아 내 난이도·다양성 확보.
+  if(st>=2)return Math.random()<0.5?'k2e4':'k2e';
   return 'e2k';
 }
 function clozeText(w,ex){
@@ -1646,6 +1649,7 @@ function clozeText(w,ex){
 }
 function askText(w,mode,pick){
   if(mode==='listen')return '들리는 단어를 영어로 쓰세요  (뜻: '+w.m+')';
+  if(mode==='k2e4')return '「'+w.m+'」 …영어로 고르면?';
   if(mode==='k2e')return '「'+w.m+'」 …영어로 쓰면?';
   if(mode==='cloze'){const p=pick||bankSenses(w)[0]||{ex:bankEx(w),sense:w.m};return '빈칸에 알맞은 단어는?  '+clozeText(w,p.ex)+'  (뜻: '+p.sense+')';}
   return '「'+w.w+'」 …이 단어의 뜻은?';
@@ -1654,7 +1658,7 @@ function askText(w,mode,pick){
 // x.m!==w.m 필터로 같은 뜻을 가진 단어는 오답 보기에서 제외(중복정답 방지).
 // 후보를 유사도로 점수화해 헷갈리는 "근사치" 오답을 우선 배치한다.
 function makeChoices(w,mode){
-  const wantEng=(mode==='k2e'||mode==='cloze');
+  const wantEng=(mode==='k2e'||mode==='cloze'||mode==='k2e4');
   const correct=wantEng?w.w:w.m;
   const cl=correct.toLowerCase();
   const tgtPos=posOf(w),tgtType=koType(w.m);
@@ -1804,9 +1808,9 @@ function nextMon(){
   },1000);
 }
 
-// e2k(4지선다) 선택 응답
+// 4지선다(e2k=영어→뜻, k2e4=뜻→영어) 선택 응답
 function answer(i){
-  if(S.phase!=='ask'||S.mode!=='e2k')return;
+  if(S.phase!=='ask'||(S.mode!=='e2k'&&S.mode!=='k2e4'))return;
   const c=S.choices[i];if(!c)return;
   S.picked=i;
   revealChoices();
@@ -2557,7 +2561,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=33"></script>
+<script type="module" src="cloud.js?v=34"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
