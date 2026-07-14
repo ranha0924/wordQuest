@@ -630,7 +630,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       </div>
       <div class="flabel">📷 사진으로 담기 <span class="sub">교재 사진에서 자동 인식(기기 내 처리·무료)</span></div>
       <button class="samplebtn" id="ocrbtn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 2h6l1 2h2v9H2V4h2zM8 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>사진 찍기 / 앨범에서 고르기</button>
-      <input type="file" id="ocrfile" accept="image/*" capture="environment" style="display:none;">
+      <input type="file" id="ocrfile" accept="image/*" style="display:none;">
       <div id="ocrstatus" class="regmsg" style="display:none;"></div>
       <div class="flabel">단어 붙여넣기 <span class="sub">직접 입력·수정</span></div>
       <div class="regex">
@@ -822,11 +822,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=23"></script>
-<script src="pack-hs1.js?v=23"></script>
-<script src="pack-confuse.js?v=23"></script>
-<script src="pack-vacation.js?v=23"></script>
-<script src="firebase-config.js?v=23"></script>
+<script src="words.js?v=24"></script>
+<script src="pack-hs1.js?v=24"></script>
+<script src="pack-confuse.js?v=24"></script>
+<script src="pack-vacation.js?v=24"></script>
+<script src="firebase-config.js?v=24"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1258,19 +1258,33 @@ function ensureTesseract(){
     document.head.appendChild(s);
   });
 }
-// 파일 → 축소·그레이스케일 캔버스(인식 정확도·속도 향상)
+// 파일 → 전처리 캔버스: (필요시) 확대 + 그레이스케일 + Otsu 이진화(흑백)
+// Tesseract는 깨끗한 흑백 이미지에서 정확도가 가장 높다.
 function fileToCanvas(file,maxDim){
   return new Promise((res,rej)=>{
     const url=URL.createObjectURL(file);
     const img=new Image();
     img.onload=()=>{
       let w=img.naturalWidth,h=img.naturalHeight;
-      const sc=Math.min(1,maxDim/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+      // 너무 크면 줄이고, 너무 작으면 살짝 키움(작은 글자 인식 도움) — 목표 긴 변 ~2200
+      const target=maxDim||2200, sc=target/Math.max(w,h);
+      w=Math.max(1,Math.round(w*sc)); h=Math.max(1,Math.round(h*sc));
       const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
-      const g=cv.getContext('2d'); g.drawImage(img,0,0,w,h);
-      try{ // 그레이스케일 + 살짝 대비 강화
-        const d=g.getImageData(0,0,w,h),a=d.data;
-        for(let i=0;i<a.length;i+=4){ let v=0.3*a[i]+0.59*a[i+1]+0.11*a[i+2]; v=(v-128)*1.25+128; v=v<0?0:v>255?255:v; a[i]=a[i+1]=a[i+2]=v; }
+      const g=cv.getContext('2d'); g.imageSmoothingEnabled=true; g.imageSmoothingQuality='high';
+      g.drawImage(img,0,0,w,h);
+      try{
+        const d=g.getImageData(0,0,w,h),a=d.data,n=w*h;
+        // 1) 그레이스케일 + 히스토그램
+        const gray=new Uint8Array(n),hist=new Uint32Array(256);
+        for(let i=0,p=0;i<a.length;i+=4,p++){ const v=(0.299*a[i]+0.587*a[i+1]+0.114*a[i+2])|0; gray[p]=v; hist[v]++; }
+        // 2) Otsu 임계값
+        let sum=0; for(let t=0;t<256;t++)sum+=t*hist[t];
+        let sumB=0,wB=0,maxVar=-1,thr=127;
+        for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB)continue; const wF=n-wB; if(!wF)break; sumB+=t*hist[t];
+          const mB=sumB/wB,mF=(sum-sumB)/wF,between=wB*wF*(mB-mF)*(mB-mF); if(between>maxVar){maxVar=between;thr=t;} }
+        // 3) 이진화(글자=검정, 배경=흰색). 약간 여유(thr+8)로 옅은 글자 살림
+        const cut=Math.min(255,thr+8);
+        for(let i=0,p=0;i<a.length;i+=4,p++){ const v=gray[p]<cut?0:255; a[i]=a[i+1]=a[i+2]=v; }
         g.putImageData(d,0,0);
       }catch(e){}
       URL.revokeObjectURL(url); res(cv);
@@ -1300,12 +1314,19 @@ async function runOCR(file){
   const btn=$('ocrbtn'); if(btn)btn.disabled=true;
   try{
     ocrStatus('사진 준비 중…');
-    const cv=await fileToCanvas(file,1600);
-    ocrStatus('글자 인식 준비 중… (처음엔 한국어 인식 데이터를 받느라 시간이 걸려요)');
+    const cv=await fileToCanvas(file,2200);
+    ocrStatus('글자 인식 준비 중… (처음엔 고정밀 한국어 데이터를 받느라 시간이 좀 걸려요)');
     let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
-    const worker=await T.createWorker('kor+eng',1,{ logger:m=>{ if(m.status==='recognizing text'){ ocrStatus('글자 인식 중… '+Math.round((m.progress||0)*100)+'%'); } } });
+    // 고정밀(best) 학습데이터 사용 → 정확도↑ (조금 느려짐)
+    const worker=await T.createWorker('kor+eng',1,{
+      langPath:'https://tessdata.projectnaptha.com/4.0.0_best',
+      logger:m=>{ if(m.status==='recognizing text'){ ocrStatus('글자 인식 중… '+Math.round((m.progress||0)*100)+'%'); } }
+    });
     let text='';
-    try{ const ret=await worker.recognize(cv); text=(ret&&ret.data&&ret.data.text)||''; }
+    try{
+      try{ await worker.setParameters({ tessedit_pageseg_mode:'6', preserve_interword_spaces:'1' }); }catch(e){} // 단일 블록 가정 + 단어 간격 보존
+      const ret=await worker.recognize(cv); text=(ret&&ret.data&&ret.data.text)||'';
+    }
     finally{ try{await worker.terminate();}catch(e){} }
     const lines=ocrParse(text);
     if(!lines.length){ ocrStatus('단어를 찾지 못했어요. 표보다는 “단어 + 뜻”이 한 줄에 오도록, 밝고 반듯하게 찍어 다시 시도해 보세요.'); return; }
@@ -2406,7 +2427,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=23"></script>
+<script type="module" src="cloud.js?v=24"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
