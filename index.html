@@ -628,7 +628,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <div class="scr-head-t">영입소</div>
         <div class="scr-head-b">단어를 몬스터로 영입한다</div>
       </div>
-      <div class="flabel">단어 붙여넣기</div>
+      <div class="flabel">📷 사진으로 담기 <span class="sub">교재 사진에서 자동 인식(기기 내 처리·무료)</span></div>
+      <button class="samplebtn" id="ocrbtn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 2h6l1 2h2v9H2V4h2zM8 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>사진 찍기 / 앨범에서 고르기</button>
+      <input type="file" id="ocrfile" accept="image/*" capture="environment" style="display:none;">
+      <div id="ocrstatus" class="regmsg" style="display:none;"></div>
+      <div class="flabel">단어 붙여넣기 <span class="sub">직접 입력·수정</span></div>
       <div class="regex">
         <span>abandon <b>-</b> 버리다</span>
         <span>achieve <b>:</b> 성취하다</span>
@@ -818,11 +822,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=22"></script>
-<script src="pack-hs1.js?v=22"></script>
-<script src="pack-confuse.js?v=22"></script>
-<script src="pack-vacation.js?v=22"></script>
-<script src="firebase-config.js?v=22"></script>
+<script src="words.js?v=23"></script>
+<script src="pack-hs1.js?v=23"></script>
+<script src="pack-confuse.js?v=23"></script>
+<script src="pack-vacation.js?v=23"></script>
+<script src="firebase-config.js?v=23"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1239,6 +1243,82 @@ $('samplebtn').addEventListener('click',()=>{
   $('regtext').value=SAMPLE;
   $('parsebtn').click();
 });
+
+/* ================= 사진 OCR (기기 내 · Tesseract.js) ================= */
+function ocrStatus(msg,show){ const el=$('ocrstatus'); if(!el)return; el.textContent=msg; el.style.display=(show===false)?'none':'block'; }
+let _ocrBusy=false;
+// Tesseract.js 지연 로딩(처음 사용할 때만)
+function ensureTesseract(){
+  if(window.Tesseract) return Promise.resolve(window.Tesseract);
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=()=>window.Tesseract?res(window.Tesseract):rej(new Error('load'));
+    s.onerror=()=>rej(new Error('network'));
+    document.head.appendChild(s);
+  });
+}
+// 파일 → 축소·그레이스케일 캔버스(인식 정확도·속도 향상)
+function fileToCanvas(file,maxDim){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.naturalWidth,h=img.naturalHeight;
+      const sc=Math.min(1,maxDim/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const g=cv.getContext('2d'); g.drawImage(img,0,0,w,h);
+      try{ // 그레이스케일 + 살짝 대비 강화
+        const d=g.getImageData(0,0,w,h),a=d.data;
+        for(let i=0;i<a.length;i+=4){ let v=0.3*a[i]+0.59*a[i+1]+0.11*a[i+2]; v=(v-128)*1.25+128; v=v<0?0:v>255?255:v; a[i]=a[i+1]=a[i+2]=v; }
+        g.putImageData(d,0,0);
+      }catch(e){}
+      URL.revokeObjectURL(url); res(cv);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('image')); };
+    img.src=url;
+  });
+}
+// OCR 텍스트 한 줄 → "영어단어 - 한국어뜻" (없으면 null)
+function ocrParseLine(line){
+  line=(line||'').replace(/[’']/g,"'").trim();
+  const wm=line.match(/^([A-Za-z][A-Za-z.\-']{0,24})\b/); if(!wm) return null;
+  const word=wm[1].replace(/[.\-']+$/,''); if(word.length<2) return null;
+  const rest=line.slice(wm[0].length);
+  const km=rest.match(/[가-힣][가-힣0-9\s,;·~/()]*/); if(!km) return null;
+  let mean=km[0].replace(/\s+/g,' ').replace(/[·,;\s]+$/,'').trim();
+  if(mean.length<1) return null;
+  return word.toLowerCase()+' - '+mean;
+}
+function ocrParse(text){
+  const out=[],seen=new Set();
+  (text||'').split(/\r?\n/).forEach(l=>{ const r=ocrParseLine(l); if(r){ const k=r.split(' - ')[0]; if(!seen.has(k)){seen.add(k); out.push(r);} } });
+  return out;
+}
+async function runOCR(file){
+  if(_ocrBusy) return; _ocrBusy=true;
+  const btn=$('ocrbtn'); if(btn)btn.disabled=true;
+  try{
+    ocrStatus('사진 준비 중…');
+    const cv=await fileToCanvas(file,1600);
+    ocrStatus('글자 인식 준비 중… (처음엔 한국어 인식 데이터를 받느라 시간이 걸려요)');
+    let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
+    const worker=await T.createWorker('kor+eng',1,{ logger:m=>{ if(m.status==='recognizing text'){ ocrStatus('글자 인식 중… '+Math.round((m.progress||0)*100)+'%'); } } });
+    let text='';
+    try{ const ret=await worker.recognize(cv); text=(ret&&ret.data&&ret.data.text)||''; }
+    finally{ try{await worker.terminate();}catch(e){} }
+    const lines=ocrParse(text);
+    if(!lines.length){ ocrStatus('단어를 찾지 못했어요. 표보다는 “단어 + 뜻”이 한 줄에 오도록, 밝고 반듯하게 찍어 다시 시도해 보세요.'); return; }
+    const ta=$('regtext'); const cur=(ta.value||'').trim();
+    ta.value=(cur?cur+'\n':'')+lines.join('\n');
+    updateDetect();
+    ocrStatus('사진에서 '+lines.length+'개 인식했어요! 아래 칸에서 확인·수정한 뒤 “몬스터 영입!”을 누르세요.');
+  }catch(e){
+    console.warn('[ocr] 실패',e); ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요.');
+  }finally{ _ocrBusy=false; if(btn)btn.disabled=false; }
+}
+$('ocrbtn').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
+$('ocrfile').addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); });
 // 어휘 팩을 하루 20개씩 순차 담기 — 주제 순서대로 출현
 function seedPack(pack){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
@@ -2326,7 +2406,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=22"></script>
+<script type="module" src="cloud.js?v=23"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
