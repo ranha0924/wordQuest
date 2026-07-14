@@ -827,11 +827,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=32"></script>
-<script src="pack-hs1.js?v=32"></script>
-<script src="pack-confuse.js?v=32"></script>
-<script src="pack-vacation.js?v=32"></script>
-<script src="firebase-config.js?v=32"></script>
+<script src="words.js?v=33"></script>
+<script src="pack-hs1.js?v=33"></script>
+<script src="pack-confuse.js?v=33"></script>
+<script src="pack-vacation.js?v=33"></script>
+<script src="firebase-config.js?v=33"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1408,7 +1408,9 @@ async function runOCRApi(file,endpoint){
     r=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({image:dataUri}) });
   }catch(e){ ocrStatus('서버에 연결하지 못했어요. 기기 내 인식으로 대신 시도할게요…'); return false; }
   if(!r.ok){
-    let msg='인식 서버 오류', code=''; try{ const j=await r.json(); code=(j&&j.error)||''; if(code==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(code==='unauthorized')msg='로그인이 필요해요. 로그아웃 후 다시 로그인해 주세요.'; else if(code==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
+    let msg='인식 서버 오류', code='', jlim=0; try{ const j=await r.json(); code=(j&&j.error)||''; jlim=(j&&j.limit)||0; if(code==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(code==='unauthorized')msg='로그인이 필요해요. 로그아웃 후 다시 로그인해 주세요.'; else if(code==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
+    // 계정 기준 하루 한도 초과(서버 강제) — 로컬 카운터도 소진 처리해 표시 일치시키고 안내.
+    if(code==='user_daily_cap_reached'){ const lim=jlim||window.OCR_DAILY_LIMIT||8; try{ localStorage.setItem(ocrQuotaKey(),String(lim)); }catch(e){} ocrStatus('오늘 AI 사진 인식 횟수를 다 썼어요(하루 '+lim+'장). 내일 다시 이용하거나, 아래 칸에 직접 입력해 주세요.'); return true; }
     // 서버 설정 미완(500/502) 등은 기기 내 OCR로 폴백
     if(r.status>=500 || code==='server_misconfig' || code==='upstream_error'){ ocrStatus('AI 서버가 아직 준비 중이라 기기 내 인식으로 대신 시도할게요… (원인: '+(code||('HTTP '+r.status))+')'); return false; }
     ocrStatus(msg+' (오류: '+(code||('HTTP '+r.status))+')'); return true;
@@ -1417,10 +1419,13 @@ async function runOCRApi(file,endpoint){
   let j; try{ j=await r.json(); }catch(e){ ocrStatus('응답을 읽지 못해 기기 내 인식으로 대신 시도할게요…'); return false; }
   const lines=ocrParse((j&&j.text)||'');
   if(!lines.length){ ocrStatus('단어를 찾지 못했어요. “단어 + 뜻”이 보이게 밝고 반듯하게 다시 찍어보세요.'); return true; }
-  ocrQuotaUse();
+  // 남은 횟수: 서버(계정 기준)가 알려주면 그걸 신뢰하고 로컬 표시도 동기화, 아니면 로컬 차감.
+  let left;
+  if(j && typeof j.remaining==='number'){ const lim=j.limit||window.OCR_DAILY_LIMIT||8; left=Math.max(0,j.remaining); try{ localStorage.setItem(ocrQuotaKey(),String(Math.max(0,lim-left))); }catch(e){} }
+  else { ocrQuotaUse(); left=ocrQuotaLeft(); }
   const ta=$('regtext'); const cur=(ta.value||'').trim();
   ta.value=(cur?cur+'\n':'')+lines.join('\n'); updateDetect();
-  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 확인·수정 후 “몬스터 영입!”을 누르세요. (오늘 남은 횟수 '+ocrQuotaLeft()+'장)');
+  ocrStatus('사진에서 '+lines.length+'개 인식했어요! 확인·수정 후 “몬스터 영입!”을 누르세요. (오늘 남은 횟수 '+left+'장)');
   return true;
 }
 // 기기 내(Tesseract) 경로 — 무료·폴백
@@ -1454,11 +1459,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v32: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v33: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v32';
+var BUILD='v33';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2552,7 +2557,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=32"></script>
+<script type="module" src="cloud.js?v=33"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

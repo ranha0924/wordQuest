@@ -6,17 +6,21 @@
 
    보안/비용 안전장치:
      · Firebase 로그인 토큰을 검증 → 이 앱의 로그인 사용자만 호출 가능(무단 사용 차단).
-     · (선택) KV로 하루 전체 호출 상한 → 비용 폭주 원천 차단.
-     · 이미지 크기 제한. 학생당 하루 제한은 클라이언트에서, 최종 상한은
-       Anthropic 콘솔의 월 지출 한도로.
+     · KV로 (a) 학생(uid)별 하루 상한, (b) 하루 전체 호출 상한 → 서버에서 강제.
+       학생별 제한을 계정 기준으로 서버가 세므로, 기기·브라우저·시크릿창을 바꿔도
+       우회 불가(클라이언트 localStorage 카운터는 빠른 표시용 힌트일 뿐).
+     · 이미지 크기 제한. 최종 상한은 Anthropic 콘솔의 월 지출 한도로.
 
    필요한 환경변수(Cloudflare 대시보드 Settings → Variables):
      ANTHROPIC_API_KEY  (Secret)  — 본인 Claude API 키
      FIREBASE_API_KEY   (Variable) — firebase-config.js 의 apiKey(공개값)
      MODEL              (선택)      — 기본 claude-haiku-4-5-20251001
+     USER_DAILY_LIMIT   (선택)      — 학생 1인당 하루 스캔 상한(기본 8). KV 바인딩 시 강제
      DAILY_CAP          (선택)      — 하루 전체 호출 상한(기본 500). KV 바인딩 시 적용
      ALLOW_ORIGIN       (선택)      — 허용할 앱 도메인(기본 *). 예: https://your-app.web.app
-   (선택) KV 네임스페이스 바인딩 이름: OCR_KV  — 하루 상한 카운터 저장용
+   ★ KV 네임스페이스 바인딩 이름: OCR_KV  — 카운터 저장용.
+     이 바인딩이 있어야 학생별 하루 상한이 서버에서 "우회 불가"로 강제됩니다.
+     (바인딩이 없으면 클라이언트 소프트 제한만 적용 = 우회 가능.)
    ============================================================================ */
 
 const PROMPT =
@@ -54,15 +58,24 @@ export default {
       const mediaType = m[1], b64 = m[2];
       if (b64.length > 7000000) return json({ error: 'image_too_large' }, 413, cors); // 약 5MB
 
-      // 3) (선택) 하루 전체 상한
+      // 3) 한도 — KV 바인딩 시 서버에서 강제(우회 불가). 학생별 + 전체.
+      const day = new Date().toISOString().slice(0, 10);
+      const userLim = parseInt(env.USER_DAILY_LIMIT || '8', 10) || 8;
+      let userKey = null, userCur = 0;
       if (env.OCR_KV) {
-        const day = new Date().toISOString().slice(0, 10);
-        const key = 'cnt:' + day;
-        const cur = parseInt((await env.OCR_KV.get(key)) || '0', 10) || 0;
+        // 3a) 하루 전체 상한(비용 폭주 차단) — 시도 기준 카운트(보수적).
+        const gKey = 'cnt:' + day;
+        const gCur = parseInt((await env.OCR_KV.get(gKey)) || '0', 10) || 0;
         const cap = parseInt(env.DAILY_CAP || '500', 10) || 500;
-        if (cur >= cap) return json({ error: 'daily_cap_reached' }, 429, cors);
+        if (gCur >= cap) return json({ error: 'daily_cap_reached' }, 429, cors);
+
+        // 3b) 학생(uid)별 하루 상한 — 로그인 계정 기준이라 기기·브라우저를 바꿔도 못 넘김.
+        userKey = 'u:' + uid + ':' + day;
+        userCur = parseInt((await env.OCR_KV.get(userKey)) || '0', 10) || 0;
+        if (userCur >= userLim) return json({ error: 'user_daily_cap_reached', limit: userLim, remaining: 0 }, 429, cors);
+
         // 근사 카운터(최종 상한은 Anthropic 지출 한도로 보장)
-        await env.OCR_KV.put(key, String(cur + 1), { expirationTtl: 172800 });
+        await env.OCR_KV.put(gKey, String(gCur + 1), { expirationTtl: 172800 });
       }
 
       // 4) Claude 비전 호출
@@ -91,7 +104,14 @@ export default {
       }
       const data = await ar.json();
       const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
-      return json({ text }, 200, cors);
+
+      // 학생별 카운터는 "성공 + 단어 있음"일 때만 차감(빈 결과·실패는 소모 안 함 → 공정).
+      let remaining = null;
+      if (env.OCR_KV && userKey) {
+        if (text) { userCur += 1; await env.OCR_KV.put(userKey, String(userCur), { expirationTtl: 172800 }); }
+        remaining = Math.max(0, userLim - userCur);
+      }
+      return json({ text, remaining, limit: userLim }, 200, cors);
     } catch (e) {
       return json({ error: 'server_error', detail: String((e && e.message) || e).slice(0, 200) }, 500, cors);
     }
