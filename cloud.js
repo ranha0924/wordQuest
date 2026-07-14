@@ -380,7 +380,19 @@
     }
   }
 
-  // ── 내가 만든 반 목록(선생님) ──
+  // ── 기존 반(코드 매핑 없이 만들어진) 백필: 이미 나눠준 코드로 학생이 계속 참여하게 ──
+  async function ensureCode(cls) {
+    if (!user || !cls || !cls.code) return;
+    var code = (cls.code || '').toUpperCase();
+    try {
+      var s = await fsMod.getDoc(codeRef(code));
+      if (!s.exists()) {
+        await fsMod.setDoc(codeRef(code), { classId: cls.id, ownerUid: user.uid, name: cls.name || '', createdAt: now() });
+      }
+    } catch (e) { /* 이미 있거나 코드 충돌 — 무시 */ }
+  }
+
+  // ── 내가 만든 반 목록(선생님) — 코드 매핑 백필 포함 ──
   async function listMyClasses() {
     if (!user) return [];
     try {
@@ -389,6 +401,8 @@
       var out = [];
       res.forEach(function (d) { var v = d.data(); out.push({ id: d.id, name: v.name || '', code: v.code || '' }); });
       out.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+      // 옛 반들의 코드 매핑을 백그라운드로 보강(이미 배포한 코드가 계속 동작하도록)
+      for (var i = 0; i < out.length; i++) { ensureCode(out[i]); }
       return out;
     } catch (e) {
       console.warn('[cloud] 반 목록 조회 실패', e);
