@@ -4,7 +4,8 @@ rules_version = '2';
    ----------------------------------------------------------------
    users/{uid}                → 본인 read/write. 선생님은 자기 반 학생만 read.
    users/{uid}/private/state  → 본인만 read/write (무거운 학습 데이터).
-   classes/{classId}          → 로그인 사용자 read(코드 조회용), 소유 선생님만 write.
+   classes/{classId}          → 소유 선생님만 read/write(수정 시 코드·소유자 불변).
+   classCodes/{code}          → 코드→반 매핑. 단건 get 만(열거 불가), 생성 전용(코드 유일성).
    그 외 전면 거부.
    ================================================================ */
 service cloud.firestore {
@@ -20,15 +21,25 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/classes/$(data.classId)).data.ownerUid == request.auth.uid;
     }
 
+    // summary 내부 숫자 필드는 숫자만(위조 문자열이 대시보드에 섞이지 않게 서버단 방어)
+    function validSummary(s) {
+      return (!('streak' in s)     || s.streak is number)
+        && (!('accuracy' in s)     || s.accuracy is number)
+        && (!('captured' in s)     || s.captured is number)
+        && (!('total' in s)        || s.total is number)
+        && (!('attempts' in s)     || s.attempts is number)
+        && (!('todayCount' in s)   || s.todayCount is number)
+        && (!('daily' in s)        || s.daily is map);
+    }
+
     // users/{uid} 쓰기 필드 검증 — 있을 때만 타입/크기 확인.
-    // 선생님 대시보드가 이 값을 읽어 화면에 그리므로, 위조 문자열이 섞이지 않게 서버단에서 제약(XSS 방어 심층).
     function validUserDoc(d) {
       return (!('displayName' in d) || (d.displayName is string && d.displayName.size() <= 40))
         && (!('className' in d)   || (d.className is string && d.className.size() <= 60))
         && (!('classId' in d)     || (d.classId is string && d.classId.size() <= 64))
         && (!('role' in d)        || (d.role is string && (d.role == 'student' || d.role == 'teacher')))
-        && (!('summary' in d)     || d.summary is map)
-        && (!('profile' in d)     || d.profile is map);
+        && (!('profile' in d)     || d.profile is map)
+        && (!('summary' in d)     || (d.summary is map && validSummary(d.summary)));
     }
 
     match /users/{uid} {
@@ -44,14 +55,31 @@ service cloud.firestore {
     }
 
     match /classes/{classId} {
-      // 코드 조회에 필요해 로그인 사용자 read 허용. 단, 규칙만으로는 "코드로 조회"만 허용하고
-      // "전체 열거"를 막을 수 없다 → 로그인한 사용자는 반 코드/이름을 모두 조회 가능(약한 관문).
-      // 완전 차단은 Cloud Function(코드 검증 서버화)이 필요. 반 코드에 민감정보를 담지 말 것.
-      allow read: if signedIn();
+      // 소유 선생님만 읽는다(학생은 classCodes 로만 참여, 반 문서를 직접 못 봄 → 열거·PII 차단).
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
       // 생성: 로그인 사용자가 자신을 소유자로.
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      // 수정·삭제: 소유 선생님만.
-      allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      // 수정: 소유자만 + 소유자·코드·이름 불변, removed 는 배열(제외/복구용 removed 만 바꿀 수 있게).
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.name == resource.data.name
+        && request.resource.data.removed is list;
+      // 삭제: 소유자만.
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    match /classCodes/{code} {
+      // 코드로 단건 조회만 허용(list 금지 → 전체 코드 열거 불가).
+      allow get: if signedIn();
+      allow list: if false;
+      // 생성 전용 → 이미 있는 코드로는 생성 실패(코드 유일성 보장). update 불가.
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.classId is string;
+      allow update: if false;
+      // 삭제: 소유자만(반 삭제 시 정리).
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     match /{document=**} {
