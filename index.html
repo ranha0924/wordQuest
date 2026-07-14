@@ -58,7 +58,10 @@
   --frame-steel:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' shape-rendering='crispEdges'><rect x='2' y='2' width='4' height='4' fill='%23100800'/><g fill='%23000000'><rect x='2' y='1' width='4' height='1'/><rect x='1' y='2' width='1' height='4'/><rect x='6' y='2' width='1' height='4'/><rect x='2' y='6' width='4' height='1'/></g><g fill='%23ffb000'><rect x='2' y='0' width='4' height='1'/><rect x='1' y='1' width='1' height='1'/><rect x='6' y='1' width='1' height='1'/><rect x='0' y='2' width='1' height='4'/><rect x='7' y='2' width='1' height='4'/><rect x='1' y='6' width='1' height='1'/><rect x='6' y='6' width='1' height='1'/><rect x='2' y='7' width='4' height='1'/></g></svg>");
 }
 html,body{margin:0;padding:0;background:var(--bg);}
-body{font-family:'Galmuri11','Galmuri9',monospace;color:var(--text);-webkit-font-smoothing:none;}
+body{font-family:'Galmuri11','Galmuri9',monospace;color:var(--text);-webkit-font-smoothing:none;
+  word-break:keep-all;      /* 한국어는 어절 단위로만 줄바꿈(글자 중간 안 끊김) */
+  overflow-wrap:anywhere;}  /* 긴 영어 단어 등은 필요 시 끊어서 칸 밖으로 안 튀어나가게 */
+*{min-width:0;}             /* flex/grid 자식이 내용 때문에 줄어들지 못해 넘치는 것 방지 */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 button,textarea,input{font-family:inherit;}
 img,canvas{image-rendering:pixelated;}
@@ -427,6 +430,17 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
   .choice{font-size:13px;min-height:40px;padding:7px 6px;}
   .nameplate{padding:4px 10px 5px;}
   .monname{font-size:15px;}
+}
+/* 좁은 폰: 여백·글자 줄여 튀어나감 방지 */
+@media (max-width:380px){
+  .wq-root{padding:8px 6px;}
+  .wq-col{padding:10px 10px 20px;}
+  .scr-head-t{font-size:23px;letter-spacing:1px;}
+  .tl-main{font-size:46px;}
+  .tl-en{letter-spacing:5px;}
+  .mrow{font-size:17px;}
+  .hdr .t1{font-size:12px;}
+  .grid2{gap:6px;}
 }
 /* 데스크톱: 화면을 꽉 쓰는 전투 연출 */
 @media (min-width:760px){
@@ -804,11 +818,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=20"></script>
-<script src="pack-hs1.js?v=20"></script>
-<script src="pack-confuse.js?v=20"></script>
-<script src="pack-vacation.js?v=20"></script>
-<script src="firebase-config.js?v=20"></script>
+<script src="words.js?v=21"></script>
+<script src="pack-hs1.js?v=21"></script>
+<script src="pack-confuse.js?v=21"></script>
+<script src="pack-vacation.js?v=21"></script>
+<script src="firebase-config.js?v=21"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2312,7 +2326,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=20"></script>
+<script type="module" src="cloud.js?v=21"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
