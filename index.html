@@ -854,11 +854,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=43"></script>
-<script src="pack-hs1.js?v=43"></script>
-<script src="pack-confuse.js?v=43"></script>
-<script src="pack-vacation.js?v=43"></script>
-<script src="firebase-config.js?v=43"></script>
+<script src="words.js?v=44"></script>
+<script src="pack-hs1.js?v=44"></script>
+<script src="pack-confuse.js?v=44"></script>
+<script src="pack-vacation.js?v=44"></script>
+<script src="firebase-config.js?v=44"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1196,8 +1196,17 @@ function renderHome(){
   S.words.forEach(w=>counts[rarity(w).key]++);
   $('h-c0').textContent=counts.common;$('h-c1').textContent=counts.rare;
   $('h-c2').textContent=counts.epic;$('h-c3').textContent=counts.legend;
-  const due=dueIds().length;
-  $('h-sub').textContent=due?('오늘 출현하는 몬스터: '+due+'마리'):(total?'오늘 출현 예정 없음':'서식 중인 몬스터 없음');
+  // 오늘 출현 수는 하루 한도(DAILY_WORD_CAP)·완료 진행도를 반영해 표시.
+  const dueTotal=dueIds().length;
+  const doneToday=dailyDone();
+  const remain=Math.max(0,DAILY_WORD_CAP-doneToday);
+  const todayShow=Math.min(dueTotal,remain);
+  let sub;
+  if(!total) sub='서식 중인 몬스터 없음';
+  else if(doneToday>=DAILY_WORD_CAP) sub='오늘 목표 '+DAILY_WORD_CAP+'단어 완료! 👏 (내일 또 만나요)';
+  else if(!dueTotal) sub='오늘 출현 예정 없음';
+  else{ sub='오늘 출현하는 몬스터: '+todayShow+'마리'; if(dueTotal>remain) sub+=' (하루 '+DAILY_WORD_CAP+'까지 · 나머지 '+(dueTotal-remain)+'마리는 내일)'; }
+  $('h-sub').textContent=sub;
   $('h-msg').style.display='none';
   renderHomeHeat();
   try{toggleTeacherBtn();}catch(e){}
@@ -1487,11 +1496,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v43: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v44: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v43';
+var BUILD='v44';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2785,7 +2794,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=43"></script>
+<script type="module" src="cloud.js?v=44"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
