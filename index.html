@@ -804,11 +804,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=19"></script>
-<script src="pack-hs1.js?v=19"></script>
-<script src="pack-confuse.js?v=19"></script>
-<script src="pack-vacation.js?v=19"></script>
-<script src="firebase-config.js?v=19"></script>
+<script src="words.js?v=20"></script>
+<script src="pack-hs1.js?v=20"></script>
+<script src="pack-confuse.js?v=20"></script>
+<script src="pack-vacation.js?v=20"></script>
+<script src="firebase-config.js?v=20"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1225,12 +1225,12 @@ $('samplebtn').addEventListener('click',()=>{
   $('regtext').value=SAMPLE;
   $('parsebtn').click();
 });
-// 어휘 팩을 하루 25개씩 순차 담기 — 주제 순서대로 출현
+// 어휘 팩을 하루 20개씩 순차 담기 — 주제 순서대로 출현
 function seedPack(pack){
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
   const news=pack.data.filter(e=>!have.has(e.w.toLowerCase()));
   if(!news.length){regMsg(pack.label+'을(를) 이미 전부 담았다!');return;}
-  const t=today(),BATCH=25;
+  const t=today(),BATCH=20;
   news.forEach((e,i)=>{
     const k=e.w.toLowerCase();
     S.words.push({id:k,w:e.w,m:e.m,stage:0,wrong:0,seen:0,cap:false,due:addDays(t,Math.floor(i/BATCH)),created:t});
@@ -1277,7 +1277,7 @@ function renderPacks(){
     const btn=document.createElement('button');
     btn.className='samplebtn';
     btn.style.cssText='border-style:solid;border-color:var(--gold);color:var(--gold);';
-    btn.innerHTML='<svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3H7V13L2 12Z M9 3H14V12L9 13Z"/></svg><span>'+esc(pack.label)+' '+remain+'개 담기 (하루 25개)</span>';
+    btn.innerHTML='<svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M2 3H7V13L2 12Z M9 3H14V12L9 13Z"/></svg><span>'+esc(pack.label)+' '+remain+'개 담기 (하루 20개)</span>';
     btn.addEventListener('click',()=>seedPack(pack));
     wrap.appendChild(btn);
     // 주제별 골라담기 토글
@@ -1296,12 +1296,12 @@ function renderPacks(){
     host.appendChild(wrap);
   });
 }
-// 범용 고빈도 단어은행 전체를 하루 25개씩 순차 출현하도록 담기(간격 학습 페이싱)
+// 범용 고빈도 단어은행 전체를 하루 20개씩 순차 출현하도록 담기(간격 학습 페이싱)
 $('bankbtn').addEventListener('click',()=>{
   const have=new Set(S.words.map(w=>w.w.toLowerCase()));
   const news=WORDBANK.filter(e=>!have.has(e.w.toLowerCase()));
   if(!news.length){regMsg('이미 전부 담겨 있다!');return;}
-  const t=today(),BATCH=25;
+  const t=today(),BATCH=20;
   news.forEach((e,i)=>{
     const k=e.w.toLowerCase();
     S.words.push({id:k,w:e.w,m:e.m,stage:0,wrong:0,seen:0,cap:false,due:addDays(t,Math.floor(i/BATCH)),created:t});
@@ -2312,7 +2312,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=19"></script>
+<script type="module" src="cloud.js?v=20"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
