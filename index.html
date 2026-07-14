@@ -254,9 +254,19 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .monbox img{width:144px;height:132px;max-height:100%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 12px 8px rgba(0,0,0,.55));}
 .arena.hasbg #bgcv,.arena.hasbg .torch{display:none;}
 .monbox .part{position:absolute;pointer-events:none;}
-/* 무리 조우: 작은 monbox 대신 넓은 무대 폭에 몬스터를 가로 한 줄로 세운다 */
-.monstage .swarmrow{display:flex;align-items:flex-end;justify-content:center;gap:12px;width:100%;max-width:560px;margin-top:4px;}
-.monstage .swarmrow img{width:22%;max-width:130px;height:auto;image-rendering:pixelated;filter:drop-shadow(0 10px 7px rgba(0,0,0,.5));}
+/* 무리 조우: 작은 monbox 대신 넓은 무대 폭에 몬스터를 가로 한 줄로 세운다.
+   스프라이트 크기를 뷰포트 기준 '고정 높이'로 두어(컨테이너 flex 변형과 무관)
+   화면이 리플로우돼도 크기·위치가 흔들리거나 통째로 사라지지 않게 한다.
+   (예전엔 width:22%·height:auto 라 무대가 줄면 잘려 사라지고, 폭 변화마다 작아졌다) */
+.monstage .swarmrow{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:560px;margin:4px 0;}
+.monstage .swarmrow img{height:clamp(60px,13vh,120px);width:auto;max-width:22%;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(0 10px 7px rgba(0,0,0,.5));}
+/* 무리(짝맞추기) 모드: 세로가 빠듯 → 무대를 '내용 높이'로 두고(잘림 방지),
+   전체가 화면보다 커지면 열을 스크롤해 몬스터·컨트롤이 항상 보이도록 한다.
+   (선택자는 line 144 의 `.wq-col:has(#scr-battle.on) .arena` 보다 명시도가 높아야
+    arena 의 flex/min-height 를 확실히 덮어쓴다) */
+.wq-col:has(#scr-battle.swarm.on){overflow-y:auto;}
+.wq-col:has(#scr-battle.swarm.on) .arena{flex:0 0 auto;min-height:auto;overflow:visible;}
+.wq-col:has(#scr-battle.swarm.on) .monstage{flex:0 0 auto;overflow:visible;justify-content:center;}
 .remain{display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:6px;flex-shrink:0;}
 .qpips{display:inline-flex;gap:3px;justify-content:center;flex-wrap:wrap;max-width:280px;}
 .qpips i{width:7px;height:7px;display:block;background:var(--steel);box-shadow:0 0 0 1px var(--ink);}
@@ -1999,6 +2009,7 @@ function nextMon(){
 function swarmStage(){ return document.querySelector('#scr-battle .monstage') || ($('monbox') && $('monbox').parentElement); }
 function renderSwarmSprites(ws){
   const stage=swarmStage(); if(!stage)return;
+  const bt=$('scr-battle'); if(bt) bt.classList.add('swarm');     // 무리 전용 레이아웃 on(스크롤 허용)
   const mb=$('monbox'); if(mb) mb.style.display='none';           // 단일용 작은 박스 숨김
   let row=stage.querySelector('.swarmrow');
   if(!row){ row=document.createElement('div'); row.className='swarmrow'; stage.appendChild(row); }
@@ -2008,6 +2019,7 @@ function renderSwarmSprites(ws){
 }
 // 무리 줄 정리 + 단일 monbox 복구(일반 전투로 돌아갈 때).
 function clearSwarmSprites(){
+  const bt=$('scr-battle'); if(bt) bt.classList.remove('swarm');  // 단일 전투로 복귀 → 무리 레이아웃 off
   const mb=$('monbox'); if(mb) mb.style.display='';
   const stage=swarmStage();
   const row=stage&&stage.querySelector('.swarmrow'); if(row){ row.style.display='none'; row.innerHTML=''; }
