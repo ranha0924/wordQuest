@@ -826,11 +826,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=29"></script>
-<script src="pack-hs1.js?v=29"></script>
-<script src="pack-confuse.js?v=29"></script>
-<script src="pack-vacation.js?v=29"></script>
-<script src="firebase-config.js?v=29"></script>
+<script src="words.js?v=30"></script>
+<script src="pack-hs1.js?v=30"></script>
+<script src="pack-confuse.js?v=30"></script>
+<script src="pack-vacation.js?v=30"></script>
+<script src="firebase-config.js?v=30"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1279,9 +1279,13 @@ function looksHeic(file){
   const t=((file&&file.type)||'').toLowerCase(), n=((file&&file.name)||'').toLowerCase();
   return t.indexOf('heic')>=0 || t.indexOf('heif')>=0 || /\.(heic|heif)$/.test(n);
 }
+// 멈춤 방지용 타임아웃 래퍼 — 변환/다운로드가 무한 대기하지 않도록.
+function withTimeout(p,ms,label){
+  return Promise.race([ p, new Promise((_,rej)=>setTimeout(()=>rej(new Error(label||'timeout')),ms)) ]);
+}
 async function heicToJpegBlob(file){
-  const lib=await ensureHeic();
-  const out=await lib({ blob:file, toType:'image/jpeg', quality:0.9 });
+  const lib=await withTimeout(ensureHeic(),20000,'heic-load'); // 라이브러리 다운로드 상한 20초
+  const out=await withTimeout(lib({ blob:file, toType:'image/jpeg', quality:0.9 }),25000,'heic-convert'); // 변환 상한 25초
   return Array.isArray(out) ? out[0] : out;
 }
 function loadImgFromBlob(blob){
@@ -1295,11 +1299,14 @@ function loadImgFromBlob(blob){
 // 파일 → 로드 완료된 <img>. HEIC면 자동 변환, 그 외 디코드 실패 시에도 HEIC 변환으로 한 번 더 구제.
 async function decodeImageFromFile(file){
   let blob=file, converted=false;
-  if(looksHeic(file)){ try{ blob=await heicToJpegBlob(file); converted=true; }catch(e){ blob=file; } }
+  if(looksHeic(file)){
+    try{ ocrStatus('아이폰 사진(HEIC) 변환 중… 처음 한 장은 조금 걸려요'); blob=await heicToJpegBlob(file); converted=true; }
+    catch(e){ blob=file; }
+  }
   try{ return await loadImgFromBlob(blob); }
   catch(e){
     if(!converted){ // 타입/확장자엔 안 잡혔지만 실제 HEIC일 수 있음 → 강제 변환 재시도
-      try{ const b=await heicToJpegBlob(file); return await loadImgFromBlob(b); }catch(e2){}
+      try{ ocrStatus('사진 변환 중… 잠시만요'); const b=await heicToJpegBlob(file); return await loadImgFromBlob(b); }catch(e2){}
     }
     throw e;
   }
@@ -1428,7 +1435,7 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v29: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v30: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
@@ -2523,7 +2530,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=29"></script>
+<script type="module" src="cloud.js?v=30"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
