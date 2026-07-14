@@ -732,13 +732,14 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <!-- 로그인 상태 -->
         <div id="cloud-in" style="display:none;">
           <div class="acctline" id="acct-line" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;color:#b7b7d8;"></div>
-          <!-- 역할 선택(최초 1회) -->
+          <!-- 역할 선택(최초 1회 · 이후 '역할 바꾸기'로 다시 열림) -->
           <div id="acct-role" style="display:none;">
-            <div class="regmsg" style="display:block;margin-bottom:6px;">누구로 시작할까요?</div>
+            <div class="regmsg" id="acct-role-hd" style="display:block;margin-bottom:6px;">누구로 시작할까요?</div>
             <div class="grid2">
               <button class="subbtn" id="acct-role-student">🎒 학생</button>
               <button class="subbtn" id="acct-role-teacher">🧑‍🏫 선생님</button>
             </div>
+            <button class="subbtn" id="acct-role-cancel" style="display:none;width:100%;margin-top:8px;">취소</button>
           </div>
           <!-- 학생: 이름 + 반 참여 -->
           <div id="acct-student" style="display:none;">
@@ -761,6 +762,8 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
             <div class="regmsg" style="display:block;margin-bottom:6px;">반 만들기·코드 확인·학생 관리는 <b style="color:#ffc63a;">선생님 대시보드</b>에서 해요.</div>
             <button class="subbtn" id="acct-go-teacher" style="width:100%;">🧑‍🏫 선생님 대시보드 열기</button>
           </div>
+          <!-- 역할이 정해진 뒤 다시 바꾸기 -->
+          <button class="subbtn" id="acct-rolechange" style="display:none;width:100%;margin-top:8px;font-size:12px;color:#b7b7d8;">🔁 역할 바꾸기 (학생 ↔ 선생님)</button>
           <div class="grid2" style="margin-top:8px;">
             <button class="subbtn" id="cloud-syncnow"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>지금 동기화</button>
             <button class="subbtn" id="cloud-signout">로그아웃</button>
@@ -827,11 +830,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=34"></script>
-<script src="pack-hs1.js?v=34"></script>
-<script src="pack-confuse.js?v=34"></script>
-<script src="pack-vacation.js?v=34"></script>
-<script src="firebase-config.js?v=34"></script>
+<script src="words.js?v=35"></script>
+<script src="pack-hs1.js?v=35"></script>
+<script src="pack-confuse.js?v=35"></script>
+<script src="pack-vacation.js?v=35"></script>
+<script src="firebase-config.js?v=35"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1459,11 +1462,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v34: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v35: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v34';
+var BUILD='v35';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy)$('ocrfile').click(); });
@@ -2273,6 +2276,7 @@ function setCloudStatus(s){
   renderAccount();
 }
 // 로그인 후 계정 영역: 역할 선택 / 학생 반 참여 / 선생님 반 관리
+let roleEditing=false; // '역할 바꾸기'를 눌러 선택 UI를 다시 연 상태
 function renderAccount(){
   const C=window.Cloud; if(!C||!C.enabled) return;
   const u=C.currentUser?C.currentUser():null;
@@ -2281,9 +2285,13 @@ function renderAccount(){
   const roleBox=$('acct-role'),stu=$('acct-student'),tea=$('acct-teacher');
   if(!u){ if(roleBox)roleBox.style.display='none'; if(stu)stu.style.display='none'; if(tea)tea.style.display='none'; return; }
   const role=p?p.role:null;
-  if(roleBox) roleBox.style.display=role?'none':'';
-  if(stu) stu.style.display=(role==='student')?'':'none';
-  if(tea) tea.style.display=(role==='teacher')?'':'none';
+  const editing=roleEditing&&!!role; // 이미 역할이 있는데 '바꾸기'를 눌러 다시 선택 중
+  if(roleBox) roleBox.style.display=(role&&!editing)?'none':'';
+  if(stu) stu.style.display=(role==='student'&&!editing)?'':'none';
+  if(tea) tea.style.display=(role==='teacher'&&!editing)?'':'none';
+  const rc=$('acct-rolechange'); if(rc) rc.style.display=(role&&!editing)?'':'none';
+  const rcx=$('acct-role-cancel'); if(rcx) rcx.style.display=editing?'':'none';
+  const rhd=$('acct-role-hd'); if(rhd) rhd.textContent=editing?('역할을 바꿀까요?  (지금: '+(role==='teacher'?'선생님':'학생')+')'):'누구로 시작할까요?';
   if(role==='student'){
     const has=!!(p&&p.classId);
     const nameInp=$('acct-name');
@@ -2418,8 +2426,10 @@ function renderCloudNotify(){
   on('cloud-syncnow','click',()=>C()&&C().syncNow&&C().syncNow());
   on('cloud-notify','click',()=>{ S.meta.notify=!(S.meta&&S.meta.notify); persist(); renderCloudNotify(); });
   // 역할 선택
-  on('acct-role-student','click',()=>C()&&C().chooseRole&&C().chooseRole('student'));
-  on('acct-role-teacher','click',()=>C()&&C().chooseRole&&C().chooseRole('teacher'));
+  on('acct-role-student','click',async()=>{ if(C()&&C().chooseRole){ await C().chooseRole('student'); roleEditing=false; try{renderAccount();}catch(e){} } });
+  on('acct-role-teacher','click',async()=>{ if(C()&&C().chooseRole){ await C().chooseRole('teacher'); roleEditing=false; try{renderAccount();}catch(e){} } });
+  on('acct-rolechange','click',()=>{ roleEditing=true; try{renderAccount();}catch(e){} });
+  on('acct-role-cancel','click',()=>{ roleEditing=false; try{renderAccount();}catch(e){} });
   // 학생: 이름 저장
   const doSaveName=async()=>{
     const nm=$('acct-name'); if(!nm||!C()||!C().setDisplayName) return;
@@ -2561,7 +2571,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=34"></script>
+<script type="module" src="cloud.js?v=35"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
