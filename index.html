@@ -429,6 +429,15 @@ textarea.reg:focus{outline:none;border-image:var(--frame-gold) 3;}
 .tc-targ-list{display:flex;flex-wrap:wrap;gap:6px;}
 .tc-targ{display:inline-flex;align-items:center;gap:6px;}
 .tc-targ .bx{font-size:12px;line-height:1;}
+/* teacher: 반 학습 지표(집계) */
+#tc-analytics .res3 .num{font-size:18px;}
+#tc-analytics .res3 .lbl{line-height:1.35;}
+.wkrows{display:flex;flex-direction:column;gap:4px;}
+.wkrow{display:flex;align-items:center;gap:8px;font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);}
+.wkrow .wl{flex:0 0 42px;}
+.wkrow .wb{flex:1;height:10px;background:var(--track);border:2px solid var(--ink);box-shadow:inset 0 0 0 1px var(--steel);overflow:hidden;}
+.wkrow .wb i{display:block;height:100%;background:linear-gradient(var(--gold),var(--gold-dk));transition:width .4s steps(10);}
+.wkrow .wv{flex:0 0 34px;text-align:right;color:var(--text);}
 /* result report card */
 .resbanner{position:relative;border:8px solid transparent;border-image:var(--frame-gold) 3 fill;background:var(--win);padding:16px 14px;text-align:center;}
 .resbanner .rt{font-size:19px;color:#fff;text-shadow:2px 2px 0 var(--ink);letter-spacing:1px;line-height:1.3;}
@@ -939,6 +948,8 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         </div>
         <div class="regmsg" id="tc-packmsg" style="display:none;"></div>
         <button class="subbtn" id="tc-delclass" style="width:100%;border-color:#5a2a2a;color:#e57373;">🗑 이 반 삭제</button>
+        <!-- 반 학습 지표(집계): D1 리텐션 · 주차별 분량 초과율 · 학생당 일일 단어 중앙값 -->
+        <div id="tc-analytics" style="display:none;flex-direction:column;gap:7px;"></div>
         <div id="tc-students"></div>
       </div>
       <button class="navbtn" data-go="home">◀ 마을로 돌아가기</button>
@@ -971,11 +982,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=49"></script>
-<script src="pack-hs1.js?v=49"></script>
-<script src="pack-confuse.js?v=49"></script>
-<script src="pack-vacation.js?v=49"></script>
-<script src="firebase-config.js?v=49"></script>
+<script src="words.js?v=50"></script>
+<script src="pack-hs1.js?v=50"></script>
+<script src="pack-confuse.js?v=50"></script>
+<script src="pack-vacation.js?v=50"></script>
+<script src="firebase-config.js?v=50"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1619,11 +1630,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v49: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v50: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v49';
+var BUILD='v50';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -1765,7 +1776,10 @@ const MANA_FULL=5, ULT_CLEAR=3; // 마나 가득(콤보 5) 시 필살기/회복 
 const DAILY_WORD_CAP=40;
 function dailyReset_(){ const t=today(); if(S.meta.doneDay!==t){S.meta.doneDay=t;S.meta.doneIds=[];} }
 function dailyDone(){ dailyReset_(); return (S.meta.doneIds||[]).length; }
-function markDone(id){ dailyReset_(); if(!S.meta.doneIds)S.meta.doneIds=[]; if(S.meta.doneIds.indexOf(id)<0){S.meta.doneIds.push(id);S.meta.updatedAt=Date.now();} }
+function markDone(id){ dailyReset_(); if(!S.meta.doneIds)S.meta.doneIds=[]; if(S.meta.doneIds.indexOf(id)<0){S.meta.doneIds.push(id);
+  // 날짜별 '완료 단어 수'(w)도 함께 기록 → 리텐션/분량/중앙값 분석용(클라우드 summary.daily 로 자동 전파, 과거 데이터는 ok로 근사)
+  if(!S.meta.dailyHistory)S.meta.dailyHistory={}; const _t=today(); const _e=S.meta.dailyHistory[_t]||{a:0,ok:0}; _e.w=(_e.w||0)+1; S.meta.dailyHistory[_t]=_e;
+  S.meta.updatedAt=Date.now();} }
 $('enterbtn').addEventListener('click',()=>{
   const done=dailyDone();
   if(done>=DAILY_WORD_CAP){
@@ -2791,18 +2805,83 @@ async function checkClassPack(){
   persist();
   if(added){ try{ homeMsg('선생님이 단어 '+added+'개를 보냈어요! 던전에서 만나요.'); }catch(e){} try{ if(S.screen==='home')renderHome(); }catch(e){} }
 }
+/* ===== 반 학습 지표(집계) ===== 학생 요약(summary.daily={날짜:{a,ok,w}})만으로 계산 */
+const QUOTA_OVER=20; // '분량 초과' 기준: 하루 권장 출현량(약 20단어)을 넘긴 날. 바꾸려면 이 값만 수정.
+function _median(arr){ if(!arr.length)return null; const a=arr.slice().sort((x,y)=>x-y); const m=a.length>>1; return a.length%2?a[m]:(a[m-1]+a[m])/2; }
+function _dayActive(e){ return heatInt(e&&e.a)>0; }                       // 그날 학습했는지(시도>0)
+function _dayWords(e){ if(!e)return 0; return heatInt(e.w!=null?e.w:e.ok); } // 완료 단어 수(w 없으면 정답수 ok로 근사)
+// D1 리텐션 · 학생당 일일 단어 중앙값 · 주차별 분량 초과율을 한 번에 계산
+function computeClassAnalytics(students){
+  const t=today();
+  const dailies=(students||[]).map(s=>s&&s.summary&&s.summary.daily).filter(Boolean);
+  // ① D1 리텐션: 학생별 '첫 학습일' 다음날에도 학습했는가 (다음날이 오늘까지 관측 가능한 학생만 대상)
+  let d1elig=0,d1ret=0;
+  dailies.forEach(d=>{
+    const days=Object.keys(d).filter(k=>_dayActive(d[k])).sort();
+    if(!days.length)return;
+    const d0=days[0], nx=addDays(d0,1);
+    if(nx>t)return;                 // 첫날이 오늘이면 다음날 아직 안 옴 → 제외
+    d1elig++; if(_dayActive(d[nx]))d1ret++;
+  });
+  // ② 학생당 일일 단어 중앙값: 학생별(학습한 날 완료단어 평균) → 학생들 사이의 중앙값
+  const perStudent=[];
+  dailies.forEach(d=>{
+    const v=Object.keys(d).filter(k=>_dayActive(d[k])).map(k=>_dayWords(d[k]));
+    if(v.length)perStudent.push(v.reduce((a,b)=>a+b,0)/v.length);
+  });
+  // ③ 주차별 분량 초과율(최근 5주, 오늘 기준 롤링 7일): 그 주에 하루라도 QUOTA_OVER 초과한 학생 / 그 주 학습한 학생
+  const weeks=[];
+  for(let wi=0;wi<5;wi++){
+    const end=addDays(t,-7*wi); let act=0,over=0;
+    dailies.forEach(d=>{
+      let anyA=false,anyOver=false;
+      for(let k=0;k<7;k++){ const e=d[addDays(end,-k)]; if(_dayActive(e))anyA=true; if(_dayWords(e)>QUOTA_OVER)anyOver=true; }
+      if(anyA){ act++; if(anyOver)over++; }
+    });
+    weeks.push({start:addDays(end,-6),end:end,active:act,over:over,pct:act?Math.round(over/act*100):null});
+  }
+  return { d1:(d1elig?Math.round(d1ret/d1elig*100):null), d1elig, medDaily:_median(perStudent), nData:dailies.length, weeks };
+}
+function renderClassAnalytics(active){
+  const box=$('tc-analytics'); if(!box)return;
+  const withData=(active||[]).filter(s=>s&&s.summary&&s.summary.daily&&Object.keys(s.summary.daily).length);
+  if(!withData.length){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='flex';
+  const A=computeClassAnalytics(active);
+  const pct=v=>v==null?'—':v+'%';
+  const one=v=>v==null?'—':(Math.round(v*10)/10);
+  const wk=A.weeks.map((w,i)=>{
+    const lbl=i===0?'이번 주':(i+'주 전');
+    const p=w.pct, bar=(p==null?0:p);
+    return '<div class="wkrow" title="'+w.start+' ~ '+w.end+' · 학습 '+w.active+'명 중 '+w.over+'명 초과">'
+      +'<span class="wl">'+lbl+'</span>'
+      +'<span class="wb"><i style="width:'+bar+'%;"></i></span>'
+      +'<span class="wv">'+(p==null?'—':(p+'%'))+'</span>'
+    +'</div>';
+  }).join('');
+  box.innerHTML=
+    '<div class="flabel">📊 학습 지표 <span class="sub">이 반 · 최근 5주</span></div>'
+    +'<div class="res3">'
+      +'<div class="rescell"><div class="num">'+pct(A.d1)+'</div><div class="lbl">D1 리텐션<br><span style="opacity:.7">다음날 복귀·'+A.d1elig+'명</span></div></div>'
+      +'<div class="rescell"><div class="num">'+one(A.medDaily)+'</div><div class="lbl">일일 단어<br><span style="opacity:.7">학생 중앙값</span></div></div>'
+      +'<div class="rescell"><div class="num">'+pct(A.weeks[0]&&A.weeks[0].pct)+'</div><div class="lbl">분량 초과<br><span style="opacity:.7">이번 주·&gt;'+QUOTA_OVER+'단어</span></div></div>'
+    +'</div>'
+    +'<div class="regmsg" style="display:block;font-size:10px;line-height:1.5;">주차별 분량 초과율 — 그 주에 하루라도 '+QUOTA_OVER+'단어 넘게 한 학생 비율</div>'
+    +'<div class="wkrows">'+wk+'</div>';
+}
 async function renderTeacherStudents(){
   const C=window.Cloud;
   const sel=$('tc-class'),stu=$('tc-students'),cl=$('tc-codeline'),del=$('tc-delclass');
   const cid=sel.value; const cls=tcClasses.find(c=>c.id===cid);
   if(cl&&cls){ cl.style.display='block'; cl.innerHTML='반 코드: <b style="letter-spacing:2px;color:#ffc63a;">'+esc(cls.code)+'</b> · 학생에게 알려주세요.'; }
   if(del) del.style.display=cid?'':'none';
-  if(!cid){ stu.innerHTML=''; return; }
+  const an=$('tc-analytics'); if(!cid){ stu.innerHTML=''; if(an){an.innerHTML='';an.style.display='none';} return; }
   try{ loadTcPack(cid); }catch(e){}
   stu.innerHTML='<div class="regmsg" style="display:block;">불러오는 중…</div>';
   const list=await C.listStudents(cid);
   const t=today(), y=addDays(t,-1);
   const active=list.filter(s=>!s.removed), removed=list.filter(s=>s.removed);
+  try{ renderClassAnalytics(active); }catch(e){}
   // 학생 요약은 학생이 직접 쓸 수 있는(위조 가능) 값 → 전부 정수 강제변환/이스케이프 후 삽입(XSS 차단)
   const int=v=>{const n=Math.trunc(Number(v));return Number.isFinite(n)?n:0;};
   const card=s=>{
@@ -3020,7 +3099,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=49"></script>
+<script type="module" src="cloud.js?v=50"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
