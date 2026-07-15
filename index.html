@@ -1077,20 +1077,30 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=67"></script>
-<script src="pack-hs1.js?v=67"></script>
-<script src="pack-hs2.js?v=67"></script>
-<script src="pack-hs3.js?v=67"></script>
-<script src="pack-confuse.js?v=67"></script>
-<script src="pack-vacation.js?v=67"></script>
-<script src="firebase-config.js?v=67"></script>
+<script src="words.js?v=68"></script>
+<script src="pack-hs1.js?v=68"></script>
+<script src="pack-hs2.js?v=68"></script>
+<script src="pack-hs3.js?v=68"></script>
+<script src="pack-confuse.js?v=68"></script>
+<script src="pack-vacation.js?v=68"></script>
+<script src="firebase-config.js?v=68"></script>
 <script>
 'use strict';
 /* ================= state ================= */
 const LSKEY='wordquest_v1';
-let saved=null; try{saved=JSON.parse(localStorage.getItem(LSKEY));}catch(e){}
+let saved=null;
+try{
+  const raw=localStorage.getItem(LSKEY);
+  if(raw){
+    try{ saved=JSON.parse(raw); }
+    catch(e){
+      // 저장 데이터 손상: 샘플로 덮어쓰기 전에 원본을 따로 보관(수동 복구용). 첫 손상본만 유지.
+      try{ if(!localStorage.getItem(LSKEY+'_corrupt')) localStorage.setItem(LSKEY+'_corrupt', raw); }catch(_){}
+    }
+  }
+}catch(e){}
 const S={
-  words:(saved&&saved.words)||[],
+  words:(saved&&Array.isArray(saved.words)&&saved.words)||[],
   meta:(saved&&saved.meta)||{lastDay:null,streak:0,bestCombo:0,muted:false},
   screen:'home', session:null, curId:null, choices:[], phase:'idle', picked:-1,
   dexFilter:'all', lastResult:null
@@ -1174,6 +1184,8 @@ function migrateWords(){
   let changed=false;
   const cleaned=[];
   S.words.forEach(w=>{
+    // 손상 항목(null·비객체)은 통째로 제외 → 부팅/가져오기 중 예외로 앱이 죽지 않게
+    if(!w||typeof w!=='object'){changed=true;return;}
     // 뜻/단어가 문자열이 아니면(누락·null 등) 문자열로 강제 → 보기 렌더가 예외로 깨지지 않게
     if(typeof w.m!=='string'){w.m=(w.m==null?'':String(w.m));changed=true;}
     if(typeof w.w!=='string'){w.w=(w.w==null?'':String(w.w));changed=true;}
@@ -1208,8 +1220,27 @@ function persist(){
       if(!S.meta.tz){ try{S.meta.tz=Intl.DateTimeFormat().resolvedOptions().timeZone;}catch(e){} } // 복습 알림 크론의 '오늘' 계산용(1회 기록)
     }
     localStorage.setItem(LSKEY,JSON.stringify({words:S.words,meta:S.meta}));
-  }catch(e){}
+  }catch(e){ showStorageWarning(); } // 저장 실패(용량·시크릿/인앱 브라우저)를 침묵하지 않고 알림
   if(window.Cloud && !cloudApplying) window.Cloud.notifyChanged(); // 동기화(디바운스)
+}
+// 진도 저장이 계속 실패하면(quota·프라이빗/인앱 웹뷰) 조용히 소실되지 않게 1회 경고 배너를 띄운다.
+// 플래그를 함수 속성으로 둠 → 호이스팅되는 함수 선언과 함께라 부팅 중 어느 시점에 호출돼도
+// TDZ·재초기화 없이 '1회만' 보장(별도 let/var가 시딩 persist()보다 뒤에서 재초기화되는 문제 회피).
+function showStorageWarning(){
+  if(showStorageWarning.done)return; showStorageWarning.done=true;
+  try{
+    const b=document.createElement('div');
+    b.id='storage-warn';
+    b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:10000;background:#7a1f1f;color:#ffecec;font:600 13px/1.5 system-ui,sans-serif;padding:10px 14px;box-shadow:0 -2px 10px rgba(0,0,0,.45);text-align:center;';
+    const msg=document.createElement('span');
+    msg.textContent='⚠ 진도 저장에 실패하고 있어요(브라우저 저장공간·시크릿/인앱 브라우저). 지금 “백업 내보내기”나 로그인으로 진도를 지켜주세요.';
+    const close=document.createElement('button');
+    close.textContent='닫기';
+    close.style.cssText='margin-left:10px;background:#ffd7d7;color:#7a1f1f;border:0;border-radius:4px;padding:3px 10px;cursor:pointer;font:inherit;';
+    close.addEventListener('click',()=>b.remove());
+    b.appendChild(msg); b.appendChild(close);
+    (document.body||document.documentElement).appendChild(b);
+  }catch(_){ try{alert('진도 저장에 실패하고 있어요. 백업 내보내기나 로그인으로 진도를 지켜주세요.');}catch(__){} }
 }
 const $=id=>document.getElementById(id);
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -2078,15 +2109,20 @@ $('bankbtn').addEventListener('click',()=>{
   regMsg('교과서 단어 '+news.length+'마리를 담았다! 하루 약 '+BATCH+'마리씩 출현한다. (약 '+Math.ceil(news.length/BATCH)+'일 분량)');
   renderReg();
 });
+function downloadBackup(){
+  try{
+    const data=JSON.stringify({words:S.words,meta:S.meta},null,2);
+    const blob=new Blob([data],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='wordquest-backup-'+today()+'.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    return true;
+  }catch(e){return false;}
+}
 $('exportbtn').addEventListener('click',()=>{
-  const data=JSON.stringify({words:S.words,meta:S.meta},null,2);
-  const blob=new Blob([data],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='wordquest-backup-'+today()+'.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  regMsg('백업 두루마리를 내보냈다!');
+  regMsg(downloadBackup()?'백업 두루마리를 내보냈다!':'백업 내보내기에 실패했다…');
 });
 $('importfile').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0];
@@ -2096,12 +2132,13 @@ $('importfile').addEventListener('change',e=>{
     try{
       const data=JSON.parse(reader.result);
       if(!Array.isArray(data.words))throw new Error('bad');
-      S.words=data.words;
-      S.meta=Object.assign({lastDay:null,streak:0,bestCombo:0,muted:false,theme:S.meta.theme},data.meta||{});
+      // 요소 단위 검증: null·비객체를 걸러 migrateWords/렌더가 손상 파일로 죽지 않게(부팅 브릭 방지)
+      S.words=data.words.filter(w=>w&&typeof w==='object');
+      S.meta=Object.assign({lastDay:null,streak:0,bestCombo:0,muted:false,theme:S.meta.theme},(data.meta&&typeof data.meta==='object')?data.meta:{});
       migrateWords();
       try{applyStreakFreeze();}catch(e){}
       persist();
-      regMsg('백업에서 몬스터 '+data.words.length+'마리를 되살렸다!');
+      regMsg('백업에서 몬스터 '+S.words.length+'마리를 되살렸다!');
       $('regcount').textContent='서식 중 '+S.words.length+'마리';
       sfx('capture');renderMute();applyTheme('arcade');
     }catch(err){regMsg('두루마리가 훼손되어 읽을 수 없다… (올바른 백업 파일이 아님)');}
@@ -2111,6 +2148,7 @@ $('importfile').addEventListener('change',e=>{
 });
 $('resetbtn').addEventListener('click',()=>{
   if(!window.confirm('정말 모든 몬스터와 기록을 지울까? 되돌릴 수 없다!'))return;
+  if(S.words.length) downloadBackup(); // 지우기 전 자동 백업(복구 보험)
   S.words=[];
   S.meta={lastDay:null,streak:0,bestCombo:0,muted:S.meta.muted,theme:S.meta.theme};
   persist();renderReg();regMsg('던전이 텅 비었다…');
@@ -3506,7 +3544,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=67"></script>
+<script type="module" src="cloud.js?v=68"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

@@ -9,7 +9,7 @@
    ================================================================ */
 'use strict';
 
-var VERSION = 'v67';
+var VERSION = 'v68';
 var CACHE = 'wq-' + VERSION;
 
 // 오프라인 부팅에 필요한 최소 셸(전부 동일 출처).
@@ -58,8 +58,16 @@ self.addEventListener('activate', function (e) {
 async function handleNavigate(req) {
   try {
     var res = await fetch(req);
-    var c = await caches.open(CACHE);
-    c.put('./index.html', res.clone());
+    // 정상(200) 응답 + 앱 셸(루트/index) 내비게이션일 때만 오프라인 셸로 저장.
+    // (404/500 오류 페이지나 다른 페이지가 셸을 오염시켜 오프라인 부팅이 깨지는 것 방지)
+    try {
+      var p = new URL(req.url).pathname;
+      var isShell = /(^|\/)(index\.html)?$/.test(p);
+      if (res && res.ok && isShell) {
+        var c = await caches.open(CACHE);
+        c.put('./index.html', res.clone());
+      }
+    } catch (e2) { /* URL 파싱 실패 등 — 캐시 갱신만 건너뜀 */ }
     return res;
   } catch (e) {
     return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error();

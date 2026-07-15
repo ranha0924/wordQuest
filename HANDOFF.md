@@ -5,6 +5,14 @@
 
 최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA + 부사 46개 + 고1 필수 어휘 팩 224·14주제) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
+> **정정(2026-07-15)** — 아래 본문 중 일부가 현행과 다르니 이 블록을 우선한다.
+> - **배포**: Vercel 아님 → **GitHub Pages**(`.github/workflows/deploy-pages.yml`, main push 시 자동). 배포 URL은 `https://ranha0924.github.io/wordQuest/`.
+> - **인증**: 이메일 링크(패스워드리스) 아님 → **Google 로그인**(`cloud.js`의 `GoogleAuthProvider`). §4.9/§4.10의 "이메일 링크" 서술은 무시.
+> - **복귀 알림(§4.10)**: `scripts/reminders/`·알림 크론은 **현재 저장소에 없음**(제거됨). 관련 서술은 히스토리 참고용.
+> - **레거시**: `vocamon.html` **삭제됨**(self-XSS 소지 프로토타입 정리).
+> - **firestore.rules 배포**: 이 저장소엔 firebase.json/CLI 설정이 없다 → 규칙 변경은 **Firebase 콘솔에 수동 반영**해야 라이브에 적용된다.
+> - **데이터 안전(2026-07-15)**: `persist()` 저장 실패 시 경고 배너, 손상 blob은 `wordquest_v1_corrupt`에 보관, 가져오기 요소 검증, 리셋 전 자동 백업, SW는 정상 셸 응답만 캐시. 상세는 `docs/security-review-2026-07-15.md`.
+
 ---
 
 ## 1. 한눈에 보기
@@ -26,7 +34,7 @@
   | `.github/workflows/daily-reminder.yml` | 알림 발송 **크론**(매일 08:00 KST) + 수동 트리거. |
   | `docs/` | `cloud-sync-design.md`(설계), `firebase-setup.md`(동기화 셋업), `reminder-setup.md`(알림 셋업). |
   | `워드퀘스트-기획서.md` | 최초 기획서 v1(게임 디자인 원안). |
-  | `vocamon.html` | 예전 별도 프로토타입. 현행 앱과 무관(정리 대상). |
+  | ~~`vocamon.html`~~ | 삭제됨(2026-07-15). 예전 별도 프로토타입 — self-XSS 소지로 정리. |
   | `HANDOFF.md` | 이 문서. |
 
 - **로드 순서**: `index.html`이 `<script src="words.js">`로 데이터를 먼저 로드 → 메인 `<script>`가 `window.WORDBANK`를 참조. words.js가 없으면 `[]`로 폴백(앱은 돌아가되 예문/은행 기능만 빔).
