@@ -642,6 +642,7 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
       <div class="pressstart">- PRESS START -</div>
       <div class="titlemenu">
         <button class="mrow" id="enterbtn"><span class="star">▶</span><span class="mlabel">던전 입장</span><span class="sub" id="h-sub"></span></button>
+        <button class="mrow" id="sweepbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">추가 소탕</span><span class="sub" id="h-sweep-sub">남은 단어 더 풀기</span></button>
         <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
@@ -994,11 +995,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=51"></script>
-<script src="pack-hs1.js?v=51"></script>
-<script src="pack-confuse.js?v=51"></script>
-<script src="pack-vacation.js?v=51"></script>
-<script src="firebase-config.js?v=51"></script>
+<script src="words.js?v=52"></script>
+<script src="pack-hs1.js?v=52"></script>
+<script src="pack-confuse.js?v=52"></script>
+<script src="pack-vacation.js?v=52"></script>
+<script src="firebase-config.js?v=52"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1074,6 +1075,9 @@ if(!saved){
 function migrateWords(){
   let changed=false;
   S.words.forEach(w=>{
+    // 뜻/단어가 문자열이 아니면(누락·null 등) 문자열로 강제 → 보기 렌더가 예외로 깨지지 않게
+    if(typeof w.m!=='string'){w.m=(w.m==null?'':String(w.m));changed=true;}
+    if(typeof w.w!=='string'){w.w=(w.w==null?'':String(w.w));changed=true;}
     if(w.stage===undefined){w.stage=w.cap?CAPTURE_STAGE:(w.g||0);changed=true;}
     if(w.wrong===undefined){w.wrong=0;changed=true;}
     // 정답률 추적용 시도횟수. 옛 데이터는 최소 오답 수만큼은 시도했다고 간주
@@ -1307,6 +1311,9 @@ function speak(word){
 
 /* ================= screens ================= */
 function show(name){
+  // 전투 화면을 벗어날 땐 예약된 전투 타이머를 정리 → 이전 전투의 스테일 타이머가
+  // 다음 전투의 보기를 지우거나 렌더를 가로채는 일(=보기 안 뜸)을 막는다.
+  if(name!=='battle'&&S.screen==='battle'){try{clearWaits();}catch(e){}}
   S.screen=name;
   ['home','battle','reg','dex','result','note','settings','teacher','privacy'].forEach(n=>{const el=$('scr-'+n);if(el)el.classList.toggle('on',n===name);});
   if(name==='home')renderHome();
@@ -1336,16 +1343,25 @@ function renderHome(){
   S.words.forEach(w=>counts[rarity(w).key]++);
   $('h-c0').textContent=counts.common;$('h-c1').textContent=counts.rare;
   $('h-c2').textContent=counts.epic;$('h-c3').textContent=counts.legend;
-  // 하루 기본 분량(DAILY_GOAL)은 '목표'일 뿐 한도가 아니다 — 다 풀면 미리 학습으로 계속 갈 수 있다.
+  // 하루 기본 분량(DAILY_GOAL)까지가 '던전 입장'. 그 이상(백로그·미래 단어)은 '추가 소탕'으로.
   const dueTotal=dueIds().length;
   const doneToday=dailyDone();
   const aheadTotal=S.words.filter(w=>w.due&&w.due>today()).length; // 아직 안 나온(미래 due) 단어
+  const remainGoal=Math.max(0,DAILY_GOAL-doneToday);              // 오늘 기본 입장이 더 줄 수 있는 양
   let sub;
   if(!total) sub='서식 중인 몬스터 없음';
-  else if(dueTotal>0) sub='오늘 출현: '+dueTotal+'마리'+(doneToday?(' · '+doneToday+'단어 완료'):'');
-  else if(doneToday>0) sub='오늘 '+doneToday+'단어 완료! 👏'+(aheadTotal?' (더 풀려면 입장)':'');
-  else sub=aheadTotal?'오늘 출현 예정 없음 (미리 풀려면 입장)':'오늘 출현 예정 없음';
+  else if(remainGoal>0&&dueTotal>0) sub='오늘 목표까지 '+Math.min(remainGoal,dueTotal)+'마리'+(doneToday?(' · '+doneToday+'/'+DAILY_GOAL+' 완료'):'');
+  else if(doneToday>=DAILY_GOAL) sub='오늘 목표 '+DAILY_GOAL+'단어 완료! 👏';
+  else sub=doneToday>0?('오늘 '+doneToday+'단어 완료!'):'오늘 출현 예정 없음';
   $('h-sub').textContent=sub;
+  // 추가 소탕: 기본 분량을 넘는 복습 백로그 또는 미리 풀 미래 단어가 있으면 노출
+  const sweepAvail=(dueTotal>remainGoal)||(aheadTotal>0);
+  const sb=$('sweepbtn');
+  if(sb){
+    sb.style.display=sweepAvail?'':'none';
+    const ss=$('h-sweep-sub'); const backlog=Math.max(0,dueTotal-remainGoal);
+    if(ss) ss.textContent = backlog>0 ? ('남은 복습 '+backlog+'마리 더 풀기') : (aheadTotal>0 ? '다음 단어 미리 풀기' : '남은 단어 더 풀기');
+  }
   $('h-msg').style.display='none';
   renderHomeHeat();
   try{toggleTeacherBtn();}catch(e){}
@@ -1641,11 +1657,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v51: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v52: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v51';
+var BUILD='v52';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -1792,21 +1808,34 @@ function markDone(id){ dailyReset_(); if(!S.meta.doneIds)S.meta.doneIds=[]; if(S
   if(!S.meta.dailyHistory)S.meta.dailyHistory={}; const _t=today(); const _e=S.meta.dailyHistory[_t]||{a:0,ok:0}; _e.w=(_e.w||0)+1; S.meta.dailyHistory[_t]=_e;
   S.meta.updatedAt=Date.now();} }
 $('enterbtn').addEventListener('click',()=>{
+  const done=dailyDone();
+  const budget=DAILY_GOAL-done;                 // 오늘 기본 분량(20)에서 남은 몫
+  if(budget<=0){ homeMsg('오늘 목표 '+DAILY_GOAL+'단어를 다 풀었어요! 👏 더 하고 싶으면 "추가 소탕"을 눌러요.'); return; }
   let q=dueIds();
-  const ahead=(q.length===0); // 오늘 due 를 다 풀었으면 '미리 학습' — 미래 due 단어를 앞당겨(원하는 만큼 계속)
-  if(ahead){
-    const t=today();
-    q=S.words.filter(w=>w.due&&w.due>t).sort((a,b)=>a.due<b.due?-1:1).map(w=>w.id); // 가까운(곧 볼) 단어부터
-  }
   if(!q.length){
-    homeMsg(S.words.length?'모든 단어를 다 익혔어요! 새 단어를 담으면 또 만나요. 👏':'던전이 비어 있다! 먼저 영입소에서 단어를 등록하라.');
+    homeMsg(S.words.length?'오늘 풀 단어를 다 풀었어요! 더 하려면 "추가 소탕"을 눌러요.':'던전이 비어 있다! 먼저 영입소에서 단어를 등록하라.');
     return;
   }
-  if(!ahead){ for(let i=q.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=q[i];q[i]=q[j];q[j]=t;} } // due 는 랜덤
-  // 한 판 최대 DAILY_GOAL(20)마리 = 하루 기본 분량. 더 하고 싶으면 다시 입장하면 무제한으로 계속(한도 없음).
-  if(q.length>DAILY_GOAL)q=q.slice(0,DAILY_GOAL);
+  for(let i=q.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=q[i];q[i]=q[j];q[j]=t;}
+  if(q.length>budget)q=q.slice(0,budget);        // 하루 기본 분량까지만 → 다 풀면 종료(첫 입장은 20에서 끝)
   // 연속(streak)은 입장이 아니라 '실제 문제를 푼 날' 기준으로 recordStudy에서 갱신한다.
-  S.session={q,hearts:HEARTS_MAX,maxH:HEARTS_MAX,combo:0,best:0,win:0,hurt:0,cap:0,ahead:ahead};
+  S.session={q,hearts:HEARTS_MAX,maxH:HEARTS_MAX,combo:0,best:0,win:0,hurt:0,cap:0};
+  sfx('select');
+  show('battle');
+  nextMon();
+});
+// 추가 소탕: 하루 기본 분량을 넘겨 원하는 만큼 더 풀기(한도 없음). 남은 복습부터, 없으면 미래 단어를 미리.
+$('sweepbtn').addEventListener('click',()=>{
+  let q=dueIds();
+  const ahead=(q.length===0);
+  if(ahead){ const t=today(); q=S.words.filter(w=>w.due&&w.due>t).sort((a,b)=>a.due<b.due?-1:1).map(w=>w.id); } // 가까운 순
+  if(!q.length){
+    homeMsg(S.words.length?'소탕할 단어가 없어요! 다 익혔어요 👏':'던전이 비어 있다! 먼저 영입소에서 단어를 등록하라.');
+    return;
+  }
+  if(!ahead){ for(let i=q.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=q[i];q[i]=q[j];q[j]=t;} }
+  if(q.length>DAILY_GOAL)q=q.slice(0,DAILY_GOAL); // 한 판 20마리씩(전투 길이 관리) · 반복하면 무제한
+  S.session={q,hearts:HEARTS_MAX,maxH:HEARTS_MAX,combo:0,best:0,win:0,hurt:0,cap:0,sweep:true};
   sfx('select');
   show('battle');
   nextMon();
@@ -1864,21 +1893,24 @@ function askText(w,mode,pick){
 // 후보를 유사도로 점수화해 헷갈리는 "근사치" 오답을 우선 배치한다.
 function makeChoices(w,mode){
   const wantEng=(mode==='k2e'||mode==='cloze'||mode==='k2e4');
-  const correct=wantEng?w.w:w.m;
+  // 뜻/단어가 누락·비문자여도 예외 없이, 빈 보기 없이 항상 유효한 4지선다를 만든다.
+  const correct=String((wantEng?w.w:w.m)||'').trim();
   const cl=correct.toLowerCase();
-  const tgtPos=posOf(w),tgtType=koType(w.m);
-  const scored=S.words.filter(x=>x.id!==w.id&&x.m!==w.m).map(x=>{
+  const wm=String(w.m||'');
+  const tgtPos=posOf(w),tgtType=koType(wm);
+  const scored=S.words.filter(x=>x.id!==w.id&&String(x.m||'')!==wm).map(x=>{
+    const v=String((wantEng?x.w:x.m)||'').trim();
     let s=Math.random()*0.6; // 동점 흔들기 → 매번 같은 오답만 나오지 않게
-    if(wantEng){s+=engSim(correct,x.w);if(tgtPos&&posOf(x)===tgtPos)s+=1.2;}
-    else{if(koType(x.m)===tgtType)s+=1.5;if(tgtPos&&posOf(x)===tgtPos)s+=0.8;}
-    return {v:wantEng?x.w:x.m,s};
-  }).sort((a,b)=>b.s-a.s);
-  const pool=[];const seen=new Set([cl]);
+    if(wantEng){s+=engSim(correct,v);if(tgtPos&&posOf(x)===tgtPos)s+=1.2;}
+    else{if(koType(String(x.m||''))===tgtType)s+=1.5;if(tgtPos&&posOf(x)===tgtPos)s+=0.8;}
+    return {v,s};
+  }).filter(c=>c.v).sort((a,b)=>b.s-a.s); // 빈 값은 오답 후보에서 제외
+  const pool=[];const seen=new Set(cl?[cl]:[]);
   for(const c of scored){if(pool.length>=3)break;const vl=c.v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(c.v);}}
   if(pool.length<3){const fb=shuffle((wantEng?FALLBACK_EN:FALLBACK).slice());let fi=0;
     while(pool.length<3&&fi<fb.length){const v=fb[fi++];const vl=v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(v);}}}
   const all=pool.map(v=>({t:v,ok:false}));
-  all.push({t:correct,ok:true});
+  all.push({t:correct||String((wantEng?w.w:w.m)||'?'),ok:true}); // 정답 텍스트도 빈 값 방어
   return shuffle(all);
 }
 
@@ -2279,8 +2311,8 @@ function endBattle(){
   const remainNow=s.q.length;
   let next;
   if(remainNow)next='아직 던전에 몬스터 '+remainNow+'마리가 남아 있다. 재입장 가능!';
-  else if(dueLeft)next='오늘 풀 수 있는 몬스터가 '+dueLeft+'마리 더 있다. 재입장 가능!';
-  else if(aheadLeft)next='오늘 분량 끝! 더 풀고 싶으면 재입장해 미리 학습할 수 있다.';
+  else if(dueLeft)next='복습할 몬스터가 '+dueLeft+'마리 더! "추가 소탕"으로 계속 풀 수 있다.';
+  else if(aheadLeft)next='오늘 몫은 끝! "추가 소탕"으로 다음 단어를 미리 풀 수 있다.';
   else next='모든 단어를 다 익혔다! 새 단어를 영입해도 좋다.';
   S.lastResult={win:s.win,hurt:s.hurt,cap:s.cap,combo:s.best,ko:s.hearts<=0,next};
   S.session=null;S.phase='idle';
@@ -3144,7 +3176,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=51"></script>
+<script type="module" src="cloud.js?v=52"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
