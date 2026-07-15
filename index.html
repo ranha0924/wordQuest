@@ -162,6 +162,23 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .homestats .panel{padding:10px;display:flex;flex-direction:column;}
 .kv{display:flex;justify-content:space-between;font-family:'Galmuri9',monospace;font-size:11px;color:var(--dim);}
 .homemsg{font-size:12px;color:var(--gold);text-align:center;animation:wqPop .3s;text-shadow:1px 1px 0 var(--ink);}
+/* 연속(streak) 상태 배너: 유지/위험 경고 + 프리즈 개수 */
+.streakbar{font-family:'Galmuri9',monospace;font-size:11px;color:var(--gold);background:var(--night);border:3px solid transparent;border-image:var(--frame-steel) 3 fill;padding:8px 10px;text-align:center;letter-spacing:.3px;line-height:1.5;width:100%;max-width:420px;align-self:center;margin-top:8px;}
+.streakbar b{color:var(--gold);font-weight:normal;}
+.streakbar.risk{border-image:var(--frame-gold) 3 fill;animation:wqPop .3s;}
+.streakbar .warn{color:#ff7a5c;}
+.streakbar .fz{color:#8fd0ff;margin-left:5px;white-space:nowrap;}
+/* 반 주간 랭킹 행 */
+.rankrow{display:flex;align-items:center;gap:9px;padding:9px 8px;border-bottom:1px solid #22223a;font-size:13px;color:#d8d8e8;}
+.rankrow.me{background:#152515;border:1px solid #2a5a3a;border-radius:6px;color:#8ff0a8;}
+.rankrow .rkn{flex:0 0 26px;text-align:center;font-size:15px;}
+.rankrow .rkn .rk{color:#8a8ab0;font-size:12px;}
+.rankrow .rknm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rankrow .rknm b{color:#5fe06a;font-size:11px;}
+.rankrow .rkwk{flex:0 0 auto;color:#ffc63a;font-weight:700;}
+.rankrow .rkwk small{color:#8a8ab0;font-weight:400;font-size:9px;margin-left:1px;}
+.rankrow .rkst{flex:0 0 auto;color:#f0881c;font-size:11px;}
+.rankgap{text-align:center;color:#6a6a8a;padding:3px;font-size:14px;}
 
 /* ===== title screen (Famicom style) ===== */
 #scr-home{align-items:center;gap:0;justify-content:center;flex:1;position:relative;}
@@ -646,9 +663,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
         <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
+        <button class="mrow" id="rankbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">반 랭킹</span><span class="sub">우리 반 이번 주 순위</span></button>
         <button class="mrow" data-go="teacher" id="h-teacher-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">선생님 대시보드</span><span class="sub">반별 학생 학습 현황</span></button>
       </div>
       <div class="homemsg" id="h-msg" style="display:none;"></div>
+      <div class="streakbar" id="h-streakbar" style="display:none;"></div>
       <div class="titlestatus">
         <div class="ts-cell"><b id="h-pct">0%</b><span>클리어</span></div>
         <div class="ts-cell"><b id="h-cap">0 / 0</b><span>포획</span></div>
@@ -994,12 +1013,22 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
   </div>
 </div>
 
+<!-- 반 주간 랭킹 모달 -->
+<div id="rank-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(4,4,10,.86);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:18px 16px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6);">
+    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">🏆 우리 반 랭킹</div>
+    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">이번 주 완료 단어 기준</div>
+    <div id="rank-body" style="max-height:58vh;overflow-y:auto;"></div>
+    <button class="subbtn" id="rank-close" style="width:100%;justify-content:center;margin-top:12px;">닫기</button>
+  </div>
+</div>
+
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=52"></script>
-<script src="pack-hs1.js?v=52"></script>
-<script src="pack-confuse.js?v=52"></script>
-<script src="pack-vacation.js?v=52"></script>
-<script src="firebase-config.js?v=52"></script>
+<script src="words.js?v=53"></script>
+<script src="pack-hs1.js?v=53"></script>
+<script src="pack-confuse.js?v=53"></script>
+<script src="pack-vacation.js?v=53"></script>
+<script src="firebase-config.js?v=53"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1089,6 +1118,7 @@ function migrateWords(){
   if(changed)persist();
 }
 migrateWords();
+try{applyStreakFreeze();}catch(e){} // 연속 프리즈: 어제 하루 빠졌으면 자동 방어(함수 선언은 호이스팅됨)
 let timers=[];
 function wait(fn,ms){const id=setTimeout(fn,ms);timers.push(id);return id;}
 function clearWaits(){timers.forEach(clearTimeout);timers=[];} // 전투 종료·도망 시 예약된 연출 타이머 취소
@@ -1130,6 +1160,69 @@ function liveStreak(){
   const t=today(),ld=S.meta.lastDay;
   return (ld===t||ld===addDays(t,-1))?(S.meta.streak||0):0;
 }
+/* ===== 연속(streak) 리텐션 강화: 프리즈(하루 방어) · 마일스톤 보상 · 위험 경고 ===== */
+const STREAK_MILESTONES=[3,7,14,30,60,100];
+function daysBetweenStr(a,b){const pa=a.split('-').map(Number),pb=b.split('-').map(Number);return Math.round((Date.UTC(pb[0],pb[1]-1,pb[2])-Date.UTC(pa[0],pa[1]-1,pa[2]))/86400000);}
+// 앱을 열 때: 어제 '딱 하루' 빠졌고 프리즈가 있으면 자동으로 연속을 지켜준다(손실회피).
+function applyStreakFreeze(){
+  const t=today();
+  if(S.meta.freezes==null){ S.meta.freezes=2; S.meta.updatedAt=Date.now(); } // 최초 지급(쿠션 2개)
+  if(S.meta.frozeOn&&S.meta.frozeOn!==t&&S.meta.frozeOn!==addDays(t,-1)) S.meta.frozeOn=null; // 오래된 안내 정리
+  if(S.meta.lastDay&&(S.meta.streak||0)>0){
+    const gap=daysBetweenStr(S.meta.lastDay,t);
+    if(gap===2&&S.meta.freezes>0){ // 어제 하루 결석 → 프리즈 1개로 방어(어제 학습한 것처럼 이어붙임)
+      S.meta.freezes--; S.meta.lastDay=addDays(t,-1); S.meta.frozeOn=t; S.meta.updatedAt=Date.now();
+      try{persist();}catch(e){}
+    }
+  }
+}
+// 마일스톤 달성 시 1회 보상(프리즈 +1, EXP +N). 새로 달성한 값을 반환(축하용).
+function checkStreakMilestones(){
+  const s=liveStreak(); if(!Array.isArray(S.meta.streakClaims))S.meta.streakClaims=[];
+  let hit=null;
+  for(const m of STREAK_MILESTONES){ if(s>=m&&S.meta.streakClaims.indexOf(m)<0){ S.meta.streakClaims.push(m); S.meta.freezes=(S.meta.freezes||0)+1; S.meta.exp=(S.meta.exp||0)+m; hit=m; } }
+  if(hit!=null){ S.meta.updatedAt=Date.now(); try{persist();}catch(e){} }
+  return hit;
+}
+// 홈 연속 배너: 유지/위험/시작 + 프리즈 개수. 위험(어제까지만 학습)일 때 강조.
+function renderStreakBar(){
+  const el=$('h-streakbar'); if(!el)return;
+  const s=liveStreak(), t=today(), fz=S.meta.freezes||0, froze=(S.meta.frozeOn===t);
+  let html='', cls='streakbar';
+  if(froze) html+='❄️ 프리즈로 어제 연속을 지켰어요! ';
+  if(s>0){
+    if(S.meta.lastDay===t) html+='🔥 <b>'+s+'일</b> 연속 유지 중!';
+    else { html+='🔥 <b>'+s+'일</b> 연속 · <b class="warn">오늘 안 하면 끊겨요!</b>'; cls+=' risk'; }
+  } else if(!froze){
+    html+='🔥 오늘 학습하고 연속을 시작해요!';
+  }
+  html+='<span class="fz">❄️ '+fz+'</span>';
+  el.className=cls; el.innerHTML=html; el.style.display='';
+}
+/* ===== 반 주간 랭킹 모달: 이번 주 완료 단어 순 · 상위 10 + 내 순위 ===== */
+async function openRank(){
+  const C=window.Cloud, modal=$('rank-modal'), body=$('rank-body');
+  if(!modal||!body) return;
+  body.innerHTML='<div style="color:#8a8ab0;padding:22px;text-align:center;">불러오는 중…</div>';
+  modal.style.display='flex';
+  let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){}
+  if(!list||!list.length){
+    body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주 랭킹이 없어요.<br>단어를 풀면 우리 반 순위에 올라가요!</div>';
+    return;
+  }
+  const medal=i=>['🥇','🥈','🥉'][i]||('<span class="rk">'+(i+1)+'</span>');
+  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'">'
+    +'<span class="rkn">'+medal(i)+'</span>'
+    +'<span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span>'
+    +'<span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'
+    +((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')
+    +'</div>';
+  let html=list.slice(0,10).map(row).join('');
+  const mi=list.findIndex(e=>e.me);
+  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(list[mi],mi); // 10위 밖이면 내 순위 따로 표시
+  body.innerHTML=html;
+}
+function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
 // 최근 weeks*7일 히트맵 SVG-less 그리드 HTML. dh: dailyHistory 맵.
 function heatmapHTML(dh,weeks){
   dh=dh||{}; weeks=weeks||5;
@@ -1363,6 +1456,8 @@ function renderHome(){
     if(ss) ss.textContent = backlog>0 ? ('남은 복습 '+backlog+'마리 더 풀기') : (aheadTotal>0 ? '다음 단어 미리 풀기' : '남은 단어 더 풀기');
   }
   $('h-msg').style.display='none';
+  try{ const _ms=checkStreakMilestones(); if(_ms!=null) homeMsg('🎉 '+_ms+'일 연속 달성! 프리즈 ❄️+1 · EXP +'+_ms); renderStreakBar(); }catch(e){}
+  try{ const rb=$('rankbtn'); if(rb){ const p=(window.Cloud&&window.Cloud.getProfile)?window.Cloud.getProfile():null; rb.style.display=(p&&p.role==='student'&&p.classId)?'':'none'; } }catch(e){}
   renderHomeHeat();
   try{toggleTeacherBtn();}catch(e){}
 }
@@ -1657,11 +1752,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v52: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v53: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v52';
+var BUILD='v53';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -1779,6 +1874,7 @@ $('importfile').addEventListener('change',e=>{
       S.words=data.words;
       S.meta=Object.assign({lastDay:null,streak:0,bestCombo:0,muted:false,theme:S.meta.theme},data.meta||{});
       migrateWords();
+      try{applyStreakFreeze();}catch(e){}
       persist();
       regMsg('백업에서 몬스터 '+data.words.length+'마리를 되살렸다!');
       $('regcount').textContent='서식 중 '+S.words.length+'마리';
@@ -1844,6 +1940,10 @@ $('fleebtn').addEventListener('click',()=>{
   if(!window.confirm('도망칠까? 남은 몬스터는 그대로 던전에 남는다.'))return;
   endBattle();
 });
+// 반 랭킹 모달 열기/닫기
+$('rankbtn').addEventListener('click',()=>{ sfx('select'); openRank(); });
+$('rank-close').addEventListener('click',closeRank);
+$('rank-modal').addEventListener('click',e=>{ if(e.target&&e.target.id==='rank-modal') closeRank(); });
 $('ult-blast').addEventListener('click',useBlast);
 $('ult-heal').addEventListener('click',useHeal);
 window.addEventListener('keydown',e=>{
@@ -2654,6 +2754,7 @@ window.WQ={
         S.meta.muted=localMuted; S.meta.theme=localTheme;
       }
       migrateWords();
+      try{applyStreakFreeze();}catch(e){}
       persist();
       try{renderHome();}catch(e){}
       try{renderReg();}catch(e){}
@@ -3176,7 +3277,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=52"></script>
+<script type="module" src="cloud.js?v=53"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
