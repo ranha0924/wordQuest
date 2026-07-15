@@ -64,6 +64,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| (v75) | **랭킹 점수 위조(치팅) 차단** — 학생이 콘솔로 `days`/`wk` 를 조작해 1등을 만든 사건 대응. ①`firestore.rules`: 랭킹 항목 `wk`(0~2000)·`streak`(0~4000)·`days`(map, ≤9키) 상한 + 필드 화이트리스트로 서버가 과대 기록을 거부. ②`cloud.js`: `weekSum`/`getRank`/`getGlobalRank` 에 하루 500·주간 2000·연속 4000 상한을 걸어 조작 값이 표시·정렬을 지배하지 못하게 함(기록·조회 양쪽). 보안 리뷰 (2)·(4) 해소. ★규칙은 Firebase 콘솔에 수동 게시 필요 |
 | (v74) | **중복 종류 정리** — 종류가 겹치는 몬스터 3종 제거(원본 유지·신규 삭제): `snowbun`(↔moonrabbit 토끼)·`direwolf`(↔werewolf 늑대)·`irongolem`(↔rock/armor 골렘). 63종 → **60종** |
 | (v73) | **몬스터 그림 대폭 확장** — 힉스필드(Nano Banana 2)로 신규 37종 생성, 26종 → **63종**. 아트 풀을 3개(`cute`/`elite`/`boss`)에서 **등급별 4개**(`common`/`rare`/`epic`/`legend`)로 재편해 영웅·전설이 각자 전용 아트를 가짐. `monAsset`을 `rarity().key` 기반으로 일원화(§4.8) |
 

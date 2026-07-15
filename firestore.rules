@@ -168,9 +168,11 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if signedIn()
         && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name','wk','streak','days','at'])
         && request.resource.data.name is string && request.resource.data.name.size() <= 40
-        && request.resource.data.wk is number
-        && request.resource.data.streak is number;
+        && request.resource.data.wk is number && request.resource.data.wk >= 0 && request.resource.data.wk <= 2000
+        && request.resource.data.streak is number && request.resource.data.streak >= 0 && request.resource.data.streak <= 4000
+        && (!('days' in request.resource.data) || (request.resource.data.days is map && request.resource.data.days.size() <= 9));
       allow delete: if signedIn() && (request.auth.uid == uid || isMaster());
     }
 
@@ -181,9 +183,11 @@ service cloud.firestore {
       allow write: if signedIn()
         && request.auth.uid == uid
         && requesterClassId() == cid
+        && request.resource.data.keys().hasOnly(['name','wk','streak','days','at'])
         && request.resource.data.name is string && request.resource.data.name.size() <= 40
-        && request.resource.data.wk is number
-        && request.resource.data.streak is number;
+        && request.resource.data.wk is number && request.resource.data.wk >= 0 && request.resource.data.wk <= 2000
+        && request.resource.data.streak is number && request.resource.data.streak >= 0 && request.resource.data.streak <= 4000
+        && (!('days' in request.resource.data) || (request.resource.data.days is map && request.resource.data.days.size() <= 9));
       allow delete: if signedIn() && (request.auth.uid == uid || ownsClass(cid) || isMaster());
     }
 
