@@ -68,7 +68,9 @@ button,textarea,input{font-family:inherit;}
 button{-webkit-appearance:none;appearance:none;border-radius:0;background-clip:padding-box;}
 img,canvas{image-rendering:pixelated;}
 a{color:var(--gold);text-decoration:none;}
-@keyframes wqAppear{0%{transform:translateY(-46px) scale(.2);opacity:0}55%{transform:translateY(8px) scale(1.1);opacity:1}75%{transform:translateY(-4px) scale(.96)}100%{transform:translateY(0) scale(1);opacity:1}}
+/* 등장: 제자리 팝(scale+fade). translateY 로 하늘에서 떨어뜨리지 않아 모바일에서
+   '떴다가 땅으로 뚝' 튀는 현상이 없다. scale 은 중앙 기준이라 수직 이동이 없음. */
+@keyframes wqAppear{0%{transform:scale(.5);opacity:0}55%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes wqShake{0%,100%{transform:translate(0,0)}15%{transform:translate(-9px,3px)}30%{transform:translate(8px,-4px)}45%{transform:translate(-6px,2px)}60%{transform:translate(5px,-2px)}80%{transform:translate(-3px,1px)}}
 @keyframes wqHit{0%{filter:brightness(6);transform:translateX(5px)}40%{filter:brightness(1);transform:translateX(-4px)}100%{filter:none;transform:none}}
 /* correct hit: monster blinks (opacity) + shakes */
@@ -1077,13 +1079,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=70"></script>
-<script src="pack-hs1.js?v=70"></script>
-<script src="pack-hs2.js?v=70"></script>
-<script src="pack-hs3.js?v=70"></script>
-<script src="pack-confuse.js?v=70"></script>
-<script src="pack-vacation.js?v=70"></script>
-<script src="firebase-config.js?v=70"></script>
+<script src="words.js?v=71"></script>
+<script src="pack-hs1.js?v=71"></script>
+<script src="pack-hs2.js?v=71"></script>
+<script src="pack-hs3.js?v=71"></script>
+<script src="pack-confuse.js?v=71"></script>
+<script src="pack-vacation.js?v=71"></script>
+<script src="firebase-config.js?v=71"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -3549,7 +3551,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=70"></script>
+<script type="module" src="cloud.js?v=71"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
