@@ -116,12 +116,24 @@
     for (var i = 0; i <= sinceMon; i++) out.push(addDaysStr(t, -i));
     return out;
   }
+  // 랭킹 위조(치팅) 방어용 상한 — 랭킹 수치는 클라이언트가 자유 기록하므로, 집계·표시 때
+  //   물리적 상한을 걸어 콘솔로 days/wk 를 크게 조작해도 랭킹을 지배하지 못하게 한다.
+  //   (firestore.rules 의 wk<=2000·streak<=4000·days<=9키 검증과 짝을 이루는 클라이언트 방어)
+  var RK_DAY_MAX = 500;     // 하루 완료 단어수 상한(정상 학습자는 한참 아래)
+  var RK_WK_MAX = 2000;     // 이번 주 합계 상한
+  var RK_STREAK_MAX = 4000; // 연속일 상한(약 11년)
+  function clampNum(n, max) {
+    n = (typeof n === 'number' && isFinite(n)) ? n : 0;
+    if (n < 0) n = 0;
+    return n > max ? max : n;
+  }
   // 일자별 단어수 맵(days)에서 '이번 주' 합을 낸다. days 없으면 0.
+  //   각 일자값·합계에 상한을 적용 → 조작된 큰 값이 랭킹을 지배하지 못하게 한다.
   function weekSum(days, t) {
     if (!days) return 0;
     var wd = weekDates(t), s = 0;
-    for (var i = 0; i < wd.length; i++) s += (days[wd[i]] || 0);
-    return s;
+    for (var i = 0; i < wd.length; i++) s += clampNum(days[wd[i]] || 0, RK_DAY_MAX);
+    return clampNum(s, RK_WK_MAX);
   }
 
   // ── 병합: 단어별 updatedAt 최신 우선, meta는 스칼라 LWW + dailyHistory 날짜별 병합 ──
@@ -261,7 +273,7 @@
       var dk = addDaysStr(t, -wi), de = dh[dk];
       if (de) { var dv = (de.w != null ? de.w : de.ok) || 0; if (dv) rkDays[dk] = dv; }
     }
-    var rkStreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
+    var rkStreak = clampNum((meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0, RK_STREAK_MAX);
     var rkName = ((profile && (profile.displayName || profile.name)) || user.displayName || '익명').slice(0, 40);
     // 반 랭킹(학생 + 반 소속)
     try {
@@ -539,8 +551,9 @@
       res.forEach(function (d) {
         var v = d.data() || {};
         // '이번 주' 합을 읽는 시점에 다시 계산(days 있으면). 옛 항목(days 없음)은 저장된 wk 폴백.
-        var wk = v.days ? weekSum(v.days, t) : (v.wk || 0);
-        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: (v.streak || 0), me: d.id === user.uid });
+        //   상한을 적용해 조작된 항목이 표시·정렬을 지배하지 못하게 한다.
+        var wk = v.days ? weekSum(v.days, t) : clampNum(v.wk || 0, RK_WK_MAX);
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: clampNum(v.streak || 0, RK_STREAK_MAX), me: d.id === user.uid });
       });
       out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
       return out;
@@ -559,8 +572,8 @@
       var t = todayStr(), out = [];
       res.forEach(function (d) {
         var v = d.data() || {};
-        var wk = v.days ? weekSum(v.days, t) : (v.wk || 0); // 조회 시점에 '이번 주' 합 재계산
-        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: (v.streak || 0), me: d.id === user.uid });
+        var wk = v.days ? weekSum(v.days, t) : clampNum(v.wk || 0, RK_WK_MAX); // 조회 시점에 '이번 주' 합 재계산(상한 적용)
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: clampNum(v.streak || 0, RK_STREAK_MAX), me: d.id === user.uid });
       });
       out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
       return out;
