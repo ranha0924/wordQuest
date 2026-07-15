@@ -1024,11 +1024,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=55"></script>
-<script src="pack-hs1.js?v=55"></script>
-<script src="pack-confuse.js?v=55"></script>
-<script src="pack-vacation.js?v=55"></script>
-<script src="firebase-config.js?v=55"></script>
+<script src="words.js?v=56"></script>
+<script src="pack-hs1.js?v=56"></script>
+<script src="pack-confuse.js?v=56"></script>
+<script src="pack-vacation.js?v=56"></script>
+<script src="firebase-config.js?v=56"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1206,8 +1206,10 @@ async function openRank(){
   body.innerHTML='<div style="color:#8a8ab0;padding:22px;text-align:center;">불러오는 중…</div>';
   modal.style.display='flex';
   let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){}
-  if(!list||!list.length){
-    body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주 랭킹이 없어요.<br>단어를 풀면 우리 반 순위에 올라가요!</div>';
+  // 이번 주에 한 기록이 있는 학생만 순위에(오늘 안 했어도 이번 주 기록으로 표시). 0단어는 제외.
+  const active=(list||[]).filter(e=>(e.wk|0)>0);
+  if(!active.length){
+    body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!</div>';
     return;
   }
   const medal=i=>['🥇','🥈','🥉'][i]||('<span class="rk">'+(i+1)+'</span>');
@@ -1217,9 +1219,10 @@ async function openRank(){
     +'<span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'
     +((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')
     +'</div>';
-  let html=list.slice(0,10).map(row).join('');
-  const mi=list.findIndex(e=>e.me);
-  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(list[mi],mi); // 10위 밖이면 내 순위 따로 표시
+  let html=active.slice(0,10).map(row).join('');
+  const mi=active.findIndex(e=>e.me);
+  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);                 // 10위 밖이면 내 순위 따로
+  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>'; // 나는 이번 주 기록 없음 → 격려 행
   body.innerHTML=html;
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
@@ -1752,11 +1755,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v55: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v56: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v55';
+var BUILD='v56';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -3278,7 +3281,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=55"></script>
+<script type="module" src="cloud.js?v=56"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

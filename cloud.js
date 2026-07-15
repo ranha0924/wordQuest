@@ -108,6 +108,21 @@
     var d = new Date(p[0], p[1] - 1, p[2] + n);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+  // 이번 주(월요일~오늘) 날짜들 — 반 랭킹의 '이번 주' 기준(읽는 시점에 다시 계산해 오래된 점수 자동 제외)
+  function weekDates(t) {
+    var p = t.split('-').map(Number);
+    var sinceMon = (new Date(p[0], p[1] - 1, p[2]).getDay() + 6) % 7; // 월=0 … 일=6
+    var out = [];
+    for (var i = 0; i <= sinceMon; i++) out.push(addDaysStr(t, -i));
+    return out;
+  }
+  // 일자별 단어수 맵(days)에서 '이번 주' 합을 낸다. days 없으면 0.
+  function weekSum(days, t) {
+    if (!days) return 0;
+    var wd = weekDates(t), s = 0;
+    for (var i = 0; i < wd.length; i++) s += (days[wd[i]] || 0);
+    return s;
+  }
 
   // ── 병합: 단어별 updatedAt 최신 우선, meta는 스칼라 LWW + dailyHistory 날짜별 병합 ──
   function merge(local, remote) {
@@ -239,17 +254,19 @@
         });
       } catch (e2) { /* 필드 없으면 무시 */ }
     } catch (e) { console.warn('[cloud] 요약 기록 실패', e); }
-    // ── 반 주간 랭킹 항목 갱신(학생 + 반 소속) — 최근 7일 완료 단어수(w, 없으면 ok) + 연속 ──
+    // ── 반 주간 랭킹 항목 갱신(학생 + 반 소속) — 최근 8일 일자별 완료 단어수(days) + 연속 ──
+    //    days 를 저장해두면, 조회하는 쪽에서 '이번 주(월~오늘)' 합을 언제든 다시 계산할 수 있다.
+    //    → 오늘 안 해도 이번 주에 한 기록이 반영되고, 지난주 점수는 새 주가 되면 자동으로 빠진다.
     try {
       if (profile && profile.role === 'student' && profile.classId) {
-        var wk = 0;
-        for (var wi = 0; wi < 7; wi++) {
-          var de = dh[addDaysStr(t, -wi)];
-          if (de) wk += ((de.w != null ? de.w : de.ok) || 0);
+        var days = {};
+        for (var wi = 0; wi < 8; wi++) {
+          var dk = addDaysStr(t, -wi), de = dh[dk];
+          if (de) { var dv = (de.w != null ? de.w : de.ok) || 0; if (dv) days[dk] = dv; }
         }
         var lstreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
         var lref = fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid);
-        await fsMod.setDoc(lref, { name: (profile.displayName || profile.name || '익명').slice(0, 40), wk: wk, streak: lstreak, at: now() });
+        await fsMod.setDoc(lref, { name: (profile.displayName || profile.name || '익명').slice(0, 40), wk: weekSum(days, t), streak: lstreak, days: days, at: now() });
       }
     } catch (eL) { /* 랭킹 쓰기 실패는 조용히(규칙 미배포·오프라인 등) */ }
   }
@@ -505,10 +522,12 @@
     try {
       var col = fsMod.collection(db, 'leaderboards', profile.classId, 'entries');
       var res = await fsMod.getDocs(col);
-      var out = [];
+      var t = todayStr(), out = [];
       res.forEach(function (d) {
         var v = d.data() || {};
-        out.push({ uid: d.id, name: (v.name || '익명'), wk: (v.wk || 0), streak: (v.streak || 0), me: d.id === user.uid });
+        // '이번 주' 합을 읽는 시점에 다시 계산(days 있으면). 옛 항목(days 없음)은 저장된 wk 폴백.
+        var wk = v.days ? weekSum(v.days, t) : (v.wk || 0);
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: (v.streak || 0), me: d.id === user.uid });
       });
       out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
       return out;
