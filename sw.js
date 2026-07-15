@@ -9,7 +9,7 @@
    ================================================================ */
 'use strict';
 
-var VERSION = 'v62';
+var VERSION = 'v63';
 var CACHE = 'wq-' + VERSION;
 
 // 오프라인 부팅에 필요한 최소 셸(전부 동일 출처).
@@ -18,6 +18,8 @@ var SHELL = [
   './index.html',
   './words.js',
   './pack-hs1.js',
+  './pack-hs2.js',
+  './pack-hs3.js',
   './pack-confuse.js',
   './pack-vacation.js',
   './cloud.js',
