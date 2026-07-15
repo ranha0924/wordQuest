@@ -1079,13 +1079,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=72"></script>
-<script src="pack-hs1.js?v=72"></script>
-<script src="pack-hs2.js?v=72"></script>
-<script src="pack-hs3.js?v=72"></script>
-<script src="pack-confuse.js?v=72"></script>
-<script src="pack-vacation.js?v=72"></script>
-<script src="firebase-config.js?v=72"></script>
+<script src="words.js?v=73"></script>
+<script src="pack-hs1.js?v=73"></script>
+<script src="pack-hs2.js?v=73"></script>
+<script src="pack-hs3.js?v=73"></script>
+<script src="pack-confuse.js?v=73"></script>
+<script src="pack-vacation.js?v=73"></script>
+<script src="firebase-config.js?v=73"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1428,10 +1428,12 @@ function sprite(word){
 /* ================= AI 생성 에셋 ================= */
 const A='assets/';  // 로컬 에셋 루트(외부 CDN 의존 없이 리포지토리 자체 포함)
 const MON=A+'mon/'; // 몬스터 스프라이트(600×600 투명 PNG)
+// 등급별 몬스터 아트 풀. rarity().key(common/rare/epic/legend)와 1:1로 매칭된다.
+// 각 등급은 전용 아트를 가지며 오답이 쌓이면 상위 등급 몬스터로 진화한다.
 const ASSETS={
   bg:A+'bg.png',      // 던전 배경
   hero:A+'hero.png',  // 용사 초상
-  cute:[
+  common:[            // 일반: 귀엽고 작은 치비 몬스터
     MON+'goblin.png',   // 고블린
     MON+'slime.png',    // 슬라임
     MON+'bat.png',      // 박쥐
@@ -1445,29 +1447,68 @@ const ASSETS={
     MON+'mimic.png',    // 미믹(보물상자)
     MON+'spider.png',   // 꼬마 거미
     MON+'ice.png',      // 얼음 정령
-    MON+'kraken.png'    // 새끼 크라켄
+    MON+'kraken.png',   // 새끼 크라켄
+    MON+'firefox.png',    // 불여우 정령
+    MON+'moonrabbit.png', // 달토끼
+    MON+'pebblegolem.png',// 조약돌 골렘
+    MON+'sproutling.png', // 새싹 요정
+    MON+'bubblefish.png', // 물방울 물고기
+    MON+'wispflame.png',  // 도깨비불
+    MON+'snowbun.png',    // 눈토끼
+    MON+'beetle.png',     // 장수풍뎅이
+    MON+'cactusling.png', // 선인장 요정
+    MON+'sparkpup.png'    // 번개 강아지
   ],
-  elite:[
+  rare:[              // 희귀: 전사·야수형 몬스터
     MON+'orc.png',       // 오크 전사
     MON+'lizardman.png', // 리자드맨 검사
     MON+'werewolf.png',  // 늑대인간
-    MON+'minotaur.png'   // 미노타우로스
+    MON+'minotaur.png',  // 미노타우로스
+    MON+'gnoll.png',       // 놀 전사
+    MON+'harpy.png',       // 하피
+    MON+'bandit.png',      // 도적
+    MON+'sahuagin.png',    // 사후아긴 전사
+    MON+'cultist.png',     // 사교도 주술사
+    MON+'direwolf.png',    // 다이어 울프
+    MON+'gargoyle.png',    // 가고일
+    MON+'cavetroll.png',   // 동굴 트롤
+    MON+'wraith.png',      // 망령
+    MON+'mantiswarrior.png',// 사마귀 전사
+    MON+'centaur.png'      // 켄타우로스 궁수
   ],
-  boss:[
+  epic:[              // 영웅: 강력한 정예·미니보스
     MON+'rockgolem.png',  // 바위 골렘
     MON+'armorgolem.png', // 갑옷 골렘
     MON+'darkknight.png', // 흑기사
     MON+'lich.png',       // 리치
+    MON+'chimera.png',    // 키메라
+    MON+'griffon.png',    // 그리핀
+    MON+'cyclops.png',    // 사이클롭스
+    MON+'manticore.png',  // 만티코어
+    MON+'wyvern.png',     // 와이번
+    MON+'irongolem.png',  // 강철 골렘
+    MON+'vampirelord.png',// 뱀파이어 로드
+    MON+'stormelemental.png' // 폭풍 정령
+  ],
+  legend:[            // 전설: 초대형 보스
     MON+'reddragon.png',  // 화룡
     MON+'demonlord.png',  // 데몬 로드
     MON+'hydra.png',      // 3두 히드라
-    MON+'frostgiant.png'  // 서리 거인
+    MON+'frostgiant.png', // 서리 거인
+    MON+'golddragon.png', // 황금 고룡
+    MON+'krakenlord.png', // 크라켄 군주
+    MON+'lichking.png',   // 리치 킹
+    MON+'behemoth.png',   // 베히모스
+    MON+'leviathan.png',  // 리바이어던
+    MON+'phoenix.png',    // 불사조
+    MON+'stonetitan.png', // 돌 거신
+    MON+'archdemon.png'   // 대마왕
   ]
 };
-// 단어 → 항상 같은 몬스터. 오답이 쌓이면 진화: 일반(cute)→희귀(elite)→영웅·전설(boss)
+// 단어 → 항상 같은 몬스터. 오답이 쌓이면 진화: 일반→희귀→영웅→전설(등급별 전용 아트).
+// 등급은 rarity(w).key 로 결정하고, 같은 단어는 그 등급 풀에서 항상 같은 그림을 뽑는다.
 function monAsset(w){
-  const n=w.wrong||0;
-  const set=(n>=3)?ASSETS.boss:(n>=1?ASSETS.elite:ASSETS.cute);
+  const set=ASSETS[rarity(w).key]||ASSETS.common;
   return set[hash(w.w.toLowerCase())%set.length];
 }
 // 에셋 로드 실패 시 절차 생성 스프라이트로 폴백 (오프라인에서도 동작)
@@ -2009,7 +2050,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v67';
+var BUILD='v73';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3551,7 +3592,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=72"></script>
+<script type="module" src="cloud.js?v=73"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

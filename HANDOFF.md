@@ -27,7 +27,7 @@
   | `words.js` | **범용 고빈도 단어은행**(648개). `window.WORDBANK` 배열. 로직과 분리됨. |
   | `pack-hs1.js` | **고1 필수 어휘 팩**(224개, 14주제 큐레이션). `window.WORDPACK_HS1`. 예문·품사 포함, BANK에 편입돼 cloze 지원. 참고 §4.7. |
   | `manifest.webmanifest` · `sw.js` | **PWA** — 설치형 매니페스트 + 서비스 워커(앱 셸 오프라인 캐시). 참고 §4.11. |
-  | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 26종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
+  | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 63종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
   | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
   | `firebase-config.js` | Firebase 웹 config(사용자가 값 채움). 비어 있으면 로컬 전용. |
   | `firestore.rules` | Firestore 보안 규칙(본인 문서만 접근). |
@@ -59,6 +59,12 @@
 2. 재인 편중 → 재인/역방향/문맥/철자생산으로 단계 상승.
 3. 오답지 무작위 → 철자·품사·뜻유형 유사도 기반 근사치.
 4. 단일 뜻·발음 없음 → 다의어 + 센스별 예문 + TTS.
+
+### 이번 세션(2026-07-15) 추가
+
+| 커밋 | 내용 |
+|---|---|
+| (v73) | **몬스터 그림 대폭 확장** — 힉스필드(Nano Banana 2)로 신규 37종 생성, 26종 → **63종**. 아트 풀을 3개(`cute`/`elite`/`boss`)에서 **등급별 4개**(`common`/`rare`/`epic`/`legend`)로 재편해 영웅·전설이 각자 전용 아트를 가짐. `monAsset`을 `rarity().key` 기반으로 일원화(§4.8) |
 
 ### 이번 세션(2026-07-11) 추가
 
@@ -168,17 +174,19 @@
 
 ### 4.8 몬스터 에셋 & 등급 진화
 - 이미지는 전부 **로컬**(`assets/`): 몬스터 스프라이트 `assets/mon/*.png`(600×600 투명 PNG), 배경 `assets/bg.png`, 용사 `assets/hero.png`. 외부 CDN 의존 없음(과거 CloudFront → 로컬로 이관).
-- `ASSETS = { bg, hero, cute[14], elite[4], boss[8] }` (`MON='assets/mon/'`). `monAsset(w)`가 누적 오답 수로 풀을 골라 "진화"를 표현:
+- `ASSETS = { bg, hero, common[24], rare[15], epic[12], legend[12] }` (`MON='assets/mon/'`). 네 풀은 `rarity(w).key`와 1:1로 매칭되며, `monAsset(w)`가 등급에 따라 풀을 골라 "진화"를 표현:
 
   | 등급 | 오답 | 몬스터 풀 |
   |---|---|---|
-  | 일반 COMMON | 0 | `cute` (14종) |
-  | 희귀 RARE | 1~2 | `elite` (4종) |
-  | 영웅·전설 EPIC/LEGEND | 3+ | `boss` (8종) |
+  | 일반 COMMON | 0 | `common` (24종) |
+  | 희귀 RARE | 1~2 | `rare` (15종) |
+  | 영웅 EPIC | 3~4 | `epic` (12종) |
+  | 전설 LEGEND | 5+ | `legend` (12종) |
 
-- 단어→몬스터는 `hash(word) % 풀길이`로 결정론적(같은 단어는 같은 등급 안에서 항상 같은 몬스터). 오답이 쌓여 등급이 오르면 다른 풀에서 **새 모습으로 진화**(일반→희귀→영웅·전설).
+- 이제 **영웅·전설이 각자 전용 아트 풀**을 가진다(과거엔 둘 다 `boss` 공유). `monAsset(w)=ASSETS[rarity(w).key][hash(word)%풀길이]` — 등급 판정을 `rarity()`로 일원화.
+- 단어→몬스터는 `hash(word) % 풀길이`로 결정론적(같은 단어는 같은 등급 안에서 항상 같은 몬스터). 오답이 쌓여 등급이 오르면 다른 풀에서 **새 모습으로 진화**(일반→희귀→영웅→전설).
 - 로드 실패 시 `setMonImg`가 절차 생성 스프라이트(`sprite()`, 12×11 대칭 픽셀)로 폴백 → 오프라인·이미지 유실에도 동작.
-- 신규 16종은 힉스필드(Nano Banana 2)로 기존 몬스터를 스타일 레퍼런스 삼아 생성 후, 배경제거·600 정규화·PNG8(128색) 최적화(장당 ~34KB).
+- 아트는 힉스필드(Nano Banana 2)로 생성. 등급별 톤(치비→전사→정예→초대형 보스)과 몬스터별 배경색(회색/초록/마젠타, 팔레트 충돌 방지)을 프롬프트로 지정 후, **테두리 연결성분 기반 배경제거**(+갇힌 배경 주머니 제거·디프린지)·600 정규화·PNG8(256색) 최적화(장당 23~83KB). 파이프라인은 `scratchpad/process.py`·`run.py`·`roster.py`.
 - **등장 깜빡임 방지**: `#b-spr`은 단일 `<img>`를 재사용 → 새 `src`를 넣어도 디코드 전까진 이전 몬스터 비트맵이 잠깐 보였음. `setMonImg(img,w,onReady)`가 **디코드 완료 시에만** 콜백하고, `nextMon`은 로드 전 `opacity=0`으로 숨겼다가 준비되면 `wqAppear`로 노출. `img.complete`(캐시/동일 URL)·onerror 폴백·1.5s 안전장치 처리. 무대 암전→점등(spawn) 연출은 유지.
 
 ### 4.9 클라우드 동기화 (선택 · 오프라인 우선)
@@ -223,7 +231,7 @@
 - **SRS 간격 조정** → `LADDER` 상수.
 - **포획 기준 변경** → `CAPTURE_STAGE`.
 - **모드 난이도 배치 변경** → `pickMode()`.
-- **몬스터 추가/교체** → `assets/mon/`에 투명 PNG(권장 600×600) 저장 후 `ASSETS`의 해당 등급 배열(`cute`/`elite`/`boss`)에 `MON+'파일명.png'` 한 줄 추가. 풀 길이가 바뀌면 기존 단어의 몬스터 배정이 재셔플됨(데이터 무관, 외형만 변경). 참고 §4.8.
+- **몬스터 추가/교체** → `assets/mon/`에 투명 PNG(권장 600×600) 저장 후 `ASSETS`의 해당 등급 배열(`common`/`rare`/`epic`/`legend`)에 `MON+'파일명.png'` 한 줄 추가. 풀 길이가 바뀌면 기존 단어의 몬스터 배정이 재셔플됨(데이터 무관, 외형만 변경). 참고 §4.8.
 - **클라우드 동기화 설정/디버그** → `docs/firebase-setup.md`. 로직은 `cloud.js`, 앱 연동 훅은 `window.WQ`(index.html). 미설정이면 로컬 전용. 참고 §4.9.
 - **테마** → 현재 Arcade 고정(전환 UI 숨김). 되돌리려면 CSS의 `#themebtn,.themelabel,.themepick{display:none!important;}` 한 줄 제거.
 
