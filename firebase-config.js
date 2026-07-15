@@ -23,3 +23,11 @@ window.FIREBASE_CONFIG = {
 window.OCR_ENDPOINT = "https://crimson-leaf-7345.ranha-park.workers.dev/";
 /* 학생 1인당 하루 AI 스캔 제한(비용 통제). */
 window.OCR_DAILY_LIMIT = 8;
+
+/* 선생님 인증 프록시(Cloudflare Worker) 주소 — teacher-worker/ 배포 후 주소를 넣는다.
+   비어 있으면 앱에서 "선생님으로 시작" 이 인증 서버 미설정으로 막힌다(안전한 기본값).
+   이 값은 비밀이 아니라 단순 엔드포인트 URL이라 커밋해도 안전하다.
+   실제 비밀번호는 Worker 의 Secret(TEACHER_PW)에만 있고, 서버가 확인 후 위조 불가
+   커스텀 클레임을 부여해야만 선생님 쓰기가 firestore.rules 를 통과한다.
+   예: "https://wordquest-teacher.ranha-park.workers.dev" */
+window.TEACHER_AUTH_URL = "";

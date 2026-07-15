@@ -36,6 +36,7 @@
     getIdToken: function () { return Promise.resolve(null); },
     getProfile: function () { return null; },
     chooseRole: function () {},
+    requestTeacher: function () { return Promise.resolve({ ok: false, msg: '클라우드가 설정되지 않았어요.' }); },
     joinClassByCode: function () { return Promise.resolve({ ok: false }); },
     setDisplayName: function () { return Promise.resolve({ ok: false }); },
     createClass: function () { return Promise.resolve({ ok: false }); },
@@ -362,6 +363,38 @@
     }
   }
 
+  // ── 선생님 승격 요청 — teacher-worker(서버)가 비밀번호를 확인 ──
+  //   서버가 비번을 확인하면 그 계정에 위조 불가 커스텀 클레임(teacher=true)을 부여한다.
+  //   여기서 토큰을 강제 갱신(getIdToken(true))해 새 클레임을 받아와야, 이후
+  //   firestore.rules 가 선생님 쓰기(role='teacher'·반 생성/배포)를 허용한다.
+  //   ★ 비밀번호는 이 앱/소스 어디에도 없고 Worker 의 Secret 에만 있다.
+  async function requestTeacher(password) {
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    var url = window.TEACHER_AUTH_URL;
+    if (!url) return { ok: false, msg: '선생님 인증 서버가 아직 설정되지 않았어요.\n(관리자: firebase-config.js 의 TEACHER_AUTH_URL 을 채워주세요)' };
+    try {
+      var token = await user.getIdToken();
+      var r = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ idToken: token, password: String(password == null ? '' : password) })
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || !d.ok) {
+        var msg = (d && d.error === 'bad_password') ? '비밀번호가 올바르지 않습니다.'
+          : (d && d.error === 'rate_limited') ? '시도가 너무 많아요. 잠시 후 다시 시도해 주세요.'
+          : (d && d.error === 'unauthorized') ? '로그인이 만료됐어요. 다시 로그인해 주세요.'
+          : ('선생님 인증에 실패했어요.' + (d && d.detail ? ' (' + d.detail + ')' : ''));
+        return { ok: false, msg: msg };
+      }
+      // 방금 부여된 커스텀 클레임을 토큰에 반영(강제 갱신) → 다음 Firestore 쓰기부터 적용.
+      try { await user.getIdToken(true); } catch (e) {}
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, msg: (e && e.message) ? e.message : '네트워크 오류로 실패했어요.' };
+    }
+  }
+
   // ── 반 코드로 참여(학생) — 코드→반 매핑(classCodes) 조회 ──
   async function joinClassByCode(code, name) {
     if (!user) return { ok: false, msg: '로그인이 필요해요.' };
@@ -627,6 +660,7 @@
 
     getProfile: function () { return profile; },
     chooseRole: chooseRole,
+    requestTeacher: requestTeacher,
     joinClassByCode: joinClassByCode,
     setDisplayName: setDisplayName,
     createClass: createClass,

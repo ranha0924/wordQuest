@@ -1077,13 +1077,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=68"></script>
-<script src="pack-hs1.js?v=68"></script>
-<script src="pack-hs2.js?v=68"></script>
-<script src="pack-hs3.js?v=68"></script>
-<script src="pack-confuse.js?v=68"></script>
-<script src="pack-vacation.js?v=68"></script>
-<script src="firebase-config.js?v=68"></script>
+<script src="words.js?v=69"></script>
+<script src="pack-hs1.js?v=69"></script>
+<script src="pack-hs2.js?v=69"></script>
+<script src="pack-hs3.js?v=69"></script>
+<script src="pack-confuse.js?v=69"></script>
+<script src="pack-vacation.js?v=69"></script>
+<script src="firebase-config.js?v=69"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -3039,14 +3039,21 @@ function setCloudStatus(s){
 }
 // 로그인 후 계정 영역: 역할 선택 / 학생 반 참여 / 선생님 반 관리
 let roleEditing=false; // '역할 바꾸기'를 눌러 선택 UI를 다시 연 상태
-// 선생님 역할은 비밀번호로 보호(학생의 임의 승격 방지). ※ 클라이언트 소프트 게이트.
-const TEACHER_PW='8889';
-function teacherGate(){
+// 선생님 승격은 서버(teacher-worker)가 비밀번호를 확인하고 "위조 불가 커스텀 클레임"을
+// 부여할 때만 인정된다. 비밀번호는 이 소스에 없다(Worker Secret 에만 존재).
+// 브라우저 콘솔에서 chooseRole('teacher') 로 우회해도, firestore.rules 의 isTeacher()가
+// 클레임 없는 쓰기를 서버에서 거부한다. (과거: 하드코딩 비번=소프트 게이트 → 우회 가능했음)
+async function teacherGate(){
+  const C=window.Cloud;
+  if(!C||!C.enabled||!(C.currentUser&&C.currentUser())){
+    alert('먼저 설정(⚙)에서 구글로 로그인해 주세요.');
+    return false;
+  }
   const pw=window.prompt('선생님 전용 비밀번호를 입력하세요.');
   if(pw===null)return false;              // 취소
-  if(pw.trim()===TEACHER_PW)return true;
-  alert('비밀번호가 올바르지 않습니다.');
-  return false;
+  const r=await C.requestTeacher(pw);
+  if(!r||!r.ok){ alert((r&&r.msg)||'선생님 인증에 실패했습니다.'); return false; }
+  return true;
 }
 function renderAccount(){
   const C=window.Cloud; if(!C||!C.enabled) return;
@@ -3393,7 +3400,7 @@ async function renderTeacherStudents(){
   on('cloud-syncnow','click',()=>C()&&C().syncNow&&C().syncNow());
   // 역할 선택
   on('acct-role-student','click',async()=>{ if(C()&&C().chooseRole){ await C().chooseRole('student'); roleEditing=false; try{renderAccount();}catch(e){} } });
-  on('acct-role-teacher','click',async()=>{ if(!teacherGate())return; if(C()&&C().chooseRole){ await C().chooseRole('teacher'); roleEditing=false; try{renderAccount();}catch(e){} } });
+  on('acct-role-teacher','click',async()=>{ if(!(await teacherGate()))return; if(C()&&C().chooseRole){ await C().chooseRole('teacher'); roleEditing=false; try{renderAccount();}catch(e){} } });
   on('acct-rolechange','click',()=>{ roleEditing=true; try{renderAccount();}catch(e){} });
   on('acct-role-cancel','click',()=>{ roleEditing=false; try{renderAccount();}catch(e){} });
   // 학생: 이름 저장
@@ -3457,7 +3464,7 @@ async function renderTeacherStudents(){
   on('login-modal-google','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
   on('login-modal-skip','click',()=>{ try{sessionStorage.setItem('wq_login_skipped','1');}catch(e){} hideLoginModal(); });
   // 역할 선택(로그인 후) — 선택 즉시 역할 저장 + 역할별 화면으로 자동 이동
-  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; if(!teacherGate())return; await C().chooseRole('teacher'); hideLoginModal(); show('teacher'); });
+  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; if(!(await teacherGate()))return; await C().chooseRole('teacher'); hideLoginModal(); show('teacher'); });
   on('lm-student','click',async()=>{ if(!C()||!C().chooseRole)return; await C().chooseRole('student'); hideLoginModal(); show('settings'); });
 })();
 // 시작 모달 상태 갱신: 미로그인→로그인 안내, 로그인+역할없음→역할 선택(건너뛰기 무시)
@@ -3544,7 +3551,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=68"></script>
+<script type="module" src="cloud.js?v=69"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

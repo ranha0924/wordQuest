@@ -1,0 +1,27 @@
+# WordQuest 선생님 인증 Worker — 배포 설정
+# 배포:  cd teacher-worker && npx wrangler deploy
+# (처음이면)  npx wrangler login
+name = "wordquest-teacher"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# ── 공개 변수(비밀 아님) ─────────────────────────────────────────────
+# firebase-config.js 의 apiKey(공개 식별자)와 동일하게.
+[vars]
+FIREBASE_API_KEY = "AIzaSyBeJFT8TIhx3vxuKdruF6G4G5ZNfHoJpX8"
+# 허용할 앱 도메인(배포 URL). 기본 * 대신 실제 도메인으로 좁히는 걸 권장.
+ALLOW_ORIGIN = "https://ranha0924.github.io"
+
+# ── 비밀값은 여기 쓰지 말 것! 아래 명령으로 등록(암호화 저장) ──────────
+#   npx wrangler secret put TEACHER_PW
+#       → 선생님 전용 비밀번호(길고 무작위로! 예: 20자 이상)
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT
+#       → Firebase 서비스계정 JSON 전체를 붙여넣기
+#         (콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성)
+
+# ── 선택: 무차별 대입 방어 KV(강력 권장) ──────────────────────────────
+#   npx wrangler kv namespace create TEACHER_KV
+#   → 출력된 id 를 아래에 채우고 주석 해제
+# [[kv_namespaces]]
+# binding = "TEACHER_KV"
+# id = "여기에_KV_네임스페이스_id"
