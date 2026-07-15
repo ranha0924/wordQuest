@@ -1079,13 +1079,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=71"></script>
-<script src="pack-hs1.js?v=71"></script>
-<script src="pack-hs2.js?v=71"></script>
-<script src="pack-hs3.js?v=71"></script>
-<script src="pack-confuse.js?v=71"></script>
-<script src="pack-vacation.js?v=71"></script>
-<script src="firebase-config.js?v=71"></script>
+<script src="words.js?v=72"></script>
+<script src="pack-hs1.js?v=72"></script>
+<script src="pack-hs2.js?v=72"></script>
+<script src="pack-hs3.js?v=72"></script>
+<script src="pack-confuse.js?v=72"></script>
+<script src="pack-vacation.js?v=72"></script>
+<script src="firebase-config.js?v=72"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1310,7 +1310,7 @@ function renderStreakBar(){
   html+='<span class="fz">❄️ '+fz+'</span>';
   el.className=cls; el.innerHTML=html; el.style.display='';
 }
-/* ===== 반 주간 랭킹 모달: 이번 주 완료 단어 순 · 상위 10 + 내 순위 ===== */
+/* ===== 랭킹 모달: 이번 주 완료 단어 순 · 반=반원 전원 / 전체=상위 100 (+ 내 순위) ===== */
 let _rankTab='class';
 async function openRank(tab){
   _rankTab=tab||_rankTab||'class';
@@ -1332,10 +1332,9 @@ async function renderClassRank(body,C){
   const active=(list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 친구가 없어요.<br>(반에 참여해야 반 랭킹이 보여요)<br>먼저 단어를 풀어 1등을 차지해요!</div>'; return; }
   const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
-  let html=active.slice(0,10).map(row).join('');
+  let html=active.map(row).join('');   // 반 전원 다 표시(이번 주 푼 반 애들 전부) — 상한 없음
   const mi=active.findIndex(e=>e.me);
-  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
-  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
+  if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
   body.innerHTML=html;
 }
 // 전체 랭킹: 이번 주 완료 단어 수 순(로그인 사용자 전체) — 반 랭킹과 동일 기준
@@ -1345,9 +1344,9 @@ async function renderGlobalRank(body,C){
   const active=list.filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!</div>'; return; }
   const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
-  let html=active.slice(0,10).map(row).join('');
+  let html=active.slice(0,100).map(row).join('');   // 전체 랭킹 상위 100
   const mi=active.findIndex(e=>e.me);
-  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
+  if(mi>=100) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
   else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
   body.innerHTML=html;
 }
@@ -3552,7 +3551,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=71"></script>
+<script type="module" src="cloud.js?v=72"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
