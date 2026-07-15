@@ -633,6 +633,12 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
   .startbtn,.pressstart,.torch,.rtag,.msgbox .cur,.arena.spawn::after,.mrow .star,#enterbtn .star{animation:none!important;}
   *{transition-duration:.001ms!important;}
 }
+/* 유닛(사용자 지정 묶음) 목록 */
+.unitrow{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--night);border:3px solid var(--line);padding:8px 10px;margin-bottom:6px;}
+.unitinfo{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.unitinfo b{color:var(--gold);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.unitinfo span{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);}
+.unitstudy{flex-shrink:0;white-space:nowrap;}
 /* 인앱 WebView(구글 클래스룸 등)가 SVG data-URI border-image 를 회색 깨짐으로 그릴 때: 아래 스크립트가 html.nosvgframe 을 달면 픽셀 프레임을 끄고 solid 폴백 테두리만 쓴다(회색 방지). */
 html.nosvgframe *{border-image:none!important;}
 </style>
@@ -773,6 +779,7 @@ html.nosvgframe *{border-image:none!important;}
       <input type="file" id="ocralbumfile" accept="image/*" style="display:none;">
       <div id="ocrstatus" class="regmsg" style="display:none;"></div>
       <div class="flabel">단어 붙여넣기 <span class="sub">직접 입력·수정</span></div>
+      <input type="text" id="reg-unit" autocomplete="off" placeholder="유닛 이름 (선택 · 예: 중간고사 3과)" style="width:100%;background:var(--ink);border:3px solid var(--line);color:var(--text);font-family:inherit;font-size:13px;padding:10px 12px;box-sizing:border-box;margin-bottom:2px;">
       <div class="regex">
         <span>abandon <b>-</b> 버리다</span>
         <span>achieve <b>:</b> 성취하다</span>
@@ -785,6 +792,8 @@ html.nosvgframe *{border-image:none!important;}
         <button class="parsebtn" id="parsebtn">▶ 몬스터 영입!</button>
       </div>
       <div class="regmsg" id="regmsg" style="display:none;"></div>
+      <div class="flabel">📚 내 유닛 <span class="sub">유닛만 골라 집중 학습</span></div>
+      <div id="unitlist"></div>
       <div class="flabel">어휘 담기 <span class="sub">교재 없이 바로 시작</span></div>
       <button class="samplebtn" id="samplebtn" style="display:none;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg>샘플 단어 20개로 시작하기</button>
       <div id="packlist"></div>
@@ -1053,11 +1062,11 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=61"></script>
-<script src="pack-hs1.js?v=61"></script>
-<script src="pack-confuse.js?v=61"></script>
-<script src="pack-vacation.js?v=61"></script>
-<script src="firebase-config.js?v=61"></script>
+<script src="words.js?v=62"></script>
+<script src="pack-hs1.js?v=62"></script>
+<script src="pack-confuse.js?v=62"></script>
+<script src="pack-vacation.js?v=62"></script>
+<script src="firebase-config.js?v=62"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1562,30 +1571,61 @@ function renderReg(){
   if(remain>0){bb.style.display='block';$('bankbtn-t').textContent='범용 어휘 '+remain+'개';}
   else bb.style.display='none';
   updateDetect();
+  try{renderUnits();}catch(e){}
 }
 $('regtext').addEventListener('input',updateDetect);
 $('parsebtn').addEventListener('click',()=>{
   const parsed=parseText($('regtext').value);
   if(!parsed.length){regMsg('영입할 몬스터가 없다… 형식을 확인하라! (예: abandon - 버리다)');return;}
-  const existing=new Set(S.words.map(w=>w.w.toLowerCase()));
-  let added=0,dup=0;
+  const unit=sanitizeField((($('reg-unit')||{}).value)||'').slice(0,40); // 유닛 이름(선택)
+  const byW=new Map(S.words.map(w=>[w.w.toLowerCase(),w]));
+  let added=0,dup=0,tagged=0;
   parsed.forEach(p=>{
     const k=p.w.toLowerCase();
-    if(existing.has(k)){dup++;return;}
-    existing.add(k);
-    S.words.push({id:k,w:p.w,m:p.m,stage:0,wrong:0,seen:0,cap:false,due:today(),created:today()});
-    added++;
+    const ex=byW.get(k);
+    if(ex){ dup++; if(unit&&(ex.unit||'')!==unit){ex.unit=unit;tagged++;} return; } // 이미 있으면 유닛만 갱신
+    const w={id:k,w:p.w,m:p.m,stage:0,wrong:0,seen:0,cap:false,due:today(),created:today()};
+    if(unit)w.unit=unit;
+    byW.set(k,w); S.words.push(w); added++;
   });
   persist();
   if(added){$('regtext').value='';sfx('appear');updateDetect();}
-  regMsg(added?('몬스터 '+added+'마리가 던전에 서식하기 시작했다!'+(dup?' (중복 '+dup+'개 제외)':'')):('전부 이미 서식 중인 몬스터다! (중복 '+dup+'개)'));
+  let msg;
+  if(added) msg='몬스터 '+added+'마리가'+(unit?' [유닛: '+unit+']':'')+' 던전에 서식하기 시작했다!'+(dup?' (중복 '+dup+'개 제외'+(tagged?', 유닛 이동 '+tagged:'')+')':'');
+  else if(tagged) msg='이미 있는 단어 '+tagged+'개를 [유닛: '+unit+']로 옮겼다.';
+  else msg='전부 이미 서식 중인 몬스터다! (중복 '+dup+'개)';
+  regMsg(msg);
   $('regcount').textContent='서식 중 '+S.words.length+'마리';
   $('samplebtn').style.display=S.words.length===0?'block':'none';
+  try{renderUnits();}catch(e){}
 });
 $('samplebtn').addEventListener('click',()=>{
   $('regtext').value=SAMPLE;
   $('parsebtn').click();
 });
+// ===== 유닛(사용자 지정 묶음): 원하는 단어만 한 묶음으로 모아 집중 학습 =====
+function unitsOf(){ const m={}; S.words.forEach(w=>{const u=(w.unit||'').trim(); if(u)(m[u]=m[u]||[]).push(w);}); return m; }
+function renderUnits(){
+  const box=$('unitlist'); if(!box)return;
+  const m=unitsOf(), names=Object.keys(m).sort();
+  if(!names.length){ box.innerHTML='<div class="regmsg" style="display:block;">아직 유닛이 없어요. 위 <b>유닛 이름</b> 칸에 이름을 적고 단어를 영입하면 여기 모여, 그 유닛만 집중해서 외울 수 있어요.</div>'; return; }
+  box.innerHTML=names.map(u=>{
+    const ws=m[u], cap=ws.filter(w=>w.cap).length;
+    return '<div class="unitrow"><div class="unitinfo"><b>'+esc(u)+'</b><span>'+ws.length+'단어 · 마스터 '+cap+'/'+ws.length+'</span></div>'
+      +'<button class="subbtn unitstudy" type="button" data-u="'+esc(u)+'">▶ 집중 학습</button></div>';
+  }).join('');
+  box.querySelectorAll('.unitstudy').forEach(b=>b.addEventListener('click',()=>startUnitDrill(b.getAttribute('data-u'))));
+}
+// 유닛 집중 학습: 그 유닛 단어만 모아 즉석 전투(due 무관, SRS 정상 적용). startWeakDrill 과 같은 패턴.
+function startUnitDrill(unit){
+  const ws=S.words.filter(w=>(w.unit||'').trim()===unit);
+  if(!ws.length){ regMsg('그 유닛에 단어가 없어요.'); return; }
+  const q=ws.map(w=>w.id);
+  for(let i=q.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=q[i];q[i]=q[j];q[j]=t;}
+  if(q.length>20)q.length=20; // 한 판 최대 20마리(반복 가능)
+  S.session={q,hearts:HEARTS_MAX,maxH:HEARTS_MAX,combo:0,best:0,win:0,hurt:0,cap:0,drill:true,unit:unit};
+  sfx('select');show('battle');nextMon();
+}
 
 /* ================= 사진 OCR (기기 내 · Tesseract.js) ================= */
 // OCR 대상 컨텍스트(영입소 / 선생님 배포) — 대상 textarea·상태표시·인식수 갱신·버튼을 바꿔 재사용.
@@ -1684,30 +1724,22 @@ function tryDataUrl(blob){
     }catch(e){ res(null); }
   });
 }
-// 파일 앞 16바이트 매직넘버로 '실제' 포맷 판별(확장자·MIME 타입이 틀린 사진 대비). 읽기 실패도 진단.
-async function sniffFormat(file){
-  return new Promise(function(res){
-    try{
-      const fr=new FileReader();
-      fr.onerror=function(){ res('read-fail'); };
-      fr.onload=function(){
-        try{
-          const b=new Uint8Array(fr.result);
-          const h=Array.from(b.slice(0,4)).map(x=>x.toString(16).padStart(2,'0')).join('');
-          if(h.indexOf('ffd8ff')===0) return res('jpeg');
-          if(h==='89504e47') return res('png');
-          if(String.fromCharCode.apply(null,b.slice(0,4))==='RIFF') return res('webp');
-          if(String.fromCharCode.apply(null,b.slice(4,8))==='ftyp'){
-            const brand=String.fromCharCode.apply(null,b.slice(8,12));
-            if(/heic|heix|hevc|heif|mif1|msf1/i.test(brand)) return res('heic');
-            return res('ftyp-'+brand.replace(/[^\x20-\x7e]/g,''));
-          }
-          res('other:'+h);
-        }catch(e){ res('sniff-err'); }
-      };
-      fr.readAsArrayBuffer(file.slice(0,16));
-    }catch(e){ res('sniff-exc'); }
-  });
+// 파일 앞부분 바이트를 '여러 방법'으로 읽는다 — 안드로이드 content:// URI 는 방법에 따라 실패하므로 다중 시도.
+async function readHead(file){
+  try{ const ab=await file.arrayBuffer(); return new Uint8Array(ab.slice(0,16)); }catch(e){}
+  try{ const ab=await file.slice(0,16).arrayBuffer(); return new Uint8Array(ab); }catch(e){}
+  try{ return await new Promise(function(res,rej){ const fr=new FileReader(); fr.onerror=function(){rej();}; fr.onload=function(){res(new Uint8Array(fr.result).slice(0,16));}; fr.readAsArrayBuffer(file); }); }catch(e){}
+  return null;
+}
+// 매직넘버 → 실제 포맷(확장자·MIME 가 틀린 사진 대비). null 이면 read-fail(바이트 자체를 못 읽음).
+function fmtOf(b){
+  if(!b) return 'read-fail';
+  const h=Array.from(b.slice(0,4)).map(function(x){return x.toString(16).padStart(2,'0');}).join('');
+  if(h.indexOf('ffd8ff')===0) return 'jpeg';
+  if(h==='89504e47') return 'png';
+  if(String.fromCharCode.apply(null,b.slice(0,4))==='RIFF') return 'webp';
+  if(String.fromCharCode.apply(null,b.slice(4,8))==='ftyp'){ const br=String.fromCharCode.apply(null,b.slice(8,12)); if(/heic|heix|hevc|heif|mif1|msf1/i.test(br)) return 'heic'; return 'ftyp-'+br.replace(/[^\x20-\x7e]/g,''); }
+  return 'other:'+h;
 }
 // 대형 이미지: 풀해상도 디코드가 치수/메모리 한계로 실패할 때 축소 디코드로 구제(크롬 등).
 async function tryBitmapResize(blob){
@@ -1716,10 +1748,20 @@ async function tryBitmapResize(blob){
     return { src:bmp, w:bmp.width, h:bmp.height, cleanup:function(){ try{bmp.close&&bmp.close();}catch(e){} } };
   }catch(e){ return null; }
 }
-// 파일 → 그릴 수 있는 디코더 결과. 매직넘버 HEIC 감지 + 다중 디코더 + 축소 디코드 + 실패 원인 진단.
+// 원본 File 이 안 열리면(안드로이드 content URI 접근 문제) 바이트를 통째로 읽어 '새 Blob'으로 재구성 후 디코드.
+async function tryReconstruct(file,fmt){
+  let ab=null;
+  try{ ab=await file.arrayBuffer(); }catch(e){}
+  if(!ab){ try{ ab=await new Promise(function(res,rej){ const fr=new FileReader(); fr.onerror=function(){rej();}; fr.onload=function(){res(fr.result);}; fr.readAsArrayBuffer(file); }); }catch(e){} }
+  if(!ab) return null;
+  const mt=(fmt==='png')?'image/png':(fmt==='webp')?'image/webp':'image/jpeg';
+  const blob=new Blob([ab],{type:mt});
+  return (await tryBitmap(blob))||(await tryImg(blob))||(await tryDataUrl(blob))||(await tryBitmapResize(blob));
+}
+// 파일 → 그릴 수 있는 디코더 결과. 실제포맷 감지 + 다중 디코더 + 축소 디코드 + 바이트 재구성 + 실패 원인 진단.
 async function decodeImageFromFile(file){
   let blob=file, converted=false;
-  const fmt=await sniffFormat(file); let diag='fmt='+fmt;
+  const head=await readHead(file); const fmt=fmtOf(head); let diag='fmt='+fmt;
   if(looksHeic(file) || fmt==='heic'){ // 타입/확장자 또는 실제 매직바이트가 HEIC → JPEG 변환
     try{ ocrStatus('사진(고효율/HEIC) 변환 중… 처음 한 장은 조금 걸려요'); blob=await heicToJpegBlob(file); converted=true; }
     catch(e){ diag+=' heic1:'+((e&&(e.message||e.name))||'err'); blob=file; }
@@ -1728,6 +1770,7 @@ async function decodeImageFromFile(file){
   d=await tryImg(blob);        if(d) return d;
   d=await tryDataUrl(blob);    if(d) return d;   // blob:/createImageBitmap 막힌 인앱 WebView 우회
   d=await tryBitmapResize(blob); if(d) return d; // 초대형 이미지 축소 디코드
+  d=await tryReconstruct(file,fmt); if(d) return d; // 바이트 재구성 후 디코드(File 접근 문제 우회)
   if(!converted){ // 매직넘버엔 안 잡혔지만 실제 HEIC/특수포맷일 수 있음 → 강제 변환 후 재시도
     try{ ocrStatus('사진 변환 중… 잠시만요'); const b=await heicToJpegBlob(file);
       d=await tryBitmap(b)||await tryImg(b)||await tryDataUrl(b)||await tryBitmapResize(b); if(d) return d;
@@ -1868,11 +1911,11 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v61: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v62: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v61';
+var BUILD='v62';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -3394,7 +3437,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=61"></script>
+<script type="module" src="cloud.js?v=62"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
