@@ -1077,13 +1077,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=66"></script>
-<script src="pack-hs1.js?v=66"></script>
-<script src="pack-hs2.js?v=66"></script>
-<script src="pack-hs3.js?v=66"></script>
-<script src="pack-confuse.js?v=66"></script>
-<script src="pack-vacation.js?v=66"></script>
-<script src="firebase-config.js?v=66"></script>
+<script src="words.js?v=67"></script>
+<script src="pack-hs1.js?v=67"></script>
+<script src="pack-hs2.js?v=67"></script>
+<script src="pack-hs3.js?v=67"></script>
+<script src="pack-confuse.js?v=67"></script>
+<script src="pack-vacation.js?v=67"></script>
+<script src="firebase-config.js?v=67"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1287,7 +1287,7 @@ async function openRank(tab){
   document.querySelectorAll('.ranktab').forEach(b=>b.classList.toggle('on', b.getAttribute('data-tab')===_rankTab));
   const ttl=$('rank-title'), sub=$('rank-sub');
   if(ttl)ttl.textContent=_rankTab==='global'?'🏆 전체 랭킹':'🏆 우리 반 랭킹';
-  if(sub)sub.textContent=_rankTab==='global'?'누구나 · 마스터한 단어 수 기준':'우리 반 · 이번 주 완료 단어 기준';
+  if(sub)sub.textContent=_rankTab==='global'?'전체 · 이번 주 완료 단어 기준':'우리 반 · 이번 주 완료 단어 기준';
   body.innerHTML='<div style="color:#8a8ab0;padding:22px;text-align:center;">불러오는 중…</div>';
   if(_rankTab==='global') await renderGlobalRank(body,C);
   else await renderClassRank(body,C);
@@ -1305,17 +1305,17 @@ async function renderClassRank(body,C){
   else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
   body.innerHTML=html;
 }
-// 전체 랭킹: 마스터한 단어 수 순(로그인 사용자 전체)
+// 전체 랭킹: 이번 주 완료 단어 수 순(로그인 사용자 전체) — 반 랭킹과 동일 기준
 async function renderGlobalRank(body,C){
   let list=null; try{ list=(C&&C.getGlobalRank)?await C.getGlobalRank():null; }catch(e){}
   if(list===null){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">전체 랭킹을 불러오지 못했어요.<br><small>로그인 상태·네트워크를 확인해 주세요.<br>(전체 랭킹은 Firebase 보안 규칙 배포가 필요해요)</small></div>'; return; }
-  const active=list.filter(e=>(e.mastered|0)>0);
-  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 마스터한 단어가 있는 사람이 없어요.<br>먼저 단어를 마스터해서 1등을 노려봐요!</div>'; return; }
-  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.mastered|0)+'<small>마스터</small></span></div>';
+  const active=list.filter(e=>(e.wk|0)>0);
+  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!</div>'; return; }
+  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
   let html=active.slice(0,10).map(row).join('');
   const mi=active.findIndex(e=>e.me);
   if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
-  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(아직 마스터 0단어)</b></span><span class="rkwk">0<small>마스터</small></span></div>';
+  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
   body.innerHTML=html;
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
@@ -1972,11 +1972,11 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v66: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v67: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v66';
+var BUILD='v67';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3506,7 +3506,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=66"></script>
+<script type="module" src="cloud.js?v=67"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

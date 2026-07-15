@@ -254,26 +254,26 @@
         });
       } catch (e2) { /* 필드 없으면 무시 */ }
     } catch (e) { console.warn('[cloud] 요약 기록 실패', e); }
-    // ── 반 주간 랭킹 항목 갱신(학생 + 반 소속) — 최근 8일 일자별 완료 단어수(days) + 연속 ──
-    //    days 를 저장해두면, 조회하는 쪽에서 '이번 주(월~오늘)' 합을 언제든 다시 계산할 수 있다.
-    //    → 오늘 안 해도 이번 주에 한 기록이 반영되고, 지난주 점수는 새 주가 되면 자동으로 빠진다.
+    // ── 주간 랭킹 항목(반·전체 공통) — 최근 8일 일자별 완료 단어수(days) + 연속 ──
+    //    days 를 저장해두면 조회 시 '이번 주(월~오늘)' 합을 다시 계산할 수 있다(지난주 점수는 새 주가 되면 자동 제외).
+    var rkDays = {};
+    for (var wi = 0; wi < 8; wi++) {
+      var dk = addDaysStr(t, -wi), de = dh[dk];
+      if (de) { var dv = (de.w != null ? de.w : de.ok) || 0; if (dv) rkDays[dk] = dv; }
+    }
+    var rkStreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
+    var rkName = ((profile && (profile.displayName || profile.name)) || user.displayName || '익명').slice(0, 40);
+    // 반 랭킹(학생 + 반 소속)
     try {
       if (profile && profile.role === 'student' && profile.classId) {
-        var days = {};
-        for (var wi = 0; wi < 8; wi++) {
-          var dk = addDaysStr(t, -wi), de = dh[dk];
-          if (de) { var dv = (de.w != null ? de.w : de.ok) || 0; if (dv) days[dk] = dv; }
-        }
-        var lstreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
-        var lref = fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid);
-        await fsMod.setDoc(lref, { name: (profile.displayName || profile.name || '익명').slice(0, 40), wk: weekSum(days, t), streak: lstreak, days: days, at: now() });
+        await fsMod.setDoc(fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid),
+          { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
       }
-    } catch (eL) { /* 랭킹 쓰기 실패는 조용히(규칙 미배포·오프라인 등) */ }
-    // ── 전체(글로벌) 랭킹 항목: 누적 마스터/총 단어수. 로그인 사용자 누구나 자기 것만 기록. ──
+    } catch (eL) { /* 규칙 미배포·오프라인 등 조용히 */ }
+    // 전체 랭킹 — 반 랭킹과 동일하게 '이번 주 완료 단어수' 기준. 로그인 사용자 누구나 자기 것만 기록.
     try {
-      var gname = (profile && (profile.displayName || profile.name)) || user.displayName || '익명';
       await fsMod.setDoc(fsMod.doc(db, 'leaderboards', '_global', 'entries', user.uid),
-        { name: gname.slice(0, 40), mastered: cap, total: arr.length, at: now() });
+        { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
     } catch (eG) { /* 규칙 미배포·오프라인 등 조용히 */ }
   }
 
@@ -549,12 +549,13 @@
     try {
       var col = fsMod.collection(db, 'leaderboards', '_global', 'entries');
       var res = await fsMod.getDocs(col);
-      var out = [];
+      var t = todayStr(), out = [];
       res.forEach(function (d) {
         var v = d.data() || {};
-        out.push({ uid: d.id, name: (v.name || '익명'), mastered: (v.mastered || 0), total: (v.total || 0), me: d.id === user.uid });
+        var wk = v.days ? weekSum(v.days, t) : (v.wk || 0); // 조회 시점에 '이번 주' 합 재계산
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: (v.streak || 0), me: d.id === user.uid });
       });
-      out.sort(function (a, b) { return (b.mastered - a.mastered) || (b.total - a.total) || (a.name < b.name ? -1 : 1); });
+      out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
       return out;
     } catch (e) {
       console.warn('[cloud] 전체 랭킹 조회 실패', e);

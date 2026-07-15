@@ -129,8 +129,8 @@ service cloud.firestore {
       allow write: if signedIn()
         && request.auth.uid == uid
         && request.resource.data.name is string && request.resource.data.name.size() <= 40
-        && request.resource.data.mastered is number
-        && request.resource.data.total is number;
+        && request.resource.data.wk is number
+        && request.resource.data.streak is number;
       allow delete: if signedIn() && (request.auth.uid == uid || isMaster());
     }
 
