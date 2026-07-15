@@ -27,7 +27,7 @@
   | `words.js` | **범용 고빈도 단어은행**(648개). `window.WORDBANK` 배열. 로직과 분리됨. |
   | `pack-hs1.js` | **고1 필수 어휘 팩**(224개, 14주제 큐레이션). `window.WORDPACK_HS1`. 예문·품사 포함, BANK에 편입돼 cloze 지원. 참고 §4.7. |
   | `manifest.webmanifest` · `sw.js` | **PWA** — 설치형 매니페스트 + 서비스 워커(앱 셸 오프라인 캐시). 참고 §4.11. |
-  | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 63종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
+  | `assets/` | **몬스터·배경·용사 이미지**(로컬 자체 포함). `assets/mon/` 스프라이트 60종(투명 PNG) + `bg.png`·`hero.png` + `icons/`(PWA 앱 아이콘 192·512·maskable·apple-180). 외부 CDN 의존 없음. |
   | `cloud.js` | **클라우드 동기화**(Firebase Auth+Firestore). `window.Cloud` 노출, 미설정 시 no-op. 오프라인 우선. |
   | `firebase-config.js` | Firebase 웹 config(사용자가 값 채움). 비어 있으면 로컬 전용. |
   | `firestore.rules` | Firestore 보안 규칙(본인 문서만 접근). |
@@ -64,6 +64,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| (v74) | **중복 종류 정리** — 종류가 겹치는 몬스터 3종 제거(원본 유지·신규 삭제): `snowbun`(↔moonrabbit 토끼)·`direwolf`(↔werewolf 늑대)·`irongolem`(↔rock/armor 골렘). 63종 → **60종** |
 | (v73) | **몬스터 그림 대폭 확장** — 힉스필드(Nano Banana 2)로 신규 37종 생성, 26종 → **63종**. 아트 풀을 3개(`cute`/`elite`/`boss`)에서 **등급별 4개**(`common`/`rare`/`epic`/`legend`)로 재편해 영웅·전설이 각자 전용 아트를 가짐. `monAsset`을 `rarity().key` 기반으로 일원화(§4.8) |
 
 ### 이번 세션(2026-07-11) 추가
@@ -174,13 +175,13 @@
 
 ### 4.8 몬스터 에셋 & 등급 진화
 - 이미지는 전부 **로컬**(`assets/`): 몬스터 스프라이트 `assets/mon/*.png`(600×600 투명 PNG), 배경 `assets/bg.png`, 용사 `assets/hero.png`. 외부 CDN 의존 없음(과거 CloudFront → 로컬로 이관).
-- `ASSETS = { bg, hero, common[24], rare[15], epic[12], legend[12] }` (`MON='assets/mon/'`). 네 풀은 `rarity(w).key`와 1:1로 매칭되며, `monAsset(w)`가 등급에 따라 풀을 골라 "진화"를 표현:
+- `ASSETS = { bg, hero, common[23], rare[14], epic[11], legend[12] }` (`MON='assets/mon/'`). 네 풀은 `rarity(w).key`와 1:1로 매칭되며, `monAsset(w)`가 등급에 따라 풀을 골라 "진화"를 표현:
 
   | 등급 | 오답 | 몬스터 풀 |
   |---|---|---|
-  | 일반 COMMON | 0 | `common` (24종) |
-  | 희귀 RARE | 1~2 | `rare` (15종) |
-  | 영웅 EPIC | 3~4 | `epic` (12종) |
+  | 일반 COMMON | 0 | `common` (23종) |
+  | 희귀 RARE | 1~2 | `rare` (14종) |
+  | 영웅 EPIC | 3~4 | `epic` (11종) |
   | 전설 LEGEND | 5+ | `legend` (12종) |
 
 - 이제 **영웅·전설이 각자 전용 아트 풀**을 가진다(과거엔 둘 다 `boss` 공유). `monAsset(w)=ASSETS[rarity(w).key][hash(word)%풀길이]` — 등급 판정을 `rarity()`로 일원화.
