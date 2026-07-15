@@ -1053,11 +1053,11 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=58"></script>
-<script src="pack-hs1.js?v=58"></script>
-<script src="pack-confuse.js?v=58"></script>
-<script src="pack-vacation.js?v=58"></script>
-<script src="firebase-config.js?v=58"></script>
+<script src="words.js?v=59"></script>
+<script src="pack-hs1.js?v=59"></script>
+<script src="pack-confuse.js?v=59"></script>
+<script src="pack-vacation.js?v=59"></script>
+<script src="firebase-config.js?v=59"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1659,10 +1659,29 @@ async function tryBitmap(blob){
 }
 function tryImg(blob){
   return new Promise(function(res){
-    const url=URL.createObjectURL(blob), img=new Image();
-    img.onload=function(){ res({ src:img, w:img.naturalWidth, h:img.naturalHeight, cleanup:function(){ URL.revokeObjectURL(url); } }); };
-    img.onerror=function(){ URL.revokeObjectURL(url); res(null); };
+    let url;
+    try{ url=URL.createObjectURL(blob); }catch(e){ res(null); return; } // blob: 차단 WebView 방어
+    const img=new Image();
+    img.onload=function(){ res({ src:img, w:img.naturalWidth, h:img.naturalHeight, cleanup:function(){ try{URL.revokeObjectURL(url);}catch(e){} } }); };
+    img.onerror=function(){ try{URL.revokeObjectURL(url);}catch(e){} res(null); };
     img.src=url;
+  });
+}
+// 3) FileReader → data: URL → <img>. blob: URL 이 막히거나 createImageBitmap 이 없는 인앱 WebView
+//    (구글 클래스룸 등)에서도 되는 최후 폴백. 앨범 사진이 "열지 못했어요"로 실패하던 문제 대응.
+function tryDataUrl(blob){
+  return new Promise(function(res){
+    try{
+      const fr=new FileReader();
+      fr.onerror=function(){ res(null); };
+      fr.onload=function(){
+        const img=new Image();
+        img.onload=function(){ res({ src:img, w:img.naturalWidth, h:img.naturalHeight, cleanup:function(){} }); };
+        img.onerror=function(){ res(null); };
+        img.src=fr.result;
+      };
+      fr.readAsDataURL(blob);
+    }catch(e){ res(null); }
   });
 }
 // 파일 → 그릴 수 있는 디코더 결과. HEIC 자동 변환 + 이중 디코더 + 미감지 HEIC 강제변환 구제.
@@ -1674,9 +1693,10 @@ async function decodeImageFromFile(file){
   }
   let d=await tryBitmap(blob); if(d) return d;
   d=await tryImg(blob);        if(d) return d;
+  d=await tryDataUrl(blob);    if(d) return d;   // blob:/createImageBitmap 막힌 인앱 WebView 우회
   if(!converted){ // 타입/확장자엔 안 잡혔지만 실제 HEIC일 수 있음 → 강제 변환 후 재시도
     try{ ocrStatus('사진 변환 중… 잠시만요'); const b=await heicToJpegBlob(file);
-      d=await tryBitmap(b)||await tryImg(b); if(d) return d;
+      d=await tryBitmap(b)||await tryImg(b)||await tryDataUrl(b); if(d) return d;
     }catch(e){}
   }
   const err=new Error('사진을 디코드하지 못함'); err.desc=fileDesc(file); throw err;
@@ -1810,11 +1830,11 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v58: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v59: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v58';
+var BUILD='v59';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -3336,7 +3356,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=58"></script>
+<script type="module" src="cloud.js?v=59"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
