@@ -647,6 +647,8 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 .uwt i{color:var(--dim);font-style:normal;font-size:11px;}
 .uwx{flex-shrink:0;background:none;border:2px solid var(--line);color:var(--hp);font-size:12px;width:26px;height:26px;cursor:pointer;line-height:1;}
 .unitdel{width:100%;margin-top:6px;color:var(--hp);justify-content:center;}
+.ranktab{font-size:13px;padding:9px;}
+.ranktab.on{background:var(--gold)!important;color:var(--ink)!important;border-image:none!important;border-color:var(--ink)!important;}
 /* 인앱 WebView(구글 클래스룸 등)가 SVG data-URI border-image 를 회색 깨짐으로 그릴 때: 아래 스크립트가 html.nosvgframe 을 달면 픽셀 프레임을 끄고 solid 폴백 테두리만 쓴다(회색 방지). */
 html.nosvgframe *{border-image:none!important;}
 </style>
@@ -706,7 +708,7 @@ html.nosvgframe *{border-image:none!important;}
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
         <button class="mrow" id="unit-home-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">유닛 학습</span><span class="sub">내가 만든 유닛만 집중 암기</span></button>
-        <button class="mrow" id="rankbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">반 랭킹</span><span class="sub">우리 반 이번 주 순위</span></button>
+        <button class="mrow" id="rankbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">랭킹</span><span class="sub">반 · 전체 순위</span></button>
         <button class="mrow" data-go="teacher" id="h-teacher-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">선생님 대시보드</span><span class="sub">반별 학생 학습 현황</span></button>
       </div>
       <div class="homemsg" id="h-msg" style="display:none;"></div>
@@ -1063,21 +1065,25 @@ html.nosvgframe *{border-image:none!important;}
 <!-- 반 주간 랭킹 모달 -->
 <div id="rank-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(4,4,10,.86);align-items:center;justify-content:center;padding:24px;">
   <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:18px 16px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6);">
-    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">🏆 우리 반 랭킹</div>
-    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">이번 주 완료 단어 기준</div>
-    <div id="rank-body" style="max-height:58vh;overflow-y:auto;"></div>
+    <div id="rank-title" style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">🏆 랭킹</div>
+    <div id="rank-sub" style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 8px;">이번 주 완료 단어 기준</div>
+    <div id="rank-tabs" style="display:flex;gap:6px;margin:0 0 12px;">
+      <button class="subbtn ranktab on" type="button" data-tab="class" style="flex:1;justify-content:center;">반 랭킹</button>
+      <button class="subbtn ranktab" type="button" data-tab="global" style="flex:1;justify-content:center;">전체 랭킹</button>
+    </div>
+    <div id="rank-body" style="max-height:52vh;overflow-y:auto;"></div>
     <button class="subbtn" id="rank-close" style="width:100%;justify-content:center;margin-top:12px;">닫기</button>
   </div>
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=65"></script>
-<script src="pack-hs1.js?v=65"></script>
-<script src="pack-hs2.js?v=65"></script>
-<script src="pack-hs3.js?v=65"></script>
-<script src="pack-confuse.js?v=65"></script>
-<script src="pack-vacation.js?v=65"></script>
-<script src="firebase-config.js?v=65"></script>
+<script src="words.js?v=66"></script>
+<script src="pack-hs1.js?v=66"></script>
+<script src="pack-hs2.js?v=66"></script>
+<script src="pack-hs3.js?v=66"></script>
+<script src="pack-confuse.js?v=66"></script>
+<script src="pack-vacation.js?v=66"></script>
+<script src="firebase-config.js?v=66"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1272,29 +1278,44 @@ function renderStreakBar(){
   el.className=cls; el.innerHTML=html; el.style.display='';
 }
 /* ===== 반 주간 랭킹 모달: 이번 주 완료 단어 순 · 상위 10 + 내 순위 ===== */
-async function openRank(){
+let _rankTab='class';
+async function openRank(tab){
+  _rankTab=tab||_rankTab||'class';
   const C=window.Cloud, modal=$('rank-modal'), body=$('rank-body');
   if(!modal||!body) return;
-  body.innerHTML='<div style="color:#8a8ab0;padding:22px;text-align:center;">불러오는 중…</div>';
   modal.style.display='flex';
+  document.querySelectorAll('.ranktab').forEach(b=>b.classList.toggle('on', b.getAttribute('data-tab')===_rankTab));
+  const ttl=$('rank-title'), sub=$('rank-sub');
+  if(ttl)ttl.textContent=_rankTab==='global'?'🏆 전체 랭킹':'🏆 우리 반 랭킹';
+  if(sub)sub.textContent=_rankTab==='global'?'누구나 · 마스터한 단어 수 기준':'우리 반 · 이번 주 완료 단어 기준';
+  body.innerHTML='<div style="color:#8a8ab0;padding:22px;text-align:center;">불러오는 중…</div>';
+  if(_rankTab==='global') await renderGlobalRank(body,C);
+  else await renderClassRank(body,C);
+}
+const _rkMedal=i=>['🥇','🥈','🥉'][i]||('<span class="rk">'+(i+1)+'</span>');
+// 반 랭킹: 이번 주 완료 단어 순(오늘 안 했어도 이번 주 기록 반영, 0단어 제외)
+async function renderClassRank(body,C){
   let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){}
-  // 이번 주에 한 기록이 있는 학생만 순위에(오늘 안 했어도 이번 주 기록으로 표시). 0단어는 제외.
   const active=(list||[]).filter(e=>(e.wk|0)>0);
-  if(!active.length){
-    body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!</div>';
-    return;
-  }
-  const medal=i=>['🥇','🥈','🥉'][i]||('<span class="rk">'+(i+1)+'</span>');
-  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'">'
-    +'<span class="rkn">'+medal(i)+'</span>'
-    +'<span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span>'
-    +'<span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'
-    +((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')
-    +'</div>';
+  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 친구가 없어요.<br>(반에 참여해야 반 랭킹이 보여요)<br>먼저 단어를 풀어 1등을 차지해요!</div>'; return; }
+  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
   let html=active.slice(0,10).map(row).join('');
   const mi=active.findIndex(e=>e.me);
-  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);                 // 10위 밖이면 내 순위 따로
-  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>'; // 나는 이번 주 기록 없음 → 격려 행
+  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
+  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
+  body.innerHTML=html;
+}
+// 전체 랭킹: 마스터한 단어 수 순(로그인 사용자 전체)
+async function renderGlobalRank(body,C){
+  let list=null; try{ list=(C&&C.getGlobalRank)?await C.getGlobalRank():null; }catch(e){}
+  if(list===null){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">전체 랭킹을 불러오지 못했어요.<br><small>로그인 상태·네트워크를 확인해 주세요.<br>(전체 랭킹은 Firebase 보안 규칙 배포가 필요해요)</small></div>'; return; }
+  const active=list.filter(e=>(e.mastered|0)>0);
+  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 마스터한 단어가 있는 사람이 없어요.<br>먼저 단어를 마스터해서 1등을 노려봐요!</div>'; return; }
+  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.mastered|0)+'<small>마스터</small></span></div>';
+  let html=active.slice(0,10).map(row).join('');
+  const mi=active.findIndex(e=>e.me);
+  if(mi>=10) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
+  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(아직 마스터 0단어)</b></span><span class="rkwk">0<small>마스터</small></span></div>';
   body.innerHTML=html;
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
@@ -1532,7 +1553,7 @@ function renderHome(){
   }
   $('h-msg').style.display='none';
   try{ const _ms=checkStreakMilestones(); if(_ms!=null) homeMsg('🎉 '+_ms+'일 연속 달성! 프리즈 ❄️+1 · EXP +'+_ms); renderStreakBar(); }catch(e){}
-  try{ const rb=$('rankbtn'); if(rb){ const p=(window.Cloud&&window.Cloud.getProfile)?window.Cloud.getProfile():null; rb.style.display=(p&&p.role==='student'&&p.classId)?'':'none'; } }catch(e){}
+  try{ const rb=$('rankbtn'); if(rb){ const p=(window.Cloud&&window.Cloud.getProfile)?window.Cloud.getProfile():null; rb.style.display=(p&&p.role==='student')?'':'none'; } }catch(e){}
   renderHomeHeat();
   try{toggleTeacherBtn();}catch(e){}
 }
@@ -1951,11 +1972,11 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v65: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v66: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v65';
+var BUILD='v66';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2150,6 +2171,7 @@ $('rankbtn').addEventListener('click',()=>{ sfx('select'); openRank(); });
 $('unit-home-btn').addEventListener('click',()=>{ sfx('select'); show('reg'); setTimeout(()=>{ try{ ($('unit-flabel')||$('unitlist')).scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} },240); });
 $('rank-close').addEventListener('click',closeRank);
 $('rank-modal').addEventListener('click',e=>{ if(e.target&&e.target.id==='rank-modal') closeRank(); });
+document.querySelectorAll('.ranktab').forEach(b=>b.addEventListener('click',()=>{ sfx('select'); openRank(b.getAttribute('data-tab')); }));
 $('ult-blast').addEventListener('click',useBlast);
 $('ult-heal').addEventListener('click',useHeal);
 window.addEventListener('keydown',e=>{
@@ -3484,7 +3506,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=65"></script>
+<script type="module" src="cloud.js?v=66"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

@@ -269,6 +269,12 @@
         await fsMod.setDoc(lref, { name: (profile.displayName || profile.name || '익명').slice(0, 40), wk: weekSum(days, t), streak: lstreak, days: days, at: now() });
       }
     } catch (eL) { /* 랭킹 쓰기 실패는 조용히(규칙 미배포·오프라인 등) */ }
+    // ── 전체(글로벌) 랭킹 항목: 누적 마스터/총 단어수. 로그인 사용자 누구나 자기 것만 기록. ──
+    try {
+      var gname = (profile && (profile.displayName || profile.name)) || user.displayName || '익명';
+      await fsMod.setDoc(fsMod.doc(db, 'leaderboards', '_global', 'entries', user.uid),
+        { name: gname.slice(0, 40), mastered: cap, total: arr.length, at: now() });
+    } catch (eG) { /* 규칙 미배포·오프라인 등 조용히 */ }
   }
 
   function notifyChanged() {
@@ -537,6 +543,25 @@
     }
   }
 
+  // ── 전체(글로벌) 랭킹 조회: 누적 마스터 단어수 내림차순. 규칙 미배포·오프라인이면 null(그레이스풀). ──
+  async function getGlobalRank() {
+    if (!user) return null;
+    try {
+      var col = fsMod.collection(db, 'leaderboards', '_global', 'entries');
+      var res = await fsMod.getDocs(col);
+      var out = [];
+      res.forEach(function (d) {
+        var v = d.data() || {};
+        out.push({ uid: d.id, name: (v.name || '익명'), mastered: (v.mastered || 0), total: (v.total || 0), me: d.id === user.uid });
+      });
+      out.sort(function (a, b) { return (b.mastered - a.mastered) || (b.total - a.total) || (a.name < b.name ? -1 : 1); });
+      return out;
+    } catch (e) {
+      console.warn('[cloud] 전체 랭킹 조회 실패', e);
+      return null;
+    }
+  }
+
   // ── 반 삭제(소유 선생님) — 반 문서 먼저, 코드 매핑은 있으면 정리(없어도 무시) ──
   // (배치로 묶으면 옛 반처럼 코드 문서가 없을 때 배치 전체가 실패하므로 분리한다)
   async function deleteClass(classId, code) {
@@ -612,6 +637,7 @@
     setClassPack: setClassPack,
     getClassPack: getClassPack,
     getRank: getRank,
+    getGlobalRank: getGlobalRank,
     isMaster: isMaster,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };
