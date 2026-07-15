@@ -239,6 +239,19 @@
         });
       } catch (e2) { /* 필드 없으면 무시 */ }
     } catch (e) { console.warn('[cloud] 요약 기록 실패', e); }
+    // ── 반 주간 랭킹 항목 갱신(학생 + 반 소속) — 최근 7일 완료 단어수(w, 없으면 ok) + 연속 ──
+    try {
+      if (profile && profile.role === 'student' && profile.classId) {
+        var wk = 0;
+        for (var wi = 0; wi < 7; wi++) {
+          var de = dh[addDaysStr(t, -wi)];
+          if (de) wk += ((de.w != null ? de.w : de.ok) || 0);
+        }
+        var lstreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
+        var lref = fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid);
+        await fsMod.setDoc(lref, { name: (profile.displayName || profile.name || '익명').slice(0, 40), wk: wk, streak: lstreak, at: now() });
+      }
+    } catch (eL) { /* 랭킹 쓰기 실패는 조용히(규칙 미배포·오프라인 등) */ }
   }
 
   function notifyChanged() {
@@ -486,6 +499,25 @@
     }
   }
 
+  // ── 반 주간 랭킹 조회(같은 반 학생/소유 선생님/마스터). 규칙 미배포·오프라인이면 null(그래스풀). ──
+  async function getRank() {
+    if (!user || !profile || !profile.classId) return null;
+    try {
+      var col = fsMod.collection(db, 'leaderboards', profile.classId, 'entries');
+      var res = await fsMod.getDocs(col);
+      var out = [];
+      res.forEach(function (d) {
+        var v = d.data() || {};
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: (v.wk || 0), streak: (v.streak || 0), me: d.id === user.uid });
+      });
+      out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
+      return out;
+    } catch (e) {
+      console.warn('[cloud] 랭킹 조회 실패', e);
+      return null;
+    }
+  }
+
   // ── 반 삭제(소유 선생님) — 반 문서 먼저, 코드 매핑은 있으면 정리(없어도 무시) ──
   // (배치로 묶으면 옛 반처럼 코드 문서가 없을 때 배치 전체가 실패하므로 분리한다)
   async function deleteClass(classId, code) {
@@ -560,6 +592,7 @@
     listStudents: listStudents,
     setClassPack: setClassPack,
     getClassPack: getClassPack,
+    getRank: getRank,
     isMaster: isMaster,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };

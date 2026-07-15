@@ -29,6 +29,18 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/classes/$(data.classId)).data.ownerUid == request.auth.uid;
     }
 
+    // 요청자(로그인 사용자)가 속한 반 id (없으면 null) — 반 랭킹 접근 판정용
+    function requesterClassId() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId
+        : null;
+    }
+    // 요청자가 이 반 소유 선생님인가
+    function ownsClass(cid) {
+      return exists(/databases/$(database)/documents/classes/$(cid))
+        && get(/databases/$(database)/documents/classes/$(cid)).data.ownerUid == request.auth.uid;
+    }
+
     // summary 내부 숫자 필드는 숫자만(위조 문자열이 대시보드에 섞이지 않게 서버단 방어)
     function validSummary(s) {
       return (!('streak' in s)     || s.streak is number)
@@ -108,6 +120,19 @@ service cloud.firestore {
           || (exists(/databases/$(database)/documents/classes/$(cid))
               && get(/databases/$(database)/documents/classes/$(cid)).data.ownerUid == request.auth.uid)
         );
+    }
+
+    // 반 주간 랭킹: 같은 반 학생끼리 서로의 항목(이름·주간 단어수·연속)을 읽고, 각자 자기 것만 쓴다.
+    //   (이메일·상세 요약은 노출하지 않음 — 표시용 필드만 저장)
+    match /leaderboards/{cid}/entries/{uid} {
+      allow read: if signedIn() && (requesterClassId() == cid || ownsClass(cid) || isMaster());
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && requesterClassId() == cid
+        && request.resource.data.name is string && request.resource.data.name.size() <= 40
+        && request.resource.data.wk is number
+        && request.resource.data.streak is number;
+      allow delete: if signedIn() && (request.auth.uid == uid || ownsClass(cid) || isMaster());
     }
 
     match /{document=**} {
