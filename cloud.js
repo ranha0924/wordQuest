@@ -108,6 +108,21 @@
     var d = new Date(p[0], p[1] - 1, p[2] + n);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+  // 이번 주(월요일~오늘) 날짜들 — 반 랭킹의 '이번 주' 기준(읽는 시점에 다시 계산해 오래된 점수 자동 제외)
+  function weekDates(t) {
+    var p = t.split('-').map(Number);
+    var sinceMon = (new Date(p[0], p[1] - 1, p[2]).getDay() + 6) % 7; // 월=0 … 일=6
+    var out = [];
+    for (var i = 0; i <= sinceMon; i++) out.push(addDaysStr(t, -i));
+    return out;
+  }
+  // 일자별 단어수 맵(days)에서 '이번 주' 합을 낸다. days 없으면 0.
+  function weekSum(days, t) {
+    if (!days) return 0;
+    var wd = weekDates(t), s = 0;
+    for (var i = 0; i < wd.length; i++) s += (days[wd[i]] || 0);
+    return s;
+  }
 
   // ── 병합: 단어별 updatedAt 최신 우선, meta는 스칼라 LWW + dailyHistory 날짜별 병합 ──
   function merge(local, remote) {
@@ -239,6 +254,27 @@
         });
       } catch (e2) { /* 필드 없으면 무시 */ }
     } catch (e) { console.warn('[cloud] 요약 기록 실패', e); }
+    // ── 주간 랭킹 항목(반·전체 공통) — 최근 8일 일자별 완료 단어수(days) + 연속 ──
+    //    days 를 저장해두면 조회 시 '이번 주(월~오늘)' 합을 다시 계산할 수 있다(지난주 점수는 새 주가 되면 자동 제외).
+    var rkDays = {};
+    for (var wi = 0; wi < 8; wi++) {
+      var dk = addDaysStr(t, -wi), de = dh[dk];
+      if (de) { var dv = (de.w != null ? de.w : de.ok) || 0; if (dv) rkDays[dk] = dv; }
+    }
+    var rkStreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
+    var rkName = ((profile && (profile.displayName || profile.name)) || user.displayName || '익명').slice(0, 40);
+    // 반 랭킹(학생 + 반 소속)
+    try {
+      if (profile && profile.role === 'student' && profile.classId) {
+        await fsMod.setDoc(fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid),
+          { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
+      }
+    } catch (eL) { /* 규칙 미배포·오프라인 등 조용히 */ }
+    // 전체 랭킹 — 반 랭킹과 동일하게 '이번 주 완료 단어수' 기준. 로그인 사용자 누구나 자기 것만 기록.
+    try {
+      await fsMod.setDoc(fsMod.doc(db, 'leaderboards', '_global', 'entries', user.uid),
+        { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
+    } catch (eG) { /* 규칙 미배포·오프라인 등 조용히 */ }
   }
 
   function notifyChanged() {
@@ -309,9 +345,11 @@
   }
 
   // ── 역할 선택(학생/선생님) — 1회 ──
+  //   선생님 전환은 서버(firestore.rules)의 허용목록(teacherAllow)이 판정한다.
+  //   목록에 없는 계정이 role='teacher' 를 쓰면 permission-denied → 친절 안내 반환.
   async function chooseRole(role) {
-    if (!user) return;
-    if (role !== 'student' && role !== 'teacher') return;
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    if (role !== 'student' && role !== 'teacher') return { ok: false };
     try {
       await fsMod.setDoc(userRef(user.uid), {
         schema: 2, role: role,
@@ -320,9 +358,14 @@
       }, { merge: true });
       if (profile) profile.role = role; else await loadProfile();
       accountChanged();
+      return { ok: true };
     } catch (e) {
       console.warn('[cloud] 역할 설정 실패', e);
-      alert('역할 저장에 실패했어요: ' + (e && e.message ? e.message : e));
+      var denied = e && (e.code === 'permission-denied' || /permission|insufficient/i.test(e.message || ''));
+      if (role === 'teacher' && denied) {
+        return { ok: false, denied: true, msg: '이 계정은 선생님 권한이 없어요.\n관리자(마스터)가 선생님 목록(teacherAllow)에 이 이메일을 추가해야 선생님이 됩니다.' };
+      }
+      return { ok: false, msg: '역할 저장에 실패했어요: ' + (e && e.message ? e.message : e) };
     }
   }
 
@@ -486,6 +529,47 @@
     }
   }
 
+  // ── 반 주간 랭킹 조회(같은 반 학생/소유 선생님/마스터). 규칙 미배포·오프라인이면 null(그래스풀). ──
+  async function getRank() {
+    if (!user || !profile || !profile.classId) return null;
+    try {
+      var col = fsMod.collection(db, 'leaderboards', profile.classId, 'entries');
+      var res = await fsMod.getDocs(col);
+      var t = todayStr(), out = [];
+      res.forEach(function (d) {
+        var v = d.data() || {};
+        // '이번 주' 합을 읽는 시점에 다시 계산(days 있으면). 옛 항목(days 없음)은 저장된 wk 폴백.
+        var wk = v.days ? weekSum(v.days, t) : (v.wk || 0);
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: (v.streak || 0), me: d.id === user.uid });
+      });
+      out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
+      return out;
+    } catch (e) {
+      console.warn('[cloud] 랭킹 조회 실패', e);
+      return null;
+    }
+  }
+
+  // ── 전체(글로벌) 랭킹 조회: 누적 마스터 단어수 내림차순. 규칙 미배포·오프라인이면 null(그레이스풀). ──
+  async function getGlobalRank() {
+    if (!user) return null;
+    try {
+      var col = fsMod.collection(db, 'leaderboards', '_global', 'entries');
+      var res = await fsMod.getDocs(col);
+      var t = todayStr(), out = [];
+      res.forEach(function (d) {
+        var v = d.data() || {};
+        var wk = v.days ? weekSum(v.days, t) : (v.wk || 0); // 조회 시점에 '이번 주' 합 재계산
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: (v.streak || 0), me: d.id === user.uid });
+      });
+      out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
+      return out;
+    } catch (e) {
+      console.warn('[cloud] 전체 랭킹 조회 실패', e);
+      return null;
+    }
+  }
+
   // ── 반 삭제(소유 선생님) — 반 문서 먼저, 코드 매핑은 있으면 정리(없어도 무시) ──
   // (배치로 묶으면 옛 반처럼 코드 문서가 없을 때 배치 전체가 실패하므로 분리한다)
   async function deleteClass(classId, code) {
@@ -560,6 +644,8 @@
     listStudents: listStudents,
     setClassPack: setClassPack,
     getClassPack: getClassPack,
+    getRank: getRank,
+    getGlobalRank: getGlobalRank,
     isMaster: isMaster,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };
