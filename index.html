@@ -639,6 +639,14 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 .unitinfo b{color:var(--gold);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .unitinfo span{font-family:'Galmuri9',monospace;font-size:10px;color:var(--dim);}
 .unitstudy{flex-shrink:0;white-space:nowrap;}
+.unitmanage{flex-shrink:0;padding:8px 9px;}
+.unitwords{background:var(--ink);border:2px solid var(--line);border-top:none;padding:6px 8px;margin:-6px 0 6px;}
+.uwrow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 2px;border-bottom:1px solid var(--line);}
+.uwrow:last-of-type{border-bottom:none;}
+.uwt{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.uwt i{color:var(--dim);font-style:normal;font-size:11px;}
+.uwx{flex-shrink:0;background:none;border:2px solid var(--line);color:var(--hp);font-size:12px;width:26px;height:26px;cursor:pointer;line-height:1;}
+.unitdel{width:100%;margin-top:6px;color:var(--hp);justify-content:center;}
 /* 인앱 WebView(구글 클래스룸 등)가 SVG data-URI border-image 를 회색 깨짐으로 그릴 때: 아래 스크립트가 html.nosvgframe 을 달면 픽셀 프레임을 끄고 solid 폴백 테두리만 쓴다(회색 방지). */
 html.nosvgframe *{border-image:none!important;}
 </style>
@@ -697,6 +705,7 @@ html.nosvgframe *{border-image:none!important;}
         <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
+        <button class="mrow" id="unit-home-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">유닛 학습</span><span class="sub">내가 만든 유닛만 집중 암기</span></button>
         <button class="mrow" id="rankbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">반 랭킹</span><span class="sub">우리 반 이번 주 순위</span></button>
         <button class="mrow" data-go="teacher" id="h-teacher-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">선생님 대시보드</span><span class="sub">반별 학생 학습 현황</span></button>
       </div>
@@ -792,7 +801,7 @@ html.nosvgframe *{border-image:none!important;}
         <button class="parsebtn" id="parsebtn">▶ 몬스터 영입!</button>
       </div>
       <div class="regmsg" id="regmsg" style="display:none;"></div>
-      <div class="flabel">📚 내 유닛 <span class="sub">유닛만 골라 집중 학습</span></div>
+      <div class="flabel" id="unit-flabel">📚 내 유닛 <span class="sub">유닛만 골라 집중 학습·관리</span></div>
       <div id="unitlist"></div>
       <div class="flabel">어휘 담기 <span class="sub">교재 없이 바로 시작</span></div>
       <button class="samplebtn" id="samplebtn" style="display:none;"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M2 2H14V14H2Z M4 4H6V6H4Z M11 4H13V6H11Z M4 11H6V13H4Z M11 11H13V13H11Z M8 8H10V10H8Z"/></svg>샘플 단어 20개로 시작하기</button>
@@ -1062,13 +1071,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=64"></script>
-<script src="pack-hs1.js?v=64"></script>
-<script src="pack-hs2.js?v=64"></script>
-<script src="pack-hs3.js?v=64"></script>
-<script src="pack-confuse.js?v=64"></script>
-<script src="pack-vacation.js?v=64"></script>
-<script src="firebase-config.js?v=64"></script>
+<script src="words.js?v=65"></script>
+<script src="pack-hs1.js?v=65"></script>
+<script src="pack-hs2.js?v=65"></script>
+<script src="pack-hs3.js?v=65"></script>
+<script src="pack-confuse.js?v=65"></script>
+<script src="pack-vacation.js?v=65"></script>
+<script src="firebase-config.js?v=65"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1611,17 +1620,38 @@ $('samplebtn').addEventListener('click',()=>{
 });
 // ===== 유닛(사용자 지정 묶음): 원하는 단어만 한 묶음으로 모아 집중 학습 =====
 function unitsOf(){ const m={}; S.words.forEach(w=>{const u=(w.unit||'').trim(); if(u)(m[u]=m[u]||[]).push(w);}); return m; }
-function renderUnits(){
+function renderUnits(openUnit){
+  try{ const ub=$('unit-home-btn'); if(ub) ub.style.display=Object.keys(unitsOf()).length?'':'none'; }catch(e){}
   const box=$('unitlist'); if(!box)return;
   const m=unitsOf(), names=Object.keys(m).sort();
   if(!names.length){ box.innerHTML='<div class="regmsg" style="display:block;">아직 유닛이 없어요. 위 <b>유닛 이름</b> 칸에 이름을 적고 단어를 영입하면 여기 모여, 그 유닛만 집중해서 외울 수 있어요.</div>'; return; }
-  box.innerHTML=names.map(u=>{
+  let html='';
+  names.forEach((u,i)=>{
     const ws=m[u], cap=ws.filter(w=>w.cap).length;
-    return '<div class="unitrow"><div class="unitinfo"><b>'+esc(u)+'</b><span>'+ws.length+'단어 · 마스터 '+cap+'/'+ws.length+'</span></div>'
-      +'<button class="subbtn unitstudy" type="button" data-u="'+esc(u)+'">▶ 집중 학습</button></div>';
-  }).join('');
+    html+='<div class="unitrow">'
+      +'<div class="unitinfo"><b>'+esc(u)+'</b><span>'+ws.length+'단어 · 마스터 '+cap+'/'+ws.length+'</span></div>'
+      +'<button class="subbtn unitmanage" type="button" data-i="'+i+'" aria-label="관리">⚙</button>'
+      +'<button class="subbtn unitstudy" type="button" data-u="'+esc(u)+'">▶ 집중</button>'
+      +'</div><div class="unitwords" id="uw'+i+'" style="display:none;"></div>';
+  });
+  box.innerHTML=html;
   box.querySelectorAll('.unitstudy').forEach(b=>b.addEventListener('click',()=>startUnitDrill(b.getAttribute('data-u'))));
+  box.querySelectorAll('.unitmanage').forEach(b=>{ const i=+b.getAttribute('data-i'); b.addEventListener('click',()=>toggleUnitManage(names[i],'uw'+i)); });
+  if(openUnit){ const oi=names.indexOf(openUnit); if(oi>=0) toggleUnitManage(openUnit,'uw'+oi); } // 관리 중이던 유닛 다시 펼치기
 }
+// 유닛 관리 패널: 단어 목록 + 개별 빼기(✕) + 유닛 해제(단어는 도감에 남음)
+function toggleUnitManage(unit,boxId){
+  const el=$(boxId); if(!el)return;
+  if(el.style.display==='block'){ el.style.display='none'; return; }
+  const ws=S.words.filter(w=>(w.unit||'').trim()===unit);
+  el.innerHTML=ws.map(w=>'<div class="uwrow"><span class="uwt">'+esc(w.w)+' <i>'+esc(w.m)+'</i></span><button class="uwx" type="button" data-w="'+esc(w.w.toLowerCase())+'" aria-label="빼기">✕</button></div>').join('')
+    +'<button class="subbtn unitdel" type="button">유닛 해제 (단어는 도감에 남음)</button>';
+  el.style.display='block';
+  el.querySelectorAll('.uwx').forEach(b=>b.addEventListener('click',()=>{ removeFromUnit(b.getAttribute('data-w')); renderUnits(unit); }));
+  const del=el.querySelector('.unitdel'); if(del)del.addEventListener('click',()=>{ if(confirm('“'+unit+'” 유닛을 해제할까요?\n(단어는 도감에 그대로 남고, 유닛 묶음만 사라져요)')){ clearUnit(unit); renderUnits(); } });
+}
+function removeFromUnit(wkey){ const w=S.words.find(x=>x.w.toLowerCase()===wkey); if(w){ delete w.unit; persist(); } }
+function clearUnit(unit){ let ch=false; S.words.forEach(w=>{ if((w.unit||'').trim()===unit){ delete w.unit; ch=true; } }); if(ch)persist(); }
 // 유닛 집중 학습: 그 유닛 단어만 모아 즉석 전투(due 무관, SRS 정상 적용). startWeakDrill 과 같은 패턴.
 function startUnitDrill(unit){
   const ws=S.words.filter(w=>(w.unit||'').trim()===unit);
@@ -1921,11 +1951,11 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v64: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v65: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v64';
+var BUILD='v65';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2116,6 +2146,8 @@ $('fleebtn').addEventListener('click',()=>{
 });
 // 반 랭킹 모달 열기/닫기
 $('rankbtn').addEventListener('click',()=>{ sfx('select'); openRank(); });
+// 홈 → 유닛 학습: 영입소로 이동해 '내 유닛' 섹션으로 스크롤
+$('unit-home-btn').addEventListener('click',()=>{ sfx('select'); show('reg'); setTimeout(()=>{ try{ ($('unit-flabel')||$('unitlist')).scrollIntoView({behavior:'smooth',block:'start'}); }catch(e){} },240); });
 $('rank-close').addEventListener('click',closeRank);
 $('rank-modal').addEventListener('click',e=>{ if(e.target&&e.target.id==='rank-modal') closeRank(); });
 $('ult-blast').addEventListener('click',useBlast);
@@ -3452,7 +3484,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=64"></script>
+<script type="module" src="cloud.js?v=65"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
