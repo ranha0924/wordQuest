@@ -1024,11 +1024,11 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=54"></script>
-<script src="pack-hs1.js?v=54"></script>
-<script src="pack-confuse.js?v=54"></script>
-<script src="pack-vacation.js?v=54"></script>
-<script src="firebase-config.js?v=54"></script>
+<script src="words.js?v=55"></script>
+<script src="pack-hs1.js?v=55"></script>
+<script src="pack-confuse.js?v=55"></script>
+<script src="pack-vacation.js?v=55"></script>
+<script src="firebase-config.js?v=55"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1752,11 +1752,11 @@ async function runOCR(file){
     if(!handled){ await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v54: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v55: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v54';
+var BUILD='v55';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -3054,7 +3054,8 @@ async function renderTeacherStudents(){
     // '오늘'·연속은 저장된 스냅샷이 아니라 실제 날짜 기준으로 계산(어제값이 오늘로 표시되던 문제 방지)
     const todayE=(sm.daily&&sm.daily[t])||null;
     const studied=!!todayE;
-    const todayCount=todayE?int(todayE.a):0;
+    // '오늘'은 완료 단어수(w, 없으면 정답수 ok)로 — 상세정보의 'N단어'와 동일하게 통일(시도수 a와 갈리지 않게)
+    const todayCount=todayE?int(todayE.w!=null?todayE.w:todayE.ok):0;
     const streak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0; // 어제/오늘 학습했을 때만 유효
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
@@ -3066,7 +3067,7 @@ async function renderTeacherStudents(){
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
         +'<div style="font-size:14px;font-weight:700;color:#e8e8f0;">'+dot+nm+'</div>'
         +'<div style="display:flex;align-items:center;gap:8px;">'
-          +'<span style="font-size:11px;color:#8a8ab0;">'+(studied?('오늘 '+todayCount+'문제'):'오늘 학습 없음')+'</span>'
+          +'<span style="font-size:11px;color:#8a8ab0;">'+(studied?('오늘 '+todayCount+'단어'):'오늘 학습 없음')+'</span>'
           +'<button class="tcx" data-uid="'+esc(s.uid)+'" title="반에서 제외" style="background:none;border:1px solid #5a2a2a;color:#e57373;border-radius:4px;font-size:10px;padding:2px 7px;cursor:pointer;font-family:inherit;flex:0 0 auto;">제외</button>'
           +'<span class="tcchev">▾</span>'
         +'</div>'
@@ -3277,7 +3278,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=54"></script>
+<script type="module" src="cloud.js?v=55"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
