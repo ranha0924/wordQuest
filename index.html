@@ -1062,13 +1062,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=63"></script>
-<script src="pack-hs1.js?v=63"></script>
-<script src="pack-hs2.js?v=63"></script>
-<script src="pack-hs3.js?v=63"></script>
-<script src="pack-confuse.js?v=63"></script>
-<script src="pack-vacation.js?v=63"></script>
-<script src="firebase-config.js?v=63"></script>
+<script src="words.js?v=64"></script>
+<script src="pack-hs1.js?v=64"></script>
+<script src="pack-hs2.js?v=64"></script>
+<script src="pack-hs3.js?v=64"></script>
+<script src="pack-confuse.js?v=64"></script>
+<script src="pack-vacation.js?v=64"></script>
+<script src="firebase-config.js?v=64"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1890,7 +1890,11 @@ async function runOCRApi(file,endpoint){
 async function runOCRTesseract(file){
   ocrStatus('사진 준비 중…');
   let cv; try{ cv=await fileToCanvas(file,2200); }
-  catch(e){ ocrStatus('사진을 열지 못했어요. 갤러리의 다른 사진이나 JPG로 다시 시도해 주세요. [형식: '+((e&&e.desc)||fileDesc(file))+']'); return; }
+  catch(e){ const d=(e&&e.desc)||fileDesc(file);
+    ocrStatus(/read-fail/.test(d)
+      ? ('이 사진의 데이터를 읽지 못했어요. 클라우드(구글 포토 등)에만 있거나 특수 형식일 수 있어요. ▶ "사진 찍기"로 직접 촬영하거나, 사진을 기기에 저장(다운로드)한 뒤 다시 시도해 주세요. ['+d+']')
+      : ('사진을 열지 못했어요. 갤러리의 다른 사진이나 JPG로 다시 시도해 주세요. ['+d+']'));
+    return; }
   ocrStatus('글자 인식 준비 중… (처음엔 인식 데이터를 받느라 시간이 좀 걸려요)');
   let T; try{ T=await ensureTesseract(); }catch(e){ ocrStatus('인식 엔진을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.'); return; }
   const worker=await T.createWorker('kor+eng',1,{ langPath:'https://tessdata.projectnaptha.com/4.0.0_best',
@@ -1917,13 +1921,18 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v63: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v64: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v63';
+var BUILD='v64';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
-function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
+// 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
+// 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
+function _ocrPick(e){ const inp=e.target; const f=inp.files&&inp.files[0];
+  if(f){ Promise.resolve(runOCR(f)).finally(function(){ try{inp.value='';}catch(_){} }); }
+  else { try{inp.value='';}catch(_){} }
+}
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
 $('ocralbum').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocralbumfile').click(); } });
 $('ocrfile').addEventListener('change',_ocrPick);
@@ -3443,7 +3452,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=63"></script>
+<script type="module" src="cloud.js?v=64"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
