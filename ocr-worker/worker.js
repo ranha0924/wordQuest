@@ -105,10 +105,13 @@ export default {
       const data = await ar.json();
       const text = (data.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n').trim();
 
-      // 학생별 카운터는 "성공 + 단어 있음"일 때만 차감(빈 결과·실패는 소모 안 함 → 공정).
+      // 학생별 카운터: 성공(2xx) 응답은 결과가 비어 있어도 실제 Anthropic 호출(=비용)이 일어났으므로 차감한다.
+      //   (빈 이미지를 반복 전송해 계정별 한도를 우회하던 허점 차단. upstream 실패(502)는 위에서 이미 early-return
+      //    되므로 여기 도달 = 실제 호출 발생. 정상 학생이 빈 사진을 하루 상한만큼 찍을 일은 없어 공정성 영향은 미미.)
       let remaining = null;
       if (env.OCR_KV && userKey) {
-        if (text) { userCur += 1; await env.OCR_KV.put(userKey, String(userCur), { expirationTtl: 172800 }); }
+        userCur += 1;
+        await env.OCR_KV.put(userKey, String(userCur), { expirationTtl: 172800 });
         remaining = Math.max(0, userLim - userCur);
       }
       return json({ text, remaining, limit: userLim }, 200, cors);
