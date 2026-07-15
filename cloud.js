@@ -345,9 +345,11 @@
   }
 
   // ── 역할 선택(학생/선생님) — 1회 ──
+  //   선생님 전환은 서버(firestore.rules)의 허용목록(teacherAllow)이 판정한다.
+  //   목록에 없는 계정이 role='teacher' 를 쓰면 permission-denied → 친절 안내 반환.
   async function chooseRole(role) {
-    if (!user) return;
-    if (role !== 'student' && role !== 'teacher') return;
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    if (role !== 'student' && role !== 'teacher') return { ok: false };
     try {
       await fsMod.setDoc(userRef(user.uid), {
         schema: 2, role: role,
@@ -356,9 +358,14 @@
       }, { merge: true });
       if (profile) profile.role = role; else await loadProfile();
       accountChanged();
+      return { ok: true };
     } catch (e) {
       console.warn('[cloud] 역할 설정 실패', e);
-      alert('역할 저장에 실패했어요: ' + (e && e.message ? e.message : e));
+      var denied = e && (e.code === 'permission-denied' || /permission|insufficient/i.test(e.message || ''));
+      if (role === 'teacher' && denied) {
+        return { ok: false, denied: true, msg: '이 계정은 선생님 권한이 없어요.\n관리자(마스터)가 선생님 목록(teacherAllow)에 이 이메일을 추가해야 선생님이 됩니다.' };
+      }
+      return { ok: false, msg: '역할 저장에 실패했어요: ' + (e && e.message ? e.message : e) };
     }
   }
 

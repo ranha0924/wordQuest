@@ -7,6 +7,13 @@ rules_version = '2';
    classes/{classId}          → 소유 선생님만 read/write(수정 시 코드·소유자 불변).
    classCodes/{code}          → 코드→반 매핑. 단건 get 만(열거 불가), 생성 전용(코드 유일성).
    그 외 전면 거부.
+
+   ★ 선생님 권한(2026-07-15)
+     선생님으로의 승격은 "위조 불가능한 커스텀 클레임"(request.auth.token.teacher)으로만
+     인정한다. 이 클레임은 Cloudflare Worker(teacher-worker)가 비밀번호(TEACHER_PW)를
+     확인한 뒤 Firebase Admin 으로만 부여할 수 있다. 따라서 학생이 클라이언트/콘솔에서
+     role='teacher' 를 스스로 쓰거나 반을 만드는 시도는 서버에서 전부 거부된다.
+     (과거: 클라이언트 하드코딩 비밀번호 = 소프트 게이트 → 소스 열람/콘솔로 우회 가능했음.)
    ================================================================ */
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -20,6 +27,18 @@ service cloud.firestore {
         && request.auth.token.email_verified == true
         && request.auth.token.email == 'ranha.park@gmail.com';
     }
+
+    // 선생님: 마스터가 관리하는 허용목록 teacherAllow/{이메일} 에 있는 계정만 인정.
+    //   · 문서 ID = 선생님 Google 이메일(로그인 토큰의 email 과 정확히 일치, 보통 소문자).
+    //   · 이 목록에 쓰기는 마스터만(아래 match). 학생은 자기를 못 넣으므로 셀프 승격 불가.
+    //   · exists() 는 클라이언트 read 권한과 무관하게 서버에서 평가되므로, 목록을 잠가도 동작.
+    function isTeacher() {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/teacherAllow/$(request.auth.token.email));
+    }
+    // 선생님 권한이 필요한 쓰기(역할·반·배포)에 쓰는 게이트. 마스터는 항상 허용(운영자 잠금 방지).
+    function teacherAllowed() { return isTeacher() || isMaster(); }
 
     // 이 문서(학생)의 소속 반을 요청자가 소유(담당 선생님)하는가
     function ownsStudentClass(data) {
@@ -66,7 +85,13 @@ service cloud.firestore {
       // 본인은 항상, 선생님은 자기 반 학생, 마스터는 전체를 읽을 수 있다.
       allow read: if signedIn() && (request.auth.uid == uid || ownsStudentClass(resource.data) || isMaster());
       // 쓰기는 본인만 + 필드 타입/크기 검증(마스터도 읽기 전용).
-      allow write: if signedIn() && request.auth.uid == uid && validUserDoc(request.resource.data);
+      //   ★ role='teacher' 는 teacher 클레임을 가진 사람만 쓸 수 있다(학생 셀프 승격 차단).
+      allow write: if signedIn()
+        && request.auth.uid == uid
+        && validUserDoc(request.resource.data)
+        && (!('role' in request.resource.data)
+            || request.resource.data.role != 'teacher'
+            || teacherAllowed());
 
       // 무거운 학습 데이터: 본인, 그리고 마스터(전체 열람).
       match /private/{docId} {
@@ -75,19 +100,29 @@ service cloud.firestore {
       }
     }
 
+    // 선생님 허용목록: 마스터만 임명/해임(Firebase 콘솔 또는 마스터 계정). 존재 자체가 선생님 자격.
+    //   · 새 선생님 추가 = 콘솔에서 이 컬렉션에 "문서 ID = 그 사람 이메일" 로 문서 하나 생성.
+    //   · 학생은 여기 못 쓰므로(마스터만) 스스로 선생님이 될 수 없다.
+    match /teacherAllow/{email} {
+      allow read, write: if isMaster();
+    }
+
     match /classes/{classId} {
       // 소유 선생님(그리고 마스터)만 읽는다(학생은 classCodes 로만 참여, 반 문서를 직접 못 봄 → 열거·PII 차단).
       allow read: if signedIn() && (resource.data.ownerUid == request.auth.uid || isMaster());
-      // 생성: 로그인 사용자가 자신을 소유자로.
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      // 수정: 소유자만 + 소유자·코드·이름 불변, removed 는 배열(제외/복구용 removed 만 바꿀 수 있게).
+      // 생성: 선생님 클레임을 가진 사람만, 자신을 소유자로.
+      allow create: if signedIn()
+        && teacherAllowed()
+        && request.resource.data.ownerUid == request.auth.uid;
+      // 수정: 소유자(+선생님 클레임)만 + 소유자·코드·이름 불변, removed 는 배열(제외/복구용 removed 만 바꿀 수 있게).
       allow update: if signedIn()
+        && teacherAllowed()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.code == resource.data.code
         && request.resource.data.name == resource.data.name
         && request.resource.data.removed is list;
-      // 삭제: 소유자만.
+      // 삭제: 소유자만(선생님 강등·정리 후에도 자기 반은 지울 수 있게 클레임은 요구하지 않음).
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
@@ -96,7 +131,10 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if false;
       // 생성 전용 → 이미 있는 코드로는 생성 실패(코드 유일성 보장). update 불가.
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid
+      //   선생님 클레임을 가진 사람만(학생이 유령 코드를 심지 못하게).
+      allow create: if signedIn()
+        && teacherAllowed()
+        && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.classId is string;
       allow update: if false;
       // 삭제: 소유자만(반 삭제 시 정리).
@@ -112,12 +150,14 @@ service cloud.firestore {
         || (exists(/databases/$(database)/documents/users/$(request.auth.uid))
             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId == cid)
       );
-      // 쓰기: 그 반 소유 선생님(또는 마스터)만. words 는 배열이어야.
+      // 쓰기: 그 반 소유 "선생님 클레임" 보유자(또는 마스터)만. words 는 배열이어야.
+      //   ★ 소유만으로는 불충분 — 선생님 클레임을 요구해 강등된 계정의 배포를 차단.
       allow write: if signedIn()
         && request.resource.data.words is list
         && (
           isMaster()
-          || (exists(/databases/$(database)/documents/classes/$(cid))
+          || (isTeacher()
+              && exists(/databases/$(database)/documents/classes/$(cid))
               && get(/databases/$(database)/documents/classes/$(cid)).data.ownerUid == request.auth.uid)
         );
     }

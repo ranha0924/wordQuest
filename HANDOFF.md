@@ -12,6 +12,7 @@
 > - **레거시**: `vocamon.html` **삭제됨**(self-XSS 소지 프로토타입 정리).
 > - **firestore.rules 배포**: 이 저장소엔 firebase.json/CLI 설정이 없다 → 규칙 변경은 **Firebase 콘솔에 수동 반영**해야 라이브에 적용된다.
 > - **데이터 안전(2026-07-15)**: `persist()` 저장 실패 시 경고 배너, 손상 blob은 `wordquest_v1_corrupt`에 보관, 가져오기 요소 검증, 리셋 전 자동 백업, SW는 정상 셸 응답만 캐시. 상세는 `docs/security-review-2026-07-15.md`.
+> - **선생님 권한 보안(2026-07-15)**: 과거 하드코딩 비번(`TEACHER_PW='8889'`) 소프트 게이트는 소스 열람·콘솔(`Cloud.chooseRole('teacher')`)로 우회됐고, 실제로 한 학생이 스스로 선생님이 됨. → **서버 허용목록으로 전환**(워커·비번 없음): `firestore.rules`가 선생님 자격을 **`teacherAllow/{이메일}` 컬렉션에 있는 계정**(또는 마스터)으로만 인정하고, 그 목록 쓰기는 마스터만 → 학생 셀프 승격 불가(콘솔 시도도 `permission-denied`). `role='teacher'`·반 생성/수정/코드·`classPacks` 쓰기 전부 `isTeacher()`(허용목록)/마스터 게이트. 클라이언트는 8889 게이트 삭제, `chooseRole('teacher')`가 규칙에 막히면 친절 안내. **구멍은 규칙만 콘솔 배포하면 즉시 닫힘(이메일 불필요, 마스터만 선생님)**, 선생님 추가는 콘솔에서 `teacherAllow` 문서 추가(코드 수정 0). 셋업·재성 정리는 **`docs/teacher-auth-setup.md`**.
 
 ---
 

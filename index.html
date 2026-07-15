@@ -68,7 +68,9 @@ button,textarea,input{font-family:inherit;}
 button{-webkit-appearance:none;appearance:none;border-radius:0;background-clip:padding-box;}
 img,canvas{image-rendering:pixelated;}
 a{color:var(--gold);text-decoration:none;}
-@keyframes wqAppear{0%{transform:translateY(-46px) scale(.2);opacity:0}55%{transform:translateY(8px) scale(1.1);opacity:1}75%{transform:translateY(-4px) scale(.96)}100%{transform:translateY(0) scale(1);opacity:1}}
+/* 등장: 제자리 팝(scale+fade). translateY 로 하늘에서 떨어뜨리지 않아 모바일에서
+   '떴다가 땅으로 뚝' 튀는 현상이 없다. scale 은 중앙 기준이라 수직 이동이 없음. */
+@keyframes wqAppear{0%{transform:scale(.5);opacity:0}55%{transform:scale(1.08);opacity:1}100%{transform:scale(1);opacity:1}}
 @keyframes wqShake{0%,100%{transform:translate(0,0)}15%{transform:translate(-9px,3px)}30%{transform:translate(8px,-4px)}45%{transform:translate(-6px,2px)}60%{transform:translate(5px,-2px)}80%{transform:translate(-3px,1px)}}
 @keyframes wqHit{0%{filter:brightness(6);transform:translateX(5px)}40%{filter:brightness(1);transform:translateX(-4px)}100%{filter:none;transform:none}}
 /* correct hit: monster blinks (opacity) + shakes */
@@ -1077,13 +1079,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=69"></script>
-<script src="pack-hs1.js?v=69"></script>
-<script src="pack-hs2.js?v=69"></script>
-<script src="pack-hs3.js?v=69"></script>
-<script src="pack-confuse.js?v=69"></script>
-<script src="pack-vacation.js?v=69"></script>
-<script src="firebase-config.js?v=69"></script>
+<script src="words.js?v=71"></script>
+<script src="pack-hs1.js?v=71"></script>
+<script src="pack-hs2.js?v=71"></script>
+<script src="pack-hs3.js?v=71"></script>
+<script src="pack-confuse.js?v=71"></script>
+<script src="pack-vacation.js?v=71"></script>
+<script src="firebase-config.js?v=71"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -3040,14 +3042,19 @@ function setCloudStatus(s){
 }
 // 로그인 후 계정 영역: 역할 선택 / 학생 반 참여 / 선생님 반 관리
 let roleEditing=false; // '역할 바꾸기'를 눌러 선택 UI를 다시 연 상태
-// 선생님 역할은 비밀번호로 보호(학생의 임의 승격 방지). ※ 클라이언트 소프트 게이트.
-const TEACHER_PW='8889';
-function teacherGate(){
-  const pw=window.prompt('선생님 전용 비밀번호를 입력하세요.');
-  if(pw===null)return false;              // 취소
-  if(pw.trim()===TEACHER_PW)return true;
-  alert('비밀번호가 올바르지 않습니다.');
-  return false;
+// 선생님 전환은 서버(firestore.rules)의 허용목록(teacherAllow)이 판정한다.
+// 허용목록에 있는 계정이면 성공, 아니면 permission-denied → 친절 안내.
+// 비밀번호·클라이언트 게이트 없음: 학생이 콘솔에서 chooseRole('teacher') 를 직접
+// 호출해도 서버가 거부하므로 우회 불가. (과거 하드코딩 비번 8889 소프트 게이트 폐기.)
+async function teacherGate(){
+  const C=window.Cloud;
+  if(!C||!C.enabled||!(C.currentUser&&C.currentUser())){
+    alert('먼저 설정(⚙)에서 구글로 로그인해 주세요.');
+    return false;
+  }
+  const r=await C.chooseRole('teacher');   // 서버 허용목록이 판정
+  if(!r||!r.ok){ alert((r&&r.msg)||'이 계정은 선생님 권한이 없어요.'); return false; }
+  return true;
 }
 function renderAccount(){
   const C=window.Cloud; if(!C||!C.enabled) return;
@@ -3394,7 +3401,7 @@ async function renderTeacherStudents(){
   on('cloud-syncnow','click',()=>C()&&C().syncNow&&C().syncNow());
   // 역할 선택
   on('acct-role-student','click',async()=>{ if(C()&&C().chooseRole){ await C().chooseRole('student'); roleEditing=false; try{renderAccount();}catch(e){} } });
-  on('acct-role-teacher','click',async()=>{ if(!teacherGate())return; if(C()&&C().chooseRole){ await C().chooseRole('teacher'); roleEditing=false; try{renderAccount();}catch(e){} } });
+  on('acct-role-teacher','click',async()=>{ if(!(await teacherGate()))return; roleEditing=false; try{renderAccount();}catch(e){} });
   on('acct-rolechange','click',()=>{ roleEditing=true; try{renderAccount();}catch(e){} });
   on('acct-role-cancel','click',()=>{ roleEditing=false; try{renderAccount();}catch(e){} });
   // 학생: 이름 저장
@@ -3458,7 +3465,7 @@ async function renderTeacherStudents(){
   on('login-modal-google','click',()=>C()&&C().signInGoogle&&C().signInGoogle());
   on('login-modal-skip','click',()=>{ try{sessionStorage.setItem('wq_login_skipped','1');}catch(e){} hideLoginModal(); });
   // 역할 선택(로그인 후) — 선택 즉시 역할 저장 + 역할별 화면으로 자동 이동
-  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; if(!teacherGate())return; await C().chooseRole('teacher'); hideLoginModal(); show('teacher'); });
+  on('lm-teacher','click',async()=>{ if(!C()||!C().chooseRole)return; if(!(await teacherGate()))return; hideLoginModal(); show('teacher'); });
   on('lm-student','click',async()=>{ if(!C()||!C().chooseRole)return; await C().chooseRole('student'); hideLoginModal(); show('settings'); });
 })();
 // 시작 모달 상태 갱신: 미로그인→로그인 안내, 로그인+역할없음→역할 선택(건너뛰기 무시)
@@ -3545,7 +3552,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=69"></script>
+<script type="module" src="cloud.js?v=71"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
