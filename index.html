@@ -1053,11 +1053,11 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=60"></script>
-<script src="pack-hs1.js?v=60"></script>
-<script src="pack-confuse.js?v=60"></script>
-<script src="pack-vacation.js?v=60"></script>
-<script src="firebase-config.js?v=60"></script>
+<script src="words.js?v=61"></script>
+<script src="pack-hs1.js?v=61"></script>
+<script src="pack-confuse.js?v=61"></script>
+<script src="pack-vacation.js?v=61"></script>
+<script src="firebase-config.js?v=61"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1684,22 +1684,56 @@ function tryDataUrl(blob){
     }catch(e){ res(null); }
   });
 }
-// 파일 → 그릴 수 있는 디코더 결과. HEIC 자동 변환 + 이중 디코더 + 미감지 HEIC 강제변환 구제.
+// 파일 앞 16바이트 매직넘버로 '실제' 포맷 판별(확장자·MIME 타입이 틀린 사진 대비). 읽기 실패도 진단.
+async function sniffFormat(file){
+  return new Promise(function(res){
+    try{
+      const fr=new FileReader();
+      fr.onerror=function(){ res('read-fail'); };
+      fr.onload=function(){
+        try{
+          const b=new Uint8Array(fr.result);
+          const h=Array.from(b.slice(0,4)).map(x=>x.toString(16).padStart(2,'0')).join('');
+          if(h.indexOf('ffd8ff')===0) return res('jpeg');
+          if(h==='89504e47') return res('png');
+          if(String.fromCharCode.apply(null,b.slice(0,4))==='RIFF') return res('webp');
+          if(String.fromCharCode.apply(null,b.slice(4,8))==='ftyp'){
+            const brand=String.fromCharCode.apply(null,b.slice(8,12));
+            if(/heic|heix|hevc|heif|mif1|msf1/i.test(brand)) return res('heic');
+            return res('ftyp-'+brand.replace(/[^\x20-\x7e]/g,''));
+          }
+          res('other:'+h);
+        }catch(e){ res('sniff-err'); }
+      };
+      fr.readAsArrayBuffer(file.slice(0,16));
+    }catch(e){ res('sniff-exc'); }
+  });
+}
+// 대형 이미지: 풀해상도 디코드가 치수/메모리 한계로 실패할 때 축소 디코드로 구제(크롬 등).
+async function tryBitmapResize(blob){
+  if(!window.createImageBitmap) return null;
+  try{ const bmp=await createImageBitmap(blob,{resizeWidth:1600,resizeQuality:'medium'});
+    return { src:bmp, w:bmp.width, h:bmp.height, cleanup:function(){ try{bmp.close&&bmp.close();}catch(e){} } };
+  }catch(e){ return null; }
+}
+// 파일 → 그릴 수 있는 디코더 결과. 매직넘버 HEIC 감지 + 다중 디코더 + 축소 디코드 + 실패 원인 진단.
 async function decodeImageFromFile(file){
   let blob=file, converted=false;
-  if(looksHeic(file)){
+  const fmt=await sniffFormat(file); let diag='fmt='+fmt;
+  if(looksHeic(file) || fmt==='heic'){ // 타입/확장자 또는 실제 매직바이트가 HEIC → JPEG 변환
     try{ ocrStatus('사진(고효율/HEIC) 변환 중… 처음 한 장은 조금 걸려요'); blob=await heicToJpegBlob(file); converted=true; }
-    catch(e){ blob=file; }
+    catch(e){ diag+=' heic1:'+((e&&(e.message||e.name))||'err'); blob=file; }
   }
   let d=await tryBitmap(blob); if(d) return d;
   d=await tryImg(blob);        if(d) return d;
   d=await tryDataUrl(blob);    if(d) return d;   // blob:/createImageBitmap 막힌 인앱 WebView 우회
-  if(!converted){ // 타입/확장자엔 안 잡혔지만 실제 HEIC일 수 있음 → 강제 변환 후 재시도
+  d=await tryBitmapResize(blob); if(d) return d; // 초대형 이미지 축소 디코드
+  if(!converted){ // 매직넘버엔 안 잡혔지만 실제 HEIC/특수포맷일 수 있음 → 강제 변환 후 재시도
     try{ ocrStatus('사진 변환 중… 잠시만요'); const b=await heicToJpegBlob(file);
-      d=await tryBitmap(b)||await tryImg(b)||await tryDataUrl(b); if(d) return d;
-    }catch(e){}
+      d=await tryBitmap(b)||await tryImg(b)||await tryDataUrl(b)||await tryBitmapResize(b); if(d) return d;
+    }catch(e){ diag+=' heic2:'+((e&&(e.message||e.name))||'err'); }
   }
-  const err=new Error('사진을 디코드하지 못함'); err.desc=fileDesc(file); throw err;
+  const err=new Error('사진을 디코드하지 못함'); err.desc=fileDesc(file)+' · '+diag; throw err;
 }
 
 // 파일 → 전처리 캔버스: (필요시) 확대 + 그레이스케일 + Otsu 이진화(흑백)
@@ -1834,11 +1868,11 @@ async function runOCR(file){
     if(!handled){ if(_ocrApiFail&&_ocrApiFail!=='LOGIN')console.warn('[ocr] AI 경로 폴백 사유:',_ocrApiFail); await runOCRTesseract(file); }
   }catch(e){
     console.warn('[ocr] 실패',e);
-    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v60: '+String((e&&e.message)||e).slice(0,80)+']');
+    ocrStatus('인식 중 문제가 생겼어요. 다시 시도해 주세요. [v61: '+String((e&&e.message)||e).slice(0,80)+']');
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v60';
+var BUILD='v61';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 function _ocrPick(e){ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f)runOCR(f); }
 $('ocrcam').addEventListener('click',()=>{ if(!_ocrBusy){ ocrCtx=OCR_TARGETS.reg; $('ocrfile').click(); } });
@@ -3360,7 +3394,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=60"></script>
+<script type="module" src="cloud.js?v=61"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
