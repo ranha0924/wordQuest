@@ -28,10 +28,14 @@ service cloud.firestore {
         && request.auth.token.email == 'ranha.park@gmail.com';
     }
 
-    // 선생님: teacher-worker 가 비밀번호 확인 후 부여한 커스텀 클레임만 인정(위조 불가).
-    //   클라이언트가 스스로 만들 수 없으므로, 학생의 임의 승격을 서버에서 원천 차단한다.
+    // 선생님: 마스터가 관리하는 허용목록 teacherAllow/{이메일} 에 있는 계정만 인정.
+    //   · 문서 ID = 선생님 Google 이메일(로그인 토큰의 email 과 정확히 일치, 보통 소문자).
+    //   · 이 목록에 쓰기는 마스터만(아래 match). 학생은 자기를 못 넣으므로 셀프 승격 불가.
+    //   · exists() 는 클라이언트 read 권한과 무관하게 서버에서 평가되므로, 목록을 잠가도 동작.
     function isTeacher() {
-      return signedIn() && request.auth.token.teacher == true;
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/teacherAllow/$(request.auth.token.email));
     }
     // 선생님 권한이 필요한 쓰기(역할·반·배포)에 쓰는 게이트. 마스터는 항상 허용(운영자 잠금 방지).
     function teacherAllowed() { return isTeacher() || isMaster(); }
@@ -94,6 +98,13 @@ service cloud.firestore {
         allow read: if signedIn() && (request.auth.uid == uid || isMaster());
         allow write: if signedIn() && request.auth.uid == uid;
       }
+    }
+
+    // 선생님 허용목록: 마스터만 임명/해임(Firebase 콘솔 또는 마스터 계정). 존재 자체가 선생님 자격.
+    //   · 새 선생님 추가 = 콘솔에서 이 컬렉션에 "문서 ID = 그 사람 이메일" 로 문서 하나 생성.
+    //   · 학생은 여기 못 쓰므로(마스터만) 스스로 선생님이 될 수 없다.
+    match /teacherAllow/{email} {
+      allow read, write: if isMaster();
     }
 
     match /classes/{classId} {
