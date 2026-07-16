@@ -14,15 +14,22 @@
 
    엔드포인트:
      POST /sync   body {week, today, name}  → 서버가 doneByDay 읽어 카운트·KV 저장, {wk} 반환
-     GET  /board?scope=class|global&week=YYYY-MM-DD  → 정렬된 순위 반환
+                                              (KV 쓰기 실패 시 degraded:true 로 알림)
+     GET  /board?scope=class|global&week=YYYY-MM-DD  → 정렬된 순위 반환.
+                                              '내 행'은 KV 와 무관하게 서버가 즉석 계산해 병합
+                                              (쓰기 한도로 내 키가 밀려도 나는 항상 등재되어 보임)
      GET  /teacher?class=CLASSID  → (소유 선생님·마스터만) 반 학생별 '서버 관측' 연속일수·
                                     학습일수·출석맵 반환. 선생님 대시보드가 위조 불가값을 표시.
+     모든 응답에 v(코드 리비전) 포함 → 배포 확인은 워커 주소를 브라우저로 열어
+     {"error":"unauthorized","v":"…"} 의 v 값을 보면 된다(토큰 불필요).
 
    필요한 바인딩/환경변수(Cloudflare 대시보드):
      RANK_KV            (KV 네임스페이스 바인딩)  — 점수 저장(키 메타데이터에 표시값)
      FIREBASE_API_KEY   (Variable) — firebase-config.js 의 apiKey(공개값)
      PROJECT_ID         (Variable) — Firebase projectId (예: wordquest-a250d)
      ALLOW_ORIGIN       (선택)      — 허용 도메인(기본 *)
+     RANK_STEP          (선택)      — 보드 키 갱신 최소 진행 단어수(기본 5)
+     RANK_FLUSH_MIN     (선택)      — 잔여분 플러시 간격 분(기본 15)
    ============================================================================ */
 
 export default {
@@ -57,6 +64,7 @@ export default {
   },
 };
 
+const REV = 'r4';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
 const TTL = 60 * 60 * 24 * 16; // 16일(지난 주 자동 만료)
 
 async function handleSync(req, env, uid, token, cors) {
@@ -78,17 +86,18 @@ async function handleSync(req, env, uid, token, cors) {
   const meta = { n: name, w: wk, s: streak };
   // ── KV 쓰기 절약(무료 플랜 하루 1,000회 한도 보호) ──────────────────────────────
   //   실사고(2026-07-16): sync당 최대 5회 put × 전교생 종일 동기화 → 한도 초과 →
-  //   put 이 throw → /sync 전체가 500 → 이후 학생들 점수가 안 올라갔다.
-  //   대책 ①값이 안 변했으면 put 생략(읽기는 하루 10만회로 여유) ②put 은 개별
-  //   try/catch — 한도가 차도 집계·응답(wk)은 계속 되고 보드도 기존 값으로 살아있게.
-  if (cid) {
-    let cPrev = null;
-    try { cPrev = (await env.RANK_KV.getWithMetadata('c:' + week + ':' + cid + ':' + uid)).metadata; } catch (e) { /* 없음 */ }
-    if (!sameMeta(cPrev, meta)) { try { await env.RANK_KV.put('c:' + week + ':' + cid + ':' + uid, '', { metadata: meta, expirationTtl: TTL }); } catch (e) { /* 한도 등 — 다음 sync 때 재시도 */ } }
-  }
-  let gPrev = null;
-  try { gPrev = (await env.RANK_KV.getWithMetadata('g:' + week + ':' + uid)).metadata; } catch (e) { /* 없음 */ }
-  if (!sameMeta(gPrev, meta)) { try { await env.RANK_KV.put('g:' + week + ':' + uid, '', { metadata: meta, expirationTtl: TTL }); } catch (e) { /* 한도 등 */ } }
+  //   put 이 throw → /sync 전체가 500 → 이후 학생들 점수가 안 올라갔다(랭킹 미등재).
+  //   대책(boardWriteDue): ①이번 주 키가 없으면 무조건 기록 — '등재'가 최우선(한 주 2회면 됨)
+  //   ②등재 후엔 이름·연속 변경, RANK_STEP(기본 5)단어 이상 진행, 마지막 기록 후
+  //   RANK_FLUSH_MIN(기본 15)분 경과 때만 갱신 — 학습 중 sync 폭주가 put 폭주로 안 이어진다.
+  //   ③put 은 개별 try/catch — 한도가 차도 /sync 는 200 + 점수 반환, 실패는 degraded 로 알린다.
+  //   (내 점수 '표시'는 /board 가 KV 와 무관하게 즉석 계산해 병합하므로 put 이 밀려도 안 사라짐)
+  const nowSec = Math.floor(Date.now() / 1000);
+  const step = env.RANK_STEP ? clampInt(env.RANK_STEP, 1, 1000) : 5;
+  const flushSec = (env.RANK_FLUSH_MIN ? clampInt(env.RANK_FLUSH_MIN, 1, 1440) : 15) * 60;
+  let degraded = false;
+  if (cid) { if (!(await putBoard(env, 'c:' + week + ':' + cid + ':' + uid, meta, nowSec, step, flushSec))) degraded = true; }
+  if (!(await putBoard(env, 'g:' + week + ':' + uid, meta, nowSec, step, flushSec))) degraded = true;
 
   // ── 선생님 대시보드용 '서버 관측' 출석·명단(위조 불가) ──────────────────────────
   //   랭킹(위 KV)과 별개로, 선생님 대시보드가 학생 자기보고(summary.streak/daily)를
@@ -99,7 +108,18 @@ async function handleSync(req, env, uid, token, cors) {
   if (sCount > 0) await recordAttendance(env, uid, sToday, sCount);
   if (cid) await recordMember(env, cid, uid, name);       // 반 명단(선생님이 att를 조회하려면 uid 열거 필요)
 
-  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: countAllDone(doneByDay) }, 200, cors);
+  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: countAllDone(doneByDay), degraded: degraded }, 200, cors);
+}
+
+// 보드 키(c:/g:) 저장 — boardWriteDue 가 true 일 때만 put. 성공/생략 true, put 실패(한도 등) false.
+async function putBoard(env, key, meta, nowSec, step, flushSec) {
+  let prev = null;
+  try { prev = (await env.RANK_KV.getWithMetadata(key)).metadata; } catch (e) { /* 없음 */ }
+  if (!boardWriteDue(prev, meta, nowSec, step, flushSec)) return true;
+  try {
+    await env.RANK_KV.put(key, '', { metadata: { n: meta.n, w: meta.w, s: meta.s, at: nowSec }, expirationTtl: TTL });
+    return true;
+  } catch (e) { return false; } // 한도 등 — 다음 sync 때 재시도
 }
 
 const ATT_TTL = 60 * 60 * 24 * 45;   // 45일 롤링(선생님 대시보드 히트맵 ~최근 5주)
@@ -191,28 +211,61 @@ async function handleBoard(env, uid, token, url, cors) {
   if (!week) return json({ error: 'bad_week' }, 400, cors);
   const scope = url.searchParams.get('scope') === 'global' ? 'global' : 'class';
 
+  // users/{uid} 를 한 번 읽어 반ID(반 보드 프리픽스)와 표시이름('내 행' 즉석 병합)을 얻는다.
+  const info = await getUserInfo(env, uid, token);
   let prefix;
   if (scope === 'global') {
     prefix = 'g:' + week + ':';
   } else {
-    const cid = await getClassId(env, uid, token);
-    if (!cid) return json({ list: [] }, 200, cors);
-    prefix = 'c:' + week + ':' + cid + ':';
+    if (!info.cid) return json({ list: [] }, 200, cors);
+    prefix = 'c:' + week + ':' + info.cid + ':';
   }
 
   const out = [];
   let cursor;
-  do {
-    const res = await env.RANK_KV.list({ prefix: prefix, cursor: cursor, limit: 1000 });
-    for (const k of res.keys) {
-      const m = k.metadata || {};
-      const kid = k.name.slice(prefix.length);
-      out.push({ uid: kid, name: m.n || '익명', wk: m.w || 0, streak: m.s || 0, me: kid === uid });
+  try {
+    do {
+      const res = await env.RANK_KV.list({ prefix: prefix, cursor: cursor, limit: 1000 });
+      for (const k of res.keys) {
+        const m = k.metadata || {};
+        const kid = k.name.slice(prefix.length);
+        out.push({ uid: kid, name: m.n || '익명', wk: m.w || 0, streak: m.s || 0, me: kid === uid });
+      }
+      cursor = res.list_complete ? null : res.cursor;
+    } while (cursor);
+  } catch (e) {
+    // KV list 한도(무료 1,000회/일) 등 — '빈 랭킹'으로 속이지 말고 오류임을 알린다(클라가 구분 표시).
+    return json({ error: 'kv_limit', detail: String((e && e.message) || e).slice(0, 120) }, 503, cors);
+  }
+
+  // ── '내 행' 즉석 병합: 내 점수는 KV 키와 무관하게 서버가 지금 계산해 넣는다(읽기만, 쓰기 0회).
+  //   쓰기 한도로 put 이 밀려도 "내가 랭킹에 안 보인다"는 일이 없고, 스로틀로 지연된 내 점수도
+  //   보드에서는 항상 최신으로 보인다. (다른 학생 행은 KV 값 — 최대 RANK_STEP-1 단어 지연 가능)
+  try {
+    const doc = await fsGet(env, 'users/' + uid + '/private/state', token, 'meta');
+    if (doc) {
+      const dbd = parseDoneByDay(doc);
+      const sToday = kstToday(Date.now());
+      const wkLive = countWeekDone(dbd, week, sToday);
+      let st = null;
+      try { st = await env.RANK_KV.get('st:' + uid, { type: 'json' }); } catch (e) { /* 없음 */ }
+      const stLive = streakCompute(st, sToday, normIds(dbd[sToday]).length > 0).display;
+      const idx = out.findIndex(function (e) { return e.uid === uid; });
+      const meRow = { uid: uid, name: info.name || (idx >= 0 ? out[idx].name : '') || '익명', wk: wkLive, streak: stLive, me: true };
+      if (idx >= 0) { if (wkLive >= (out[idx].wk | 0)) out[idx] = meRow; }
+      else out.push(meRow);
     }
-    cursor = res.list_complete ? null : res.cursor;
-  } while (cursor);
+  } catch (e) { /* 상태문서 읽기 실패 — KV 행이라도 그대로 응답 */ }
+
   out.sort(sortBoard);
-  return json({ list: scope === 'global' ? out.slice(0, 100) : out }, 200, cors);
+  // 전체 보드는 상위 100 — 단, '내 행'이 잘려나가면 끝에 보존(클라가 '⋯' 아래에 내 점수 표시).
+  let list = out;
+  if (scope === 'global' && out.length > 100) {
+    list = out.slice(0, 100);
+    const mi = out.findIndex(function (e) { return e.me; });
+    if (mi >= 100) list.push(out[mi]);
+  }
+  return json({ list: list }, 200, cors);
 }
 
 /* ── 순수 로직(단위 테스트 대상) ── */
@@ -242,8 +295,21 @@ function countAllDone(dbd) {
   return seen.size;
 }
 function sortBoard(a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); }
-// 랭킹 KV 메타데이터({n,w,s})가 동일한가 — 같으면 put 을 건너뛴다(무료 쓰기 한도 보호).
-function sameMeta(a, b) { return !!a && !!b && a.n === b.n && a.w === b.w && a.s === b.s; }
+// 보드 키(c:/g:) put 필요 판정 — 무료 KV 쓰기 한도(1,000/일) 보호의 핵심 규칙.
+//   ① 키가 없으면(이번 주 첫 sync) 무조건 기록: '랭킹 등재'가 최우선(학생당 주 2회 put 이면 된다).
+//   ② 등재 후엔 이름/연속 변경 → 기록(연속은 하루 1번, 이름은 드묾).
+//   ③ 점수 진행은 step 단어 이상 모였을 때만 기록(학습 중 sync 폭주 흡수).
+//   ④ 다만 점수가 바뀐 채 flushSec 지났으면 잔여분 기록(세션 끝 점수도 결국 정확히 정착).
+//   ⑤ 점수 감소(데이터 리셋 등 예외)는 즉시 기록.
+function boardWriteDue(prev, meta, nowSec, step, flushSec) {
+  if (!prev) return true;
+  if (prev.n !== meta.n || prev.s !== meta.s) return true;
+  var dw = (meta.w | 0) - (prev.w | 0);
+  if (dw === 0) return false;
+  if (dw < 0 || dw >= step) return true;
+  var at = (typeof prev.at === 'number') ? prev.at : 0;
+  return (nowSec - at) >= flushSec;
+}
 // Firestore REST(state 문서, mask=meta)에서 meta.doneByDay { 'YYYY-MM-DD': [id,…] } 추출.
 function parseDoneByDay(doc) {
   const meta = doc && doc.fields && doc.fields.meta && doc.fields.meta.mapValue && doc.fields.meta.mapValue.fields;
@@ -258,8 +324,18 @@ function parseDoneByDay(doc) {
 
 /* ── 외부 I/O ── */
 async function getClassId(env, uid, token) {
-  const doc = await fsGet(env, 'users/' + uid, token);
+  const doc = await fsGet(env, 'users/' + uid, token, 'classId');
   return (doc && doc.fields && doc.fields.classId && doc.fields.classId.stringValue) || null;
+}
+// users/{uid} 에서 반ID + 표시이름을 한 번에 읽는다(/board 의 '내 행' 즉석 병합용).
+async function getUserInfo(env, uid, token) {
+  const doc = await fsGet(env, 'users/' + uid, token, ['classId', 'profile.name']);
+  const f = (doc && doc.fields) || {};
+  const prof = f.profile && f.profile.mapValue && f.profile.mapValue.fields;
+  return {
+    cid: (f.classId && f.classId.stringValue) || null,
+    name: String((prof && prof.name && prof.name.stringValue) || '').slice(0, 40)
+  };
 }
 // 학생 본인 상태문서(users/{uid}/private/state)의 meta.doneByDay 만 읽는다.
 //   mask=meta 로 words 맵(수백 KB)은 전송받지 않아 읽기 비용을 낮춘다. 규칙상 본인 문서라 학생 토큰으로 읽힘.
@@ -268,7 +344,10 @@ async function getDoneByDay(env, uid, token) {
 }
 async function fsGet(env, docPath, idToken, mask) {
   var url = 'https://firestore.googleapis.com/v1/projects/' + env.PROJECT_ID + '/databases/(default)/documents/' + docPath;
-  if (mask) url += '?mask.fieldPaths=' + encodeURIComponent(mask);
+  if (mask) {
+    var mm = Array.isArray(mask) ? mask : [mask];
+    url += '?' + mm.map(function (m) { return 'mask.fieldPaths=' + encodeURIComponent(m); }).join('&');
+  }
   const r = await fetch(url, { headers: { Authorization: 'Bearer ' + idToken } });
   if (!r.ok) return null;
   return await r.json();
@@ -294,9 +373,11 @@ function isMasterUser(authUser, env) {
   const master = String((env && env.MASTER_EMAIL) || 'ranha.park@gmail.com').toLowerCase();
   return !!(authUser && authUser.emailVerified && authUser.email && authUser.email.toLowerCase() === master);
 }
+// 모든 응답에 v(코드 리비전)를 실어 배포 확인을 쉽게 한다: 워커 주소를 그냥 열면
+//   {"error":"unauthorized","v":"r4"} — v 가 보이면 이 코드가 라이브라는 뜻(토큰 불필요).
 function json(o, status, cors) {
-  return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', ...cors } });
+  return new Response(JSON.stringify(Object.assign({ v: REV }, o)), { status, headers: { 'content-type': 'application/json', ...cors } });
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countAllDone, parseDoneByDay, kstToday, pruneDays, streakFromDays, isMasterUser, sameMeta };
+export const _internals = { validWeek, clampInt, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countAllDone, parseDoneByDay, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue };
