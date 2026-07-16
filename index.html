@@ -1151,13 +1151,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=101"></script>
-<script src="pack-hs1.js?v=101"></script>
-<script src="pack-hs2.js?v=101"></script>
-<script src="pack-hs3.js?v=101"></script>
-<script src="pack-confuse.js?v=101"></script>
-<script src="pack-vacation.js?v=101"></script>
-<script src="firebase-config.js?v=101"></script>
+<script src="words.js?v=104"></script>
+<script src="pack-hs1.js?v=104"></script>
+<script src="pack-hs2.js?v=104"></script>
+<script src="pack-hs3.js?v=104"></script>
+<script src="pack-confuse.js?v=104"></script>
+<script src="pack-vacation.js?v=104"></script>
+<script src="firebase-config.js?v=104"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1409,29 +1409,54 @@ async function openRank(tab){
   else await renderClassRank(body,C);
 }
 const _rkMedal=i=>['🥇','🥈','🥉'][i]||('<span class="rk">'+(i+1)+'</span>');
-// 반 랭킹: 이번 주 완료 단어 순(오늘 안 했어도 이번 주 기록 반영, 0단어 제외)
+const _rkMsg=h=>'<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">'+h+'</div>';
+// 서버 오류 시 안내 — 마지막 /sync 가 서버에서 확인해 준 '내 점수'가 있으면 같이 보여준다(내 노력은 안 사라졌음을 안심).
+function _rkErrHTML(C){
+  let mine=''; try{ const st=(C&&C.rankStatus)?C.rankStatus():null; if(st) mine='<br><br>내 이번 주 완료: <b style="color:#ffc63a;">'+(st.wk|0)+'단어</b> <small>(서버 확인값 · 랭킹 반영은 잠시 뒤)</small>'; }catch(e){}
+  return _rkMsg('🛰 랭킹 서버에 연결하지 못했어요.<br><small>잠시 후 다시 열어 주세요. 계속 안 되면 선생님께 알려 주세요.</small>'+mine);
+}
+// 워커가 KV 쓰기 한도(무료 플랜)로 보드 기록을 미룬 상태면 목록 아래에 알린다(조용한 누락 방지).
+function _rkDegradedNote(C){
+  try{ const st=(C&&C.rankStatus)?C.rankStatus():null; if(st&&st.degraded) return '<div style="font-size:10px;color:#8a8ab0;text-align:center;padding:8px 6px 2px;">⏳ 서버 저장 한도로 일부 친구의 점수 반영이 늦어질 수 있어요(내 점수는 항상 최신).</div>'; }catch(e){}
+  return '';
+}
+// 반 랭킹: 이번 주 완료 단어 순(오늘 안 했어도 이번 주 기록 반영, 0단어 제외).
+//   '서버 오류'와 '빈 랭킹'을 구분해 표시 — 오류를 "아직 푼 친구가 없어요"로 뭉개면 원인 파악이
+//   안 된다(실사고 2026-07-16: KV 쓰기 한도 초과로 워커가 죽었는데 화면은 빈 랭킹처럼 보임).
 async function renderClassRank(body,C){
-  let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){}
-  const active=(list||[]).filter(e=>(e.wk|0)>0);
-  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 친구가 없어요.<br>(반에 참여해야 반 랭킹이 보여요)<br>먼저 단어를 풀어 1등을 차지해요!</div>'; return; }
+  let info=null;
+  try{ info=(C&&C.getRankInfo)?await C.getRankInfo('class'):null; }catch(e){}
+  if(!info){ let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){} info=list?{ok:true,list:list}:{ok:false,reason:'server'}; } // 구버전 cloud.js 폴백
+  if(!info.ok){
+    if(info.reason==='noauth'){ body.innerHTML=_rkMsg('로그인하면 우리 반 랭킹을 볼 수 있어요.'); return; }
+    if(info.reason==='noclass'){ body.innerHTML=_rkMsg('반에 참여하면 반 랭킹이 보여요.<br>선생님께 <b>반 코드</b>를 받아 참여해 보세요!'); return; }
+    body.innerHTML=_rkErrHTML(C); return;
+  }
+  const active=(info.list||[]).filter(e=>(e.wk|0)>0);
+  if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!'); return; }
   const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
   let html=active.map(row).join('');   // 반 전원 다 표시(이번 주 푼 반 애들 전부) — 상한 없음
   const mi=active.findIndex(e=>e.me);
   if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
-  body.innerHTML=html;
+  body.innerHTML=html+_rkDegradedNote(C);
 }
 // 전체 랭킹: 이번 주 완료 단어 수 순(로그인 사용자 전체) — 반 랭킹과 동일 기준
 async function renderGlobalRank(body,C){
-  let list=null; try{ list=(C&&C.getGlobalRank)?await C.getGlobalRank():null; }catch(e){}
-  if(list===null){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">전체 랭킹을 불러오지 못했어요.<br><small>로그인 상태·네트워크를 확인해 주세요.<br>(전체 랭킹은 Firebase 보안 규칙 배포가 필요해요)</small></div>'; return; }
-  const active=list.filter(e=>(e.wk|0)>0);
-  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!</div>'; return; }
+  let info=null;
+  try{ info=(C&&C.getRankInfo)?await C.getRankInfo('global'):null; }catch(e){}
+  if(!info){ let list=null; try{ list=(C&&C.getGlobalRank)?await C.getGlobalRank():null; }catch(e){} info=list?{ok:true,list:list}:{ok:false,reason:'server'}; } // 구버전 cloud.js 폴백
+  if(!info.ok){
+    if(info.reason==='noauth'){ body.innerHTML=_rkMsg('로그인하면 전체 랭킹을 볼 수 있어요.'); return; }
+    body.innerHTML=_rkErrHTML(C); return;
+  }
+  const active=(info.list||[]).filter(e=>(e.wk|0)>0);
+  if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!'); return; }
   const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
   let html=active.slice(0,100).map(row).join('');   // 전체 랭킹 상위 100
   const mi=active.findIndex(e=>e.me);
   if(mi>=100) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
   else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
-  body.innerHTML=html;
+  body.innerHTML=html+_rkDegradedNote(C);
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
 // 최근 weeks*7일 히트맵 SVG-less 그리드 HTML. dh: dailyHistory 맵.
@@ -2176,7 +2201,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v101';
+var BUILD='v102';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3575,15 +3600,26 @@ async function renderTeacherStudents(){
   const verifiedOn=!!vb;
   // 서버 출석맵 {날짜:완료수} → 히트맵/상세가 쓰는 {a,ok,w} 형태로 변환(a=히트 강도, w=단어수).
   const vDaily=m=>{const o={}; if(m)for(const d in m){const c=int(m[d]); o[d]={a:c,ok:c,w:c};} return o;};
+  // ── '오늘 학습·히트맵'용 날짜맵 = 서버 출석(위조 불가) ∪ 앱 자기보고(summary.daily) ────────────
+  //   날짜별로 서버값이 있으면 그것(권위·정확), 없으면 앱 보고값을 쓴다. 이렇게 '합집합'으로 봐야
+  //   오늘 공부했지만 서버가 아직 관측 못한 학생(기기 시간대가 KST 아님·아직 미동기화)이 '오늘 학습
+  //   없음'으로 잘못 뜨지 않는다. ★단, 연속일수·학습일 '숫자'와 ✓ 표시는 여전히 서버값만 쓴다
+  //   (위조 방지 유지 — 합집합은 표시용 날짜 존재/히트맵에만 쓰고, 검증 숫자는 서버 관측값 그대로).
+  const mergedDaily=s=>{
+    const sm=s.summary||{}, vv=vb&&vb.byUid[s.uid];
+    const self=sm.daily||{}, srv=vv?vDaily(vv.days):{}, o={};
+    for(const d in self){ if(self[d]) o[d]=self[d]; }
+    for(const d in srv){ o[d]=srv[d]; }   // 서버값이 있으면 덮어씀(권위 있는 값 우선)
+    return o;
+  };
   const card=s=>{
     const sm=s.summary||{};
     const v=vb&&vb.byUid[s.uid];   // 이 학생의 서버 검증 지표(없으면 undefined = 아직 서버가 관측 못함)
-    // 연속일수·오늘·히트맵·학습일수: '학생별로' 서버 검증값(v)이 있으면 그 값(위조 불가, ✓ 표시),
-    //   아직 서버가 관측 못한 학생은 자기보고(summary.daily)로 폴백한다. ★서버가 아직 관측 못했다고
-    //   화면을 통째로 비우면 안 된다(워커 배포 직후·att 저장 실패 시 전원 공백 사고 방지). 검증값은
-    //   학생이 접속·동기화하며 서버에 쌓이므로, 관측된 학생부터 순차로 ✓ 검증값으로 바뀐다.
+    // 오늘 학습·히트맵은 합집합(mergedDaily)으로 — 정직한 학생이 '학습 없음'으로 잘못 뜨는 것 방지.
+    //   연속·학습일 숫자와 ✓ 는 서버 검증값(v)이 있을 때만 그 값을 쓰고, 없으면 자기보고로 폴백한다.
+    //   ★서버가 아직 관측 못했다고 화면을 통째로 비우면 안 된다(워커 배포 직후 전원 공백 사고 방지).
     const verifiedHere=!!v;
-    const dailySrc=verifiedHere?vDaily(v.days):(sm.daily||{});
+    const dailySrc=mergedDaily(s);
     const todayE=dailySrc[t]||null;
     const studied=!!todayE;
     const todayCount=todayE?int(todayE.w!=null?todayE.w:todayE.ok):0;
@@ -3615,12 +3651,33 @@ async function renderTeacherStudents(){
       +'<div class="tcdetail" style="display:none;">'+detail+'</div>'
     +'</div>';
   };
+  // ── 🏆 이번 주 반 랭킹(대시보드) ─────────────────────────────────────────────
+  //   인게임 '우리 반' 탭은 '보는 사람이 소속된 반'만 보여준다 → 여러 반을 '관리'하는 선생님은
+  //   자기가 소속된 반(다를 수 있음)이 떠서 학생이 안 보인다. 그래서 여기(반 선택 맥락이 있는
+  //   대시보드)에서 '지금 선택한 반'의 랭킹을 학생 카드와 같은 출처로 집계해 보여준다.
+  //   집계 = 이번 주(월~오늘) 완료 단어 합. 학생 카드와 같은 합집합(서버 출석 ∪ 앱 보고)으로 집계해
+  //   서버가 아직 오늘을 관측 못한 학생이 랭킹에서 실제보다 뒤로 밀리지 않게 한다.
+  const weekDays=(()=>{ const p=t.split('-').map(Number); const mon=(new Date(p[0],p[1]-1,p[2]).getDay()+6)%7; const a=[]; for(let i=0;i<=mon;i++)a.push(addDays(t,-i)); return a; })();
+  const weekWordsOf=s=>{ const dd=mergedDaily(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n; };
+  const ranked=active.map(s=>({s,w:weekWordsOf(s),ver:!!(vb&&vb.byUid[s.uid])})).sort((a,b)=>(b.w-a.w)||(((a.s.name||a.s.email||'')<(b.s.name||b.s.email||''))?-1:1));
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
   if(verifiedOn)
-    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일·히트맵은 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">검증값은 학생이 접속·동기화하면서 쌓여요 — 아직 ✓ 없는 학생은 앱 보고값으로 보여주고, 접속하면 자동으로 검증값(✓)으로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
+    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일 숫자는 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">오늘 학습·히트맵은 서버 관측값과 학생 앱 기록을 <b>합쳐</b> 보여줘요(서버가 아직 오늘을 못 본 학생도 빠지지 않게). 서버 검증값은 학생이 접속·동기화하면서 쌓여 ✓로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
   else
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#ffd27a;">⚠️ <b>서버 검증 미적용</b> — 아래 🔥연속·📅학습일·히트맵은 <b>학생 앱이 보고한 값</b>이라 조작될 수 있어요. rank-worker를 재배포하면 서버 검증값으로 자동 전환됩니다.</div>';
+  // 🏆 이번 주 반 랭킹 — 선택한 반의 학생을 이번 주 완료 단어 순으로.
+  if(active.length){
+    const medal=i=>['🥇','🥈','🥉'][i]||('<b style="color:#8a8ab0;">'+(i+1)+'</b>');
+    html+='<div class="flabel" style="margin-top:2px;">🏆 이번 주 반 랭킹 <span class="sub">완료 단어 순'+(cls&&cls.name?(' · '+esc(cls.name)):'')+'</span></div>';
+    html+='<div style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:6px 10px;margin-bottom:10px;">'
+      + ranked.map((r,i)=>'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;'+(i<ranked.length-1?'border-bottom:1px solid #23233a;':'')+'">'
+        + '<span style="flex:0 0 26px;text-align:center;">'+medal(i)+'</span>'
+        + '<span style="flex:1;min-width:0;color:#e8e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.s.name||r.s.email||'(이름 없음)')+(r.ver?' <span title="서버 검증값 · 위조 불가" style="color:#5fe06a;font-size:9px;">✓</span>':'')+'</span>'
+        + '<span style="flex:0 0 auto;color:#ffc63a;font-weight:700;">'+r.w+'<span style="font-size:10px;color:#8a8ab0;font-weight:400;margin-left:1px;">단어</span></span>'
+      + '</div>').join('')
+    + '</div>';
+  }
   if(!active.length) html+='<div class="dexempty">'+(removed.length?'활성 학생이 없어요.':'아직 이 반에 참여한 학생이 없어요.')+'</div>';
   else html+=active.map(card).join('');
   if(removed.length){
@@ -3842,7 +3899,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=101"></script>
+<script type="module" src="cloud.js?v=104"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

@@ -150,17 +150,24 @@
     }
     return out.slice(0, 2000);
   }
+  // 마지막 /sync 서버 응답(내 점수·연속·저장지연 여부) — 보드 조회가 실패해도 '내 점수'는 보여줄 수 있게 보관.
+  var lastRank = null; // { wk, streak, degraded, at }
+  function rankStatus() { return lastRank; }
   async function rankSync(meta, t, name) {
     var ep = rankEndpoint(); if (!ep || !user) return false;
     try {
       var tok = await user.getIdToken(); if (!tok) return false;
       var todayIds = (meta && meta.doneByDay && meta.doneByDay[t]) || [];
-      await fetch(ep + '/sync', {
+      var r = await fetch(ep + '/sync', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
         // streak 은 워커가 '오늘 실제 배포단어 완료' 관측으로 산정 → 클라는 보내지 않는다(위조 차단).
         body: JSON.stringify({ week: weekMonday(t), today: t, ids: collectWeekIds(meta, t), todayIds: todayIds.slice(0, 2000), name: name })
       });
-      return true;
+      var d = null; try { d = await r.json(); } catch (e2) { /* 구버전 워커·비JSON — 무시 */ }
+      // degraded=true: 워커가 KV 쓰기 한도(무료 1,000회/일) 등으로 보드 기록을 못 남겼다는 뜻.
+      //   점수 계산 자체는 서버가 했으므로(wk) 내 점수 표시용으로 보관한다.
+      if (r.ok && d && typeof d.wk === 'number') lastRank = { wk: d.wk | 0, streak: d.streak | 0, degraded: !!d.degraded, at: Date.now() };
+      return r.ok;
     } catch (e) { return false; }
   }
   async function rankBoard(scope, t) {
@@ -684,6 +691,18 @@
     }
   }
 
+  // ── 랭킹 조회(신) — '서버 오류'와 '빈 보드'를 구분해 돌려준다 ──
+  //   기존 getRank/getGlobalRank 는 실패·미소속·빈보드가 전부 null/빈배열로 뭉개져,
+  //   워커가 죽었을 때(KV 한도 등) UI가 "아직 푼 친구가 없어요"로 잘못 안내했다(실사고 2026-07-16).
+  //   반환: { ok:true, list:[...] } | { ok:false, reason:'noauth'|'noclass'|'server' }
+  //   (getRank/getGlobalRank 는 구버전 index.html 호환을 위해 기존 시그니처 그대로 유지)
+  async function getRankInfo(scope) {
+    if (!user) return { ok: false, reason: 'noauth' };
+    if (scope !== 'global' && !(profile && profile.classId)) return { ok: false, reason: 'noclass' };
+    var list = (scope === 'global') ? await getGlobalRank() : await getRank();
+    return list ? { ok: true, list: list } : { ok: false, reason: 'server' };
+  }
+
   // ── 반 삭제(소유 선생님) — 반 문서 먼저, 코드 매핑은 있으면 정리(없어도 무시) ──
   // (배치로 묶으면 옛 반처럼 코드 문서가 없을 때 배치 전체가 실패하므로 분리한다)
   async function deleteClass(classId, code) {
@@ -814,6 +833,8 @@
     getClassPack: getClassPack,
     getRank: getRank,
     getGlobalRank: getGlobalRank,
+    getRankInfo: getRankInfo,
+    rankStatus: rankStatus,
     isMaster: isMaster,
     listTeachers: listTeachers,
     addTeacher: addTeacher,
