@@ -235,6 +235,11 @@
         remote = (ld && ld.words) ? { words: ld.words, meta: ld.meta || {} } : { words: {}, meta: {} };
       }
       var m = merge(local, remote);
+      // 안전장치: 병합 결과가 '비었는데' 원격엔 단어가 있으면 원격을 덮어쓰지 않는다(빈 상태 업로드로 인한 진도 소실 방지).
+      //   (권한오류로 읽기가 실패하면 위 getDoc 에서 throw → catch 로 빠지므로 애초에 쓰기까지 안 온다. 여기선 예외적 빈 병합 방어.)
+      var mCount = m.map ? Object.keys(m.map).length : 0;
+      var rCount = (remote && remote.words) ? Object.keys(remote.words).length : 0;
+      if (mCount === 0 && rCount > 0) { status('동기화 보류(빈 병합 안전장치)'); return; }
       var busy = false; try { busy = !!(WQ().isBusy && WQ().isBusy()); } catch (e) {}
       if (!busy && WQ().applyMerged) WQ().applyMerged({ words: m.arr, meta: m.meta });
       await fsMod.setDoc(sRef, { schema: 2, words: m.map, meta: m.meta, updatedAt: now() });
