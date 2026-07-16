@@ -709,6 +709,7 @@ html.nosvgframe *{border-image:none!important;}
         <button class="mrow" id="sweepbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">추가 소탕</span><span class="sub" id="h-sweep-sub">남은 단어 더 풀기</span></button>
         <button class="mrow" data-go="reg"><span class="star">▶</span><span class="mlabel">영입소</span><span class="sub">단어 등록 · 백업</span></button>
         <button class="mrow" data-go="dex"><span class="star">▶</span><span class="mlabel">도감</span><span class="sub" id="h-dex-sub">포획 0 / 0</span></button>
+        <button class="mrow" id="howtobtn"><span class="star">▶</span><span class="mlabel">포획하는 법</span><span class="sub">며칠에 걸쳐 3번 맞히면 포획!</span></button>
         <button class="mrow" data-go="note"><span class="star">▶</span><span class="mlabel">오답 노트</span><span class="sub" id="h-note-sub">약점 분석 · 집중 사냥</span></button>
         <button class="mrow" id="unit-home-btn" style="display:none;"><span class="star">▶</span><span class="mlabel">유닛 학습</span><span class="sub">내가 만든 유닛만 집중 암기</span></button>
         <button class="mrow" id="rankbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">랭킹</span><span class="sub">반 · 전체 순위</span></button>
@@ -718,7 +719,7 @@ html.nosvgframe *{border-image:none!important;}
       <div class="streakbar" id="h-streakbar" style="display:none;"></div>
       <div class="titlestatus">
         <div class="ts-cell"><b id="h-pct">0%</b><span>클리어</span></div>
-        <div class="ts-cell"><b id="h-cap">0 / 0</b><span>포획</span></div>
+        <div class="ts-cell" id="ts-cap-cell" role="button" tabindex="0" title="포획하는 법 보기" style="cursor:pointer;"><b id="h-cap">0 / 0</b><span>포획 ❓</span></div>
         <div class="ts-cell"><b><span id="h-streak">0일</span><svg class="ic ic-fire" viewBox="0 0 16 16" aria-hidden="true"><path fill="#f0881c" d="M8 1L10 4L11 3L11 6L13 8L13 12L11 14L5 14L3 12L3 8L6 5L6 3Z"/><path fill="#ffc63a" d="M8 6L9 8L10 9L10 12L9 13L7 13L6 12L6 10L7 8Z"/></svg></b><span>연속</span></div>
         <div class="ts-cell"><b id="h-best">0</b><span>최고 콤보</span></div>
         <span style="display:none;"><span id="h-bar"></span><span id="h-c0"></span><span id="h-c1"></span><span id="h-c2"></span><span id="h-c3"></span></span>
@@ -1086,6 +1087,7 @@ html.nosvgframe *{border-image:none!important;}
     <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">📢 업데이트 소식</div>
     <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">이번에 이렇게 좋아졌어요</div>
     <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:56vh;overflow-y:auto;">
+      <div style="margin:0 0 9px;">🆕 <b style="color:#fcbc3c;">'포획하는 법' 안내가 생겼어요</b><br><span style="color:#a8a8c8;font-size:11.5px;">포획은 하루가 아니라 여러 날에 걸쳐 3번! 홈의 '포획하는 법'(또는 포획 ❓)에서 확인하세요</span></div>
       <div style="margin:0 0 9px;">📸 <b style="color:#fcbc3c;">사진 인식(OCR) 대폭 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">AI 고품질 인식으로 단어·뜻을 훨씬 정확하게 읽어와요</span></div>
       <div style="margin:0 0 9px;">❤️ <b style="color:#fcbc3c;">하트 충전 후 단어 안 나오던 문제</b> 수정</div>
       <div style="margin:0 0 9px;">🎯 <b style="color:#fcbc3c;">객관식 보기(선택지) 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">보기를 같은 품사로 맞춰, 어미(품사)만 보고 답을 찍지 못하게 했어요</span></div>
@@ -1097,14 +1099,33 @@ html.nosvgframe *{border-image:none!important;}
   </div>
 </div>
 
+<!-- 포획하는 법 안내 모달 — 홈 메뉴('포획하는 법')와 홈 '포획' 스탯에서 열림. 포획이 '여러 날에 걸친 3번'임을 설명해 이해도를 높인다. -->
+<div id="howto-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(4,4,10,.86);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:18px 16px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6);">
+    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">🎯 포획하는 법</div>
+    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">한 번에 안 잡혀요 — 며칠에 걸쳐 3번!</div>
+    <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:60vh;overflow-y:auto;">
+      <div style="background:#191927;border:1px solid #2c2c48;border-radius:8px;padding:11px 12px;margin-bottom:12px;">
+        <div style="margin-bottom:8px;"><span style="display:inline-block;min-width:50px;color:#7fd08a;font-weight:700;">1일차</span> 정답 → <b style="color:#fcbc3c;">포획 1/3</b><br><span style="color:#a8a8c8;font-size:11px;padding-left:50px;display:inline-block;">몬스터는 도주 · 내일 다시 출현</span></div>
+        <div style="margin-bottom:8px;"><span style="display:inline-block;min-width:50px;color:#7fd08a;font-weight:700;">다음 날</span> 정답 → <b style="color:#fcbc3c;">포획 2/3</b><br><span style="color:#a8a8c8;font-size:11px;padding-left:50px;display:inline-block;">며칠 뒤 다시 출현</span></div>
+        <div><span style="display:inline-block;min-width:50px;color:#ffe08a;font-weight:700;">며칠 뒤</span> 정답 → <b style="color:#ffe08a;">포획 3/3 🎉</b><br><span style="color:#a8a8c8;font-size:11px;padding-left:50px;display:inline-block;">도감에 등록! (약 5일 걸려요)</span></div>
+      </div>
+      <div style="margin:0 0 9px;">📅 <b style="color:#fcbc3c;">"다음 출현: N일 뒤"는 정상이에요.</b><br><span style="color:#a8a8c8;font-size:11.5px;">잊어버릴 때쯤 다시 만나야 오래 기억돼요. 그래서 맞히면 그날은 도망가는 거예요.</span></div>
+      <div style="margin:0 0 9px;">🔁 <b style="color:#fcbc3c;">매일 던전에 들어오세요.</b><br><span style="color:#a8a8c8;font-size:11.5px;">같은 몬스터를 서로 다른 날 3번 만나 맞히면 잡혀요.</span></div>
+      <div style="margin:0;">⚠️ <b style="color:#fcbc3c;">틀리면 0/3으로 초기화!</b><br><span style="color:#a8a8c8;font-size:11.5px;">서두르지 말고 정확하게. 틀린 단어는 그 자리에서 바로 다시 나와요.</span></div>
+    </div>
+    <button class="subbtn" id="howto-close" style="width:100%;justify-content:center;margin-top:14px;">알겠어요!</button>
+  </div>
+</div>
+
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=89"></script>
-<script src="pack-hs1.js?v=89"></script>
-<script src="pack-hs2.js?v=89"></script>
-<script src="pack-hs3.js?v=89"></script>
-<script src="pack-confuse.js?v=89"></script>
-<script src="pack-vacation.js?v=89"></script>
-<script src="firebase-config.js?v=89"></script>
+<script src="words.js?v=90"></script>
+<script src="pack-hs1.js?v=90"></script>
+<script src="pack-hs2.js?v=90"></script>
+<script src="pack-hs3.js?v=90"></script>
+<script src="pack-confuse.js?v=90"></script>
+<script src="pack-vacation.js?v=90"></script>
+<script src="firebase-config.js?v=90"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2123,7 +2144,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v89';
+var BUILD='v90';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3149,7 +3170,7 @@ show('home');
 
 /* ================= 업데이트 소식 팝업 (버전당 1회) ================= */
 // NEWS_VER 을 바꾸면 다음 접속 때 모두에게 다시 1회 뜬다. 본 적 있으면(localStorage 일치) 안 뜸.
-var NEWS_VER='20260716b';
+var NEWS_VER='20260716c';
 function closeNews(){ var m=$('news-modal'); if(m)m.style.display='none'; try{localStorage.setItem('wq_news',NEWS_VER);}catch(e){} }
 function maybeShowNews(){
   try{ if(localStorage.getItem('wq_news')===NEWS_VER) return; }catch(e){}
@@ -3162,6 +3183,21 @@ function maybeShowNews(){
   var m=$('news-modal'); if(m) m.addEventListener('click',function(e){ if(e.target&&e.target.id==='news-modal') closeNews(); });
   // 오프라인 전용(클라우드 미사용)일 때의 안전망 — 클라우드 사용 시엔 cloud-account 확정 후 호출.
   setTimeout(function(){ if(!(window.Cloud&&window.Cloud.enabled)) maybeShowNews(); }, 1400);
+})();
+
+/* ================= 포획하는 법 안내 모달 ================= */
+// 홈 메뉴 '포획하는 법' 버튼과 홈 '포획' 스탯(❓)에서 열린다. 사용자에게 '여러 날 3번' 규칙을 설명.
+function openHowto(){ var m=$('howto-modal'); if(m){ m.style.display='flex'; try{sfx('select');}catch(e){} } }
+function closeHowto(){ var m=$('howto-modal'); if(m) m.style.display='none'; }
+(function(){
+  var open=$('howtobtn'); if(open) open.addEventListener('click',openHowto);
+  var cap=$('ts-cap-cell');
+  if(cap){
+    cap.addEventListener('click',openHowto);
+    cap.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openHowto(); } });
+  }
+  var close=$('howto-close'); if(close) close.addEventListener('click',closeHowto);
+  var m=$('howto-modal'); if(m) m.addEventListener('click',function(e){ if(e.target&&e.target.id==='howto-modal') closeHowto(); });
 })();
 
 /* ================= 클라우드 동기화 연동 (cloud.js) ================= */
@@ -3720,7 +3756,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=89"></script>
+<script type="module" src="cloud.js?v=90"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
