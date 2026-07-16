@@ -173,6 +173,23 @@
       return list.map(function (e) { return { uid: e.uid, name: e.name || '익명', wk: e.wk | 0, streak: e.streak | 0, me: !!e.me }; });
     } catch (e) { return null; }
   }
+  // 선생님 대시보드용 '서버 검증' 지표: 워커 /teacher 가 서버 시계로 관측한 학생별
+  //   연속일수·학습일수·출석맵(uid→{streak,studyDays,days})을 준다. 학생이 콘솔로 못 바꾼다.
+  //   워커 미배포/구버전(404)·권한없음(403)·오프라인이면 null → 대시보드가 자기보고 값으로 폴백.
+  async function teacherBoard(classId) {
+    var ep = rankEndpoint(); if (!ep || !user || !classId) return null;
+    try {
+      var tok = await user.getIdToken(); if (!tok) return null;
+      var r = await fetch(ep + '/teacher?class=' + encodeURIComponent(classId), { headers: { 'Authorization': 'Bearer ' + tok } });
+      if (!r.ok) return null;
+      var d = await r.json(), list = (d && d.list) || [], byUid = {};
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i]; if (!e || !e.uid) continue;
+        byUid[e.uid] = { streak: e.streak | 0, studyDays: e.studyDays | 0, days: (e.days && typeof e.days === 'object') ? e.days : {} };
+      }
+      return { byUid: byUid, today: (d && d.today) || null };
+    } catch (e) { return null; }
+  }
 
   // ── 병합: 단어별 updatedAt 최신 우선, meta는 스칼라 LWW + dailyHistory 날짜별 병합 ──
   function merge(local, remote) {
@@ -772,6 +789,7 @@
     unremoveStudent: unremoveStudent,
     listMyClasses: listMyClasses,
     listStudents: listStudents,
+    teacherBoard: teacherBoard,
     setClassPack: setClassPack,
     getClassPack: getClassPack,
     getRank: getRank,
