@@ -1073,19 +1073,20 @@ html.nosvgframe *{border-image:none!important;}
       <button class="subbtn ranktab on" type="button" data-tab="class" style="flex:1;justify-content:center;">반 랭킹</button>
       <button class="subbtn ranktab" type="button" data-tab="global" style="flex:1;justify-content:center;">전체 랭킹</button>
     </div>
+    <div id="rank-notice" style="font-size:10.5px;color:#c9c9e0;text-align:center;background:rgba(252,188,60,.10);border:1px solid rgba(252,188,60,.32);border-radius:8px;padding:8px 10px;margin:0 0 12px;line-height:1.6;">📢 랭킹 단어 집계가 <b style="color:#fcbc3c;">오늘부터 새로 시작</b>돼요<br>매주 <b style="color:#fcbc3c;">월요일</b>에 초기화됩니다</div>
     <div id="rank-body" style="max-height:52vh;overflow-y:auto;"></div>
     <button class="subbtn" id="rank-close" style="width:100%;justify-content:center;margin-top:12px;">닫기</button>
   </div>
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=80"></script>
-<script src="pack-hs1.js?v=80"></script>
-<script src="pack-hs2.js?v=80"></script>
-<script src="pack-hs3.js?v=80"></script>
-<script src="pack-confuse.js?v=80"></script>
-<script src="pack-vacation.js?v=80"></script>
-<script src="firebase-config.js?v=80"></script>
+<script src="words.js?v=81"></script>
+<script src="pack-hs1.js?v=81"></script>
+<script src="pack-hs2.js?v=81"></script>
+<script src="pack-hs3.js?v=81"></script>
+<script src="pack-confuse.js?v=81"></script>
+<script src="pack-vacation.js?v=81"></script>
+<script src="firebase-config.js?v=81"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2047,7 +2048,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v80';
+var BUILD='v81';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3610,7 +3611,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=80"></script>
+<script type="module" src="cloud.js?v=81"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
