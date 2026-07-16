@@ -68,6 +68,8 @@ service cloud.firestore {
         && (!('total' in s)        || s.total is number)
         && (!('attempts' in s)     || s.attempts is number)
         && (!('todayCount' in s)   || s.todayCount is number)
+        && (!('weekWords' in s)    || s.weekWords is number)
+        && (!('weekOf' in s)       || s.weekOf is string)
         && (!('daily' in s)        || s.daily is map);
     }
 
