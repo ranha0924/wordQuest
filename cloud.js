@@ -263,6 +263,23 @@
     return { map: mergedMap, arr: mergedArr, meta: mergedMeta };
   }
 
+  // ── 동기화 성공/실패 시각(홈 '저장 안 됨' 경고 판정용) ──
+  //   lastSyncOkAt: 마지막으로 학습데이터가 서버에 저장된 시각. lastSyncFailAt: 마지막 실패 시각.
+  //   failing = fail > ok → '지금 서버 저장이 안 되고 있음'. 앱은 이 값으로 홈에 경고를 띄운다
+  //   (오늘 학습이 로컬에만 남고 클라우드에 안 올라가는 상태를 학생이 알 수 있게).
+  var lastSyncOkAt = 0, lastSyncFailAt = 0;
+  // 일부 인앱 브라우저는 Firestore 요청이 reject 도 resolve 도 안 하고 '매달려(hang)' 있다 →
+  //   그러면 catch 를 못 타서 실패로 감지되지 않고 오늘 학습이 조용히 로컬에만 갇힌다.
+  //   네트워크 await 에 타임아웃을 걸어 hang 을 '실패'로 전환한다(→ lastSyncFailAt 세팅 → 홈 경고 표시).
+  //   25초는 정상 Firestore 왕복(<5초)보다 넉넉해 느린-정상 sync 를 잘못 실패 처리하지 않는다.
+  var SYNC_TIMEOUT_MS = 25000;
+  function withTimeout(p, label) {
+    return new Promise(function (resolve, reject) {
+      var to = setTimeout(function () { reject(new Error('sync_timeout:' + (label || '') + ':' + SYNC_TIMEOUT_MS + 'ms')); }, SYNC_TIMEOUT_MS);
+      Promise.resolve(p).then(function (v) { clearTimeout(to); resolve(v); }, function (e) { clearTimeout(to); reject(e); });
+    });
+  }
+
   // ── 학습 데이터 동기화(private/state) + 상단 요약 갱신 ──
   async function syncNow() {
     if (!user) return;
@@ -270,13 +287,13 @@
       status('동기화 중…');
       var local = (WQ().getState || function () { return { words: [], meta: {} }; })();
       var sRef = stateRef(user.uid);
-      var snap = await fsMod.getDoc(sRef);
+      var snap = await withTimeout(fsMod.getDoc(sRef), 'read');
       var remote;
       if (snap.exists()) {
         remote = snap.data();
       } else {
         // 레거시(schema 1): users/{uid} 최상위에 words/meta 가 있던 시절 → 1회 이관
-        var legacy = await fsMod.getDoc(userRef(user.uid));
+        var legacy = await withTimeout(fsMod.getDoc(userRef(user.uid)), 'read-legacy');
         var ld = legacy.exists() ? legacy.data() : null;
         remote = (ld && ld.words) ? { words: ld.words, meta: ld.meta || {} } : { words: {}, meta: {} };
       }
@@ -292,14 +309,19 @@
       //    ~120KB짜리 private/state 쓰기 '뒤'에 두면, 그 사이 앱이 닫히거나 백그라운드로 가면
       //    요약 write 가 유실돼 DB(doneByDay)엔 기록이 있는데 대시보드는 '오늘 학습 없음'으로
       //    보이던 문제(표시 불일치)가 난다. 작아서 빨리 끝나는 요약을 앞에 둬 표시 원천부터 살린다.
-      await writeSummaryDoc(m.arr, m.meta);
+      await withTimeout(writeSummaryDoc(m.arr, m.meta), 'summary');
       // ② 무거운 학습데이터(private/state) — doneByDay(랭킹 원천) 포함.
-      await fsMod.setDoc(sRef, { schema: 2, words: m.map, meta: m.meta, updatedAt: now() });
+      await withTimeout(fsMod.setDoc(sRef, { schema: 2, words: m.map, meta: m.meta, updatedAt: now() }), 'state');
+      // ★ 오늘치가 서버에 저장 완료된 시점 = '저장 안 됨' 경고 해제 신호. 랭킹 집계(③)보다 '앞'에 둔다:
+      //    데이터는 이미 저장됐으므로 랭킹 워커 호출이 느리거나 실패해도 경고를 띄우면 안 된다(오탐 방지).
+      lastSyncOkAt = now();
       // ③ 랭킹 집계 — 워커가 '방금 저장된' private/state.doneByDay 를 서버에서 직접 읽어 세므로
-      //    반드시 ② 뒤에 호출해야 이번 학습분이 점수에 반영된다(② 앞이면 한 sync 뒤처짐).
-      await rankSyncNow(m.meta);
+      //    ② 뒤에 호출해야 이번 학습분이 점수에 반영된다. 실패해도 '데이터 저장'과는 무관하므로
+      //    자체 try/catch 로 삼켜 lastSyncFailAt(=저장 실패)을 세우지 않는다(경고 오탐 방지).
+      try { await withTimeout(rankSyncNow(m.meta), 'rank'); } catch (eRank) { console.warn('[cloud] 랭킹 동기화 지연/실패(학습데이터는 저장됨)', eRank); }
       status('동기화됨 · ' + hhmm());
     } catch (e) {
+      lastSyncFailAt = now();               // 저장 실패(hang 타임아웃 포함) — 홈 경고가 뜰 신호(조용한 유실 방지)
       console.warn('[cloud] 동기화 실패', e);
       status('동기화 보류(오프라인?)');
     }
@@ -815,6 +837,8 @@
     notifyChanged: notifyChanged,
     wipeRemote: wipeRemote,
     currentEmail: function () { return user ? user.email : null; },
+    // 홈 '오늘 학습 저장 안 됨' 경고 판정용: 로그인 여부 + 지금 서버 저장이 실패 중인지 + 마지막 성공 시각.
+    syncState: function () { return { signedIn: !!user, failing: lastSyncFailAt > lastSyncOkAt, okAt: lastSyncOkAt }; },
     currentUser: function () { return user ? { uid: user.uid, email: user.email, name: user.displayName, photo: user.photoURL } : null; },
     getIdToken: function () { return user ? user.getIdToken() : Promise.resolve(null); }, // OCR 프록시 인증용
 

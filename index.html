@@ -727,6 +727,8 @@ html.nosvgframe *{border-image:none!important;}
         <div class="tl-banner">틀린 단어는 보스가 된다<span class="tl-tm">™</span></div>
       </div>
       <div class="pressstart">- PRESS START -</div>
+      <!-- 오늘 학습이 클라우드에 저장 안 되는 상태 경고(로그아웃·서버 저장 실패). renderSyncWarn 이 채움. -->
+      <div id="home-syncwarn" style="display:none;width:100%;max-width:360px;margin:0 auto 8px;background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.5);border-radius:8px;padding:9px 11px;font-size:11.5px;line-height:1.6;color:#ffd0d0;text-align:center;"></div>
       <div class="titlemenu">
         <button class="mrow" id="enterbtn"><span class="star">▶</span><span class="mlabel">던전 입장</span><span class="sub" id="h-sub"></span></button>
         <button class="mrow" id="sweepbtn" style="display:none;"><span class="star">▶</span><span class="mlabel">추가 소탕</span><span class="sub" id="h-sweep-sub">남은 단어 더 풀기</span></button>
@@ -1151,13 +1153,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=104"></script>
-<script src="pack-hs1.js?v=104"></script>
-<script src="pack-hs2.js?v=104"></script>
-<script src="pack-hs3.js?v=104"></script>
-<script src="pack-confuse.js?v=104"></script>
-<script src="pack-vacation.js?v=104"></script>
-<script src="firebase-config.js?v=104"></script>
+<script src="words.js?v=107"></script>
+<script src="pack-hs1.js?v=107"></script>
+<script src="pack-hs2.js?v=107"></script>
+<script src="pack-hs3.js?v=107"></script>
+<script src="pack-confuse.js?v=107"></script>
+<script src="pack-vacation.js?v=107"></script>
+<script src="firebase-config.js?v=107"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1733,7 +1735,38 @@ function renderHome(){
   try{ const _ms=checkStreakMilestones(); if(_ms!=null) homeMsg('🎉 '+_ms+'일 연속 달성! 프리즈 ❄️+1 · EXP +'+_ms); renderStreakBar(); }catch(e){}
   try{ const rb=$('rankbtn'); if(rb){ const p=(window.Cloud&&window.Cloud.getProfile)?window.Cloud.getProfile():null; rb.style.display=(p&&p.role==='student')?'':'none'; } }catch(e){}
   renderHomeHeat();
+  try{renderSyncWarn();}catch(e){}
   try{toggleTeacherBtn();}catch(e){}
+}
+// 오늘 학습이 클라우드에 저장 안 되는 상태를 홈에 눈에 띄게 알린다(조용한 유실 방지).
+//   케이스 ① 로그인 안 됨: 오늘 공부했는데 로그아웃 → 백업 안 됨(가장 흔한 '오늘만 안 남음' 원인).
+//   케이스 ② 서버 저장 실패: 로그인은 됐지만 동기화가 계속 실패(인앱 브라우저·네트워크 등).
+//   데이터는 로컬에 안전하며, 로그인/재접속으로 동기화가 성공하면 오늘치가 그대로 서버로 올라간다(merge=union).
+function renderSyncWarn(){
+  const el=$('home-syncwarn'); if(!el) return;
+  const C=window.Cloud;
+  if(!(C&&C.enabled)){ el.style.display='none'; return; }   // 클라우드 미설정=순수 로컬 앱 → 경고 없음
+  const t=today(), dh=S.meta.dailyHistory||{}, de=dh[t];
+  const dbd=(S.meta.doneByDay&&S.meta.doneByDay[t])||null;
+  const studiedToday = !!(de && (((de.a|0)>0)||((de.w|0)>0))) || !!(dbd && dbd.length>0);
+  if(!studiedToday){ el.style.display='none'; return; }      // 오늘 학습 없으면 경고 불필요
+  let st=null; try{ st=C.syncState?C.syncState():null; }catch(e){}
+  const signedIn = st ? st.signedIn : !!(C.currentEmail&&C.currentEmail());
+  const failing = st ? st.failing : false;
+  let html='';
+  if(!signedIn){
+    html='⚠️ <b>로그인 안 됨</b> — 오늘 학습이 <b>백업(저장)되지 않아요.</b><br>'
+      +'<button id="syncwarn-act" style="margin-top:6px;background:#2a6a3a;border:1px solid #3fae46;color:#dfffe4;border-radius:6px;font-size:11.5px;padding:5px 12px;cursor:pointer;font-family:inherit;">로그인하고 저장하기</button>';
+  } else if(failing){
+    html='⚠️ <b>서버 저장 실패</b> — 오늘 학습이 아직 클라우드에 안 올라갔어요.<br>'
+      +'<button id="syncwarn-act" style="margin-top:6px;background:#2a5a6a;border:1px solid #3f9eae;color:#dff6ff;border-radius:6px;font-size:11.5px;padding:5px 12px;cursor:pointer;font-family:inherit;">지금 다시 저장</button>';
+  } else { el.style.display='none'; return; }                // 로그인됨 + 저장 실패 아님 → 정상
+  el.innerHTML=html; el.style.display='';
+  const btn=$('syncwarn-act');
+  if(btn) btn.onclick=()=>{
+    if(!signedIn){ try{ C.signInGoogle&&C.signInGoogle(); }catch(e){} }
+    else { try{ C.syncNow&&C.syncNow(); }catch(e){} btn.textContent='저장 중…'; btn.disabled=true; setTimeout(renderSyncWarn,1800); }
+  };
 }
 // 홈 학습 히트맵(최근 5주) + 오늘 공부량
 function renderHomeHeat(){
@@ -3294,6 +3327,7 @@ function setCloudStatus(s){
   const email=(window.Cloud&&window.Cloud.currentEmail)?window.Cloud.currentEmail():null;
   const inB=$('cloud-in'),outB=$('cloud-out');
   if(inB&&outB){ inB.style.display=email?'':'none'; outB.style.display=email?'none':''; }
+  try{ renderSyncWarn(); }catch(e){}   // 동기화 상태가 바뀌면 홈 경고도 즉시 갱신(성공 시 자동 해제)
   renderAccount();
 }
 // 로그인 후 계정 영역: 역할 선택 / 학생 반 참여 / 선생님 반 관리
@@ -3837,7 +3871,7 @@ document.addEventListener('cloud-ready',()=>{
   // 모달은 여기서 띄우지 않는다 — 인증 상태(cloud-account)가 확정된 뒤에 결정(재방문 시 깜빡임 방지)
 });
 // 로그인/역할/반 상태가 바뀌면 계정 영역 다시 그림 + 모달 갱신(인증 상태 확정 시점)
-document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); try{ checkClassPack(); }catch(e){} try{ maybeShowNews(); }catch(e){} });
+document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); try{ checkClassPack(); }catch(e){} try{ maybeShowNews(); }catch(e){} try{ renderSyncWarn(); }catch(e){} });
 // 탭을 벗어나기 직전 마지막 변경분 동기화(로그인 시)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&window.Cloud&&window.Cloud.currentEmail&&window.Cloud.currentEmail()&&window.Cloud.syncNow)window.Cloud.syncNow();
@@ -3899,7 +3933,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=104"></script>
+<script type="module" src="cloud.js?v=107"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
