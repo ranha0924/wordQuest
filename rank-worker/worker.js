@@ -1,18 +1,19 @@
 /* ============================================================================
    WordQuest 랭킹 집계 프록시 (Cloudflare Worker)
    ----------------------------------------------------------------------------
-   목적: "이번 주 완료한 배포 단어 수"를 서버가 세서, 학생이 콘솔로 점수를 위조하지
+   목적: "이번 주 완료한 단어 수"를 서버가 세서, 학생이 콘솔로 점수를 위조하지
         못하게 한다(근본 차단). 점수는 클라이언트가 못 쓰고 이 워커만 KV에 기록한다.
 
    핵심 아이디어(상한 없이 위조만 차단):
-     · 클라가 "이번 주 완료한 단어 id 목록"을 보고 → 워커가 로그인 토큰을 검증하고,
-       그 반의 배포 단어(classPacks)와 **교집합**을 세어 점수로 삼는다.
-     · 따라서 점수의 자연 천장 = "배정된 단어를 전부 했을 때" 이다. 99999 같은 임의
-       숫자가 원천 불가하고, 진짜 열심히 한 학생의 값은 상한 없이 그대로 반영된다.
-     · 배포 단어 검증은 학생 '본인 토큰'으로 Firestore REST 를 읽어 수행(규칙이 허용).
+     · 워커가 로그인 토큰을 검증하고, 학생 '본인'의 동기화된 완료기록
+       (users/{uid}/private/state 의 meta.doneByDay)을 Firestore REST 로 직접 읽어
+       "이번 주(월~오늘) 완료한 단어 유니크 수"를 센다. 클라가 보낸 숫자/목록은 안 믿는다.
+     · 배포 단어에 국한하지 않고 완료한 '모든' 단어(개인등록·기본팩·배포)를 종류 불문 카운트.
+       점수의 자연 천장 = "실제로 완료 기록된 단어 수". 99999 같은 임의 숫자는 원천 불가하고,
+       조작하려면 자기 상태문서를 통째로 위조해야 해서(앱에 그대로 드러남) 감사가 가능하다.
 
    엔드포인트:
-     POST /sync   body {week, ids[], streak, name}  → 카운트 계산·KV 저장, {wk} 반환
+     POST /sync   body {week, today, name}  → 서버가 doneByDay 읽어 카운트·KV 저장, {wk} 반환
      GET  /board?scope=class|global&week=YYYY-MM-DD  → 정렬된 순위 반환
 
    필요한 바인딩/환경변수(Cloudflare 대시보드):
@@ -59,21 +60,21 @@ async function handleSync(req, env, uid, token, cors) {
   const week = validWeek(body.week) ? body.week : null;
   const today = validWeek(body.today) ? body.today : null;
   if (!week || !today) return json({ error: 'bad_date' }, 400, cors);
-  const ids = normIds(body.ids);              // 이번 주 완료 단어 id
-  const todayIds = normIds(body.todayIds);    // 오늘 완료 단어 id(연속일수 산정용)
   const name = String(body.name || '').slice(0, 40);
 
-  const cid = await getClassId(env, uid, token);
-  const classSet = cid ? await getClassWords(env, cid, token) : null;
-  const wk = classSet ? countIntersection(ids, classSet) : 0;                 // 천장=배정 단어수
-  // 연속일수: 클라가 보낸 값은 무시하고, '오늘 실제로 배포단어를 완료했는지'를 서버가 보고 산정.
-  const activeToday = classSet ? countIntersection(todayIds, classSet) > 0 : false;
+  // 집계 원천 = 학생 '본인'의 동기화된 완료기록(users/{uid}/private/state 의 meta.doneByDay)을
+  //   서버가 직접 읽어서 센다. 클라가 보낸 ids/숫자는 신뢰하지 않는다 → 콘솔로 점수 위조 불가.
+  //   배포단어에 국한하지 않고 '완료한 모든 단어'(개인등록·기본팩·배포)를 종류 불문 카운트한다.
+  const doneByDay = await getDoneByDay(env, uid, token);
+  const wk = countWeekDone(doneByDay, week, today);          // 이번 주(week=월 ~ today) 유니크 완료 수
+  const activeToday = normIds(doneByDay[today]).length > 0;  // 오늘 뭐라도 완료했는가(연속일수용)
   const streak = await updateStreak(env, uid, today, activeToday);
+  const cid = await getClassId(env, uid, token);             // 반 랭킹 보드 키에만 사용
 
   const meta = { n: name, w: wk, s: streak };
   if (cid) await env.RANK_KV.put('c:' + week + ':' + cid + ':' + uid, '', { metadata: meta, expirationTtl: TTL });
   await env.RANK_KV.put('g:' + week + ':' + uid, '', { metadata: meta, expirationTtl: TTL });
-  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: classSet ? classSet.size : 0 }, 200, cors);
+  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: countAllDone(doneByDay) }, 200, cors);
 }
 
 const STREAK_TTL = 60 * 60 * 24 * 45; // 45일 무활동 시 기록 만료(어차피 연속은 하루만 빠져도 끊김)
@@ -132,22 +133,31 @@ function validWeek(w) { return typeof w === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 function clampInt(n, lo, hi) { n = parseInt(n, 10); if (!isFinite(n)) n = 0; return n < lo ? lo : (n > hi ? hi : n); }
 function normIds(a) { return Array.isArray(a) ? a.slice(0, 2000).map(function (x) { return String(x).toLowerCase(); }) : []; }
 function isoAddDays(ds, n) { var p = ds.split('-').map(Number); var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)); var z = function (x) { return String(x).padStart(2, '0'); }; return d.getUTCFullYear() + '-' + z(d.getUTCMonth() + 1) + '-' + z(d.getUTCDate()); }
-function countIntersection(ids, classSet) {
-  const seen = new Set(); let c = 0;
-  for (let i = 0; i < ids.length; i++) { const id = ids[i]; if (classSet.has(id) && !seen.has(id)) { seen.add(id); c++; } }
-  return c;
+// 이번 주(week=월요일 ~ today, ISO 날짜 문자열 비교) 완료 단어 유니크 수. 종류(개인·기본팩·배포) 불문.
+function countWeekDone(dbd, week, today) {
+  const seen = new Set();
+  for (const d in dbd) {
+    if (d >= week && d <= today) { const a = normIds(dbd[d]); for (let i = 0; i < a.length; i++) seen.add(a[i]); }
+  }
+  return seen.size;
+}
+// 보관된 완료기록(최근 9일 롤링) 전체의 유니크 수 — 응답 참고값(ceiling)용.
+function countAllDone(dbd) {
+  const seen = new Set();
+  for (const d in dbd) { const a = normIds(dbd[d]); for (let i = 0; i < a.length; i++) seen.add(a[i]); }
+  return seen.size;
 }
 function sortBoard(a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); }
-// Firestore REST 문서에서 배포 단어(소문자 텍스트) 집합 추출
-function parseClassWords(doc) {
-  const vals = doc && doc.fields && doc.fields.words && doc.fields.words.arrayValue && doc.fields.words.arrayValue.values;
-  const set = new Set();
-  if (vals) for (let i = 0; i < vals.length; i++) {
-    const f = vals[i] && vals[i].mapValue && vals[i].mapValue.fields;
-    const w = f && f.w && f.w.stringValue;
-    if (w) set.add(String(w).toLowerCase());
+// Firestore REST(state 문서, mask=meta)에서 meta.doneByDay { 'YYYY-MM-DD': [id,…] } 추출.
+function parseDoneByDay(doc) {
+  const meta = doc && doc.fields && doc.fields.meta && doc.fields.meta.mapValue && doc.fields.meta.mapValue.fields;
+  const dbd = meta && meta.doneByDay && meta.doneByDay.mapValue && meta.doneByDay.mapValue.fields;
+  const out = {};
+  if (dbd) for (const day in dbd) {
+    const vals = dbd[day] && dbd[day].arrayValue && dbd[day].arrayValue.values;
+    if (vals) { const arr = []; for (let i = 0; i < vals.length; i++) { const s = vals[i] && vals[i].stringValue; if (s) arr.push(s); } out[day] = arr; }
   }
-  return set;
+  return out;
 }
 
 /* ── 외부 I/O ── */
@@ -155,22 +165,15 @@ async function getClassId(env, uid, token) {
   const doc = await fsGet(env, 'users/' + uid, token);
   return (doc && doc.fields && doc.fields.classId && doc.fields.classId.stringValue) || null;
 }
-async function getClassWords(env, cid, token) {
-  // Firestore 읽기 절감을 위해 반 배포단어를 KV에 5분 캐시.
-  const cacheKey = 'pack:' + cid;
-  const cached = await env.RANK_KV.get(cacheKey, { type: 'json' });
-  if (cached && Array.isArray(cached)) return new Set(cached);
-  const doc = await fsGet(env, 'classPacks/' + cid, token);
-  if (!doc) return null;
-  const set = parseClassWords(doc);
-  try { await env.RANK_KV.put(cacheKey, JSON.stringify([...set]), { expirationTtl: 300 }); } catch (e) { /* 캐시 실패 무시 */ }
-  return set;
+// 학생 본인 상태문서(users/{uid}/private/state)의 meta.doneByDay 만 읽는다.
+//   mask=meta 로 words 맵(수백 KB)은 전송받지 않아 읽기 비용을 낮춘다. 규칙상 본인 문서라 학생 토큰으로 읽힘.
+async function getDoneByDay(env, uid, token) {
+  return parseDoneByDay(await fsGet(env, 'users/' + uid + '/private/state', token, 'meta'));
 }
-async function fsGet(env, docPath, idToken) {
-  const r = await fetch(
-    'https://firestore.googleapis.com/v1/projects/' + env.PROJECT_ID + '/databases/(default)/documents/' + docPath,
-    { headers: { Authorization: 'Bearer ' + idToken } }
-  );
+async function fsGet(env, docPath, idToken, mask) {
+  var url = 'https://firestore.googleapis.com/v1/projects/' + env.PROJECT_ID + '/databases/(default)/documents/' + docPath;
+  if (mask) url += '?mask.fieldPaths=' + encodeURIComponent(mask);
+  const r = await fetch(url, { headers: { Authorization: 'Bearer ' + idToken } });
   if (!r.ok) return null;
   return await r.json();
 }
@@ -192,4 +195,4 @@ function json(o, status, cors) {
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, countIntersection, sortBoard, parseClassWords, normIds, isoAddDays, streakCompute };
+export const _internals = { validWeek, clampInt, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countAllDone, parseDoneByDay };
