@@ -1151,13 +1151,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=103"></script>
-<script src="pack-hs1.js?v=103"></script>
-<script src="pack-hs2.js?v=103"></script>
-<script src="pack-hs3.js?v=103"></script>
-<script src="pack-confuse.js?v=103"></script>
-<script src="pack-vacation.js?v=103"></script>
-<script src="firebase-config.js?v=103"></script>
+<script src="words.js?v=104"></script>
+<script src="pack-hs1.js?v=104"></script>
+<script src="pack-hs2.js?v=104"></script>
+<script src="pack-hs3.js?v=104"></script>
+<script src="pack-confuse.js?v=104"></script>
+<script src="pack-vacation.js?v=104"></script>
+<script src="firebase-config.js?v=104"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -3600,15 +3600,26 @@ async function renderTeacherStudents(){
   const verifiedOn=!!vb;
   // 서버 출석맵 {날짜:완료수} → 히트맵/상세가 쓰는 {a,ok,w} 형태로 변환(a=히트 강도, w=단어수).
   const vDaily=m=>{const o={}; if(m)for(const d in m){const c=int(m[d]); o[d]={a:c,ok:c,w:c};} return o;};
+  // ── '오늘 학습·히트맵'용 날짜맵 = 서버 출석(위조 불가) ∪ 앱 자기보고(summary.daily) ────────────
+  //   날짜별로 서버값이 있으면 그것(권위·정확), 없으면 앱 보고값을 쓴다. 이렇게 '합집합'으로 봐야
+  //   오늘 공부했지만 서버가 아직 관측 못한 학생(기기 시간대가 KST 아님·아직 미동기화)이 '오늘 학습
+  //   없음'으로 잘못 뜨지 않는다. ★단, 연속일수·학습일 '숫자'와 ✓ 표시는 여전히 서버값만 쓴다
+  //   (위조 방지 유지 — 합집합은 표시용 날짜 존재/히트맵에만 쓰고, 검증 숫자는 서버 관측값 그대로).
+  const mergedDaily=s=>{
+    const sm=s.summary||{}, vv=vb&&vb.byUid[s.uid];
+    const self=sm.daily||{}, srv=vv?vDaily(vv.days):{}, o={};
+    for(const d in self){ if(self[d]) o[d]=self[d]; }
+    for(const d in srv){ o[d]=srv[d]; }   // 서버값이 있으면 덮어씀(권위 있는 값 우선)
+    return o;
+  };
   const card=s=>{
     const sm=s.summary||{};
     const v=vb&&vb.byUid[s.uid];   // 이 학생의 서버 검증 지표(없으면 undefined = 아직 서버가 관측 못함)
-    // 연속일수·오늘·히트맵·학습일수: '학생별로' 서버 검증값(v)이 있으면 그 값(위조 불가, ✓ 표시),
-    //   아직 서버가 관측 못한 학생은 자기보고(summary.daily)로 폴백한다. ★서버가 아직 관측 못했다고
-    //   화면을 통째로 비우면 안 된다(워커 배포 직후·att 저장 실패 시 전원 공백 사고 방지). 검증값은
-    //   학생이 접속·동기화하며 서버에 쌓이므로, 관측된 학생부터 순차로 ✓ 검증값으로 바뀐다.
+    // 오늘 학습·히트맵은 합집합(mergedDaily)으로 — 정직한 학생이 '학습 없음'으로 잘못 뜨는 것 방지.
+    //   연속·학습일 숫자와 ✓ 는 서버 검증값(v)이 있을 때만 그 값을 쓰고, 없으면 자기보고로 폴백한다.
+    //   ★서버가 아직 관측 못했다고 화면을 통째로 비우면 안 된다(워커 배포 직후 전원 공백 사고 방지).
     const verifiedHere=!!v;
-    const dailySrc=verifiedHere?vDaily(v.days):(sm.daily||{});
+    const dailySrc=mergedDaily(s);
     const todayE=dailySrc[t]||null;
     const studied=!!todayE;
     const todayCount=todayE?int(todayE.w!=null?todayE.w:todayE.ok):0;
@@ -3644,15 +3655,15 @@ async function renderTeacherStudents(){
   //   인게임 '우리 반' 탭은 '보는 사람이 소속된 반'만 보여준다 → 여러 반을 '관리'하는 선생님은
   //   자기가 소속된 반(다를 수 있음)이 떠서 학생이 안 보인다. 그래서 여기(반 선택 맥락이 있는
   //   대시보드)에서 '지금 선택한 반'의 랭킹을 학생 카드와 같은 출처로 집계해 보여준다.
-  //   집계 = 이번 주(월~오늘) 완료 단어 합. 서버 검증값(v.days)이 있으면 그걸(✓), 없으면 summary.daily.
+  //   집계 = 이번 주(월~오늘) 완료 단어 합. 학생 카드와 같은 합집합(서버 출석 ∪ 앱 보고)으로 집계해
+  //   서버가 아직 오늘을 관측 못한 학생이 랭킹에서 실제보다 뒤로 밀리지 않게 한다.
   const weekDays=(()=>{ const p=t.split('-').map(Number); const mon=(new Date(p[0],p[1]-1,p[2]).getDay()+6)%7; const a=[]; for(let i=0;i<=mon;i++)a.push(addDays(t,-i)); return a; })();
-  const dsrcOf=s=>{ const sm=s.summary||{}; const vv=vb&&vb.byUid[s.uid]; return vv?vDaily(vv.days):(sm.daily||{}); };
-  const weekWordsOf=s=>{ const dd=dsrcOf(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n; };
+  const weekWordsOf=s=>{ const dd=mergedDaily(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n; };
   const ranked=active.map(s=>({s,w:weekWordsOf(s),ver:!!(vb&&vb.byUid[s.uid])})).sort((a,b)=>(b.w-a.w)||(((a.s.name||a.s.email||'')<(b.s.name||b.s.email||''))?-1:1));
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
   if(verifiedOn)
-    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일·히트맵은 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">검증값은 학생이 접속·동기화하면서 쌓여요 — 아직 ✓ 없는 학생은 앱 보고값으로 보여주고, 접속하면 자동으로 검증값(✓)으로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
+    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일 숫자는 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">오늘 학습·히트맵은 서버 관측값과 학생 앱 기록을 <b>합쳐</b> 보여줘요(서버가 아직 오늘을 못 본 학생도 빠지지 않게). 서버 검증값은 학생이 접속·동기화하면서 쌓여 ✓로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
   else
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#ffd27a;">⚠️ <b>서버 검증 미적용</b> — 아래 🔥연속·📅학습일·히트맵은 <b>학생 앱이 보고한 값</b>이라 조작될 수 있어요. rank-worker를 재배포하면 서버 검증값으로 자동 전환됩니다.</div>';
   // 🏆 이번 주 반 랭킹 — 선택한 반의 학생을 이번 주 완료 단어 순으로.
@@ -3888,7 +3899,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=103"></script>
+<script type="module" src="cloud.js?v=104"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
