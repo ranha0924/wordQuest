@@ -1080,6 +1080,22 @@ html.nosvgframe *{border-image:none!important;}
   </div>
 </div>
 
+<!-- 업데이트 소식 팝업 — 버전당 1회(localStorage) 자동 표시. 최근 개선사항 안내. -->
+<div id="news-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(4,4,10,.86);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:18px 16px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6);">
+    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">📢 업데이트 소식</div>
+    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">이번에 이렇게 좋아졌어요</div>
+    <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:56vh;overflow-y:auto;">
+      <div style="margin:0 0 9px;">📸 <b style="color:#fcbc3c;">사진 인식(OCR) 대폭 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">AI 고품질 인식으로 단어·뜻을 훨씬 정확하게 읽어와요</span></div>
+      <div style="margin:0 0 9px;">❤️ <b style="color:#fcbc3c;">하트 충전 후 단어 안 나오던 문제</b> 수정</div>
+      <div style="margin:0 0 9px;">📝 <b style="color:#fcbc3c;">뜻·보기 글자 잘림</b> 수정 <span style="color:#a8a8c8;font-size:11.5px;">— 긴 뜻도 안 잘리고 다 보여요</span></div>
+      <div style="margin:0 0 9px;">🏆 <b style="color:#fcbc3c;">랭킹 오류 수정</b> <span style="color:#a8a8c8;font-size:11.5px;">— 정확하게 집계돼요</span></div>
+      <div style="margin:0;">🔒 <b style="color:#fcbc3c;">해킹·부정접근 위험 차단</b> <span style="color:#a8a8c8;font-size:11.5px;">— 더 안전해졌어요</span></div>
+    </div>
+    <button class="subbtn" id="news-close" style="width:100%;justify-content:center;margin-top:14px;">확인했어요</button>
+  </div>
+</div>
+
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
 <script src="words.js?v=88"></script>
 <script src="pack-hs1.js?v=88"></script>
@@ -3130,6 +3146,23 @@ drawDungeon();
 })();
 show('home');
 
+/* ================= 업데이트 소식 팝업 (버전당 1회) ================= */
+// NEWS_VER 을 바꾸면 다음 접속 때 모두에게 다시 1회 뜬다. 본 적 있으면(localStorage 일치) 안 뜸.
+var NEWS_VER='20260716';
+function closeNews(){ var m=$('news-modal'); if(m)m.style.display='none'; try{localStorage.setItem('wq_news',NEWS_VER);}catch(e){} }
+function maybeShowNews(){
+  try{ if(localStorage.getItem('wq_news')===NEWS_VER) return; }catch(e){}
+  // 로그인/역할 선택 모달이 떠 있으면 겹치지 않게 미룬다(로그인 끝난 뒤 다시 호출됨).
+  var lm=$('login-modal'); if(lm && getComputedStyle(lm).display!=='none') return;
+  var m=$('news-modal'); if(m) m.style.display='flex';
+}
+(function(){
+  var b=$('news-close'); if(b) b.addEventListener('click',closeNews);
+  var m=$('news-modal'); if(m) m.addEventListener('click',function(e){ if(e.target&&e.target.id==='news-modal') closeNews(); });
+  // 오프라인 전용(클라우드 미사용)일 때의 안전망 — 클라우드 사용 시엔 cloud-account 확정 후 호출.
+  setTimeout(function(){ if(!(window.Cloud&&window.Cloud.enabled)) maybeShowNews(); }, 1400);
+})();
+
 /* ================= 클라우드 동기화 연동 (cloud.js) ================= */
 // cloud.js(모듈, 나중에 로드)가 이 훅으로 상태를 주고받는다. 미설정/미로그인 시 전부 무시됨.
 window.WQ={
@@ -3614,7 +3647,7 @@ function updateLoginModal(){
   }
   m.style.display='none';
 }
-function hideLoginModal(){ const m=$('login-modal'); if(m) m.style.display='none'; }
+function hideLoginModal(){ const m=$('login-modal'); if(m) m.style.display='none'; try{ maybeShowNews(); }catch(e){} }
 document.addEventListener('cloud-ready',()=>{
   if(window.Cloud&&window.Cloud.enabled){
     const lab=$('cloud-label'),box=$('cloud-box');
@@ -3624,7 +3657,7 @@ document.addEventListener('cloud-ready',()=>{
   // 모달은 여기서 띄우지 않는다 — 인증 상태(cloud-account)가 확정된 뒤에 결정(재방문 시 깜빡임 방지)
 });
 // 로그인/역할/반 상태가 바뀌면 계정 영역 다시 그림 + 모달 갱신(인증 상태 확정 시점)
-document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); try{ checkClassPack(); }catch(e){} });
+document.addEventListener('cloud-account',()=>{ try{ renderAccount(); }catch(e){} updateLoginModal(); try{ checkClassPack(); }catch(e){} try{ maybeShowNews(); }catch(e){} });
 // 탭을 벗어나기 직전 마지막 변경분 동기화(로그인 시)
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'&&window.Cloud&&window.Cloud.currentEmail&&window.Cloud.currentEmail()&&window.Cloud.syncNow)window.Cloud.syncNow();
