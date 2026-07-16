@@ -1088,6 +1088,7 @@ html.nosvgframe *{border-image:none!important;}
     <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:56vh;overflow-y:auto;">
       <div style="margin:0 0 9px;">📸 <b style="color:#fcbc3c;">사진 인식(OCR) 대폭 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">AI 고품질 인식으로 단어·뜻을 훨씬 정확하게 읽어와요</span></div>
       <div style="margin:0 0 9px;">❤️ <b style="color:#fcbc3c;">하트 충전 후 단어 안 나오던 문제</b> 수정</div>
+      <div style="margin:0 0 9px;">🎯 <b style="color:#fcbc3c;">객관식 보기(선택지) 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">보기를 같은 품사로 맞춰, 어미(품사)만 보고 답을 찍지 못하게 했어요</span></div>
       <div style="margin:0 0 9px;">📝 <b style="color:#fcbc3c;">뜻·보기 글자 잘림</b> 수정 <span style="color:#a8a8c8;font-size:11.5px;">— 긴 뜻도 안 잘리고 다 보여요</span></div>
       <div style="margin:0 0 9px;">🏆 <b style="color:#fcbc3c;">랭킹 오류 수정</b> <span style="color:#a8a8c8;font-size:11.5px;">— 정확하게 집계돼요</span></div>
       <div style="margin:0;">🔒 <b style="color:#fcbc3c;">해킹·부정접근 위험 차단</b> <span style="color:#a8a8c8;font-size:11.5px;">— 더 안전해졌어요</span></div>
@@ -1097,13 +1098,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=88"></script>
-<script src="pack-hs1.js?v=88"></script>
-<script src="pack-hs2.js?v=88"></script>
-<script src="pack-hs3.js?v=88"></script>
-<script src="pack-confuse.js?v=88"></script>
-<script src="pack-vacation.js?v=88"></script>
-<script src="firebase-config.js?v=88"></script>
+<script src="words.js?v=89"></script>
+<script src="pack-hs1.js?v=89"></script>
+<script src="pack-hs2.js?v=89"></script>
+<script src="pack-hs3.js?v=89"></script>
+<script src="pack-confuse.js?v=89"></script>
+<script src="pack-vacation.js?v=89"></script>
+<script src="firebase-config.js?v=89"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2122,7 +2123,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v88';
+var BUILD='v89';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3148,7 +3149,7 @@ show('home');
 
 /* ================= 업데이트 소식 팝업 (버전당 1회) ================= */
 // NEWS_VER 을 바꾸면 다음 접속 때 모두에게 다시 1회 뜬다. 본 적 있으면(localStorage 일치) 안 뜸.
-var NEWS_VER='20260716';
+var NEWS_VER='20260716b';
 function closeNews(){ var m=$('news-modal'); if(m)m.style.display='none'; try{localStorage.setItem('wq_news',NEWS_VER);}catch(e){} }
 function maybeShowNews(){
   try{ if(localStorage.getItem('wq_news')===NEWS_VER) return; }catch(e){}
@@ -3719,7 +3720,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=88"></script>
+<script type="module" src="cloud.js?v=89"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
