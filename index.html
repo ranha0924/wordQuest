@@ -2877,6 +2877,9 @@ function endBattle(){
   else next='모든 단어를 다 익혔다! 새 단어를 영입해도 좋다.';
   S.lastResult={win:s.win,hurt:s.hurt,cap:s.cap,combo:s.best,ko:s.hearts<=0,next};
   S.session=null;S.phase='idle';
+  // 학습 세션이 끝나면 즉시 클라우드 write 를 '발행'한다(연속 응답으로 디바운스가 안 튄 경우 대비).
+  //   오프라인 지속성 덕에 이 write 는 곧바로 IndexedDB 에 durable 하게 남아 반드시 서버로 반영된다.
+  try{ if(window.Cloud&&window.Cloud.currentEmail&&window.Cloud.currentEmail()&&window.Cloud.syncNow) window.Cloud.syncNow(); }catch(e){}
   const lr=S.lastResult;
   $('r-title').textContent=lr.ko?'용사, 쓰러지다…':'던전 탐사 완료!';
   $('r-sub').textContent=lr.ko?'하지만 경험은 남는다. 다시 도전하라!':'몬스터들은 잊혀질 때쯤 다시 돌아온다.';
