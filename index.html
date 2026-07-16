@@ -3708,10 +3708,27 @@ async function renderTeacherStudents(){
   //   · 워커 OFF(폴백): 폴백 인게임 랭킹이 날짜별 합(weekSum)이므로 대시보드도 날짜별 합으로 맞춘다.
   //   요약에 weekWords 가 없거나(구버전 앱) 지난주 값이면 날짜별 합으로 폴백(무회귀).
   const useServerRank=(()=>{ try{ return !!String(window.RANK_ENDPOINT||'').trim(); }catch(e){ return false; } })();
+  // ★ 서버 원장 상한 캡(워커 /teacher 가 내려준 값, 없으면 워커 기본과 동일한 폴백). 아래 weekWordsOf 가
+  //   자기보고 weekWords 를 서버 관측 att(vb.byUid[uid].days)로 상한 → 대시보드 '반 랭킹'도 리더보드와
+  //   같은 산식(min(자기보고, Σmin(att[d],일캡)))으로 위조를 무력화한다(경로2 차단).
+  const DCAP=int(vb&&vb.dailyCap)||60, WCAP=int(vb&&vb.weekCap)||300;
   const weekWordsOf=s=>{
     const sm=s.summary||{};
-    if(useServerRank && sm.weekWords!=null && sm.weekOf===weekMon) return int(sm.weekWords);
-    const dd=mergedDaily(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n;
+    // 원값(자기보고/스냅샷): 워커 ON 이면 summary.weekWords(주간 유니크), 아니면 날짜별 합.
+    let raw;
+    if(useServerRank && sm.weekWords!=null && sm.weekOf===weekMon) raw=int(sm.weekWords);
+    else { const dd=mergedDaily(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } raw=n; }
+    // ★ 워커 배포+응답(vb) 상태에선 '서버 관측 att' 로 **항상** 상한(백데이트 불가). att 흔적이 없는
+    //   학생 = 워커 /sync 를 한 번도 안 함 = 콘솔로 summary.weekWords 만 위조한 치터 프로파일 → bound=0 → 0
+    //   으로 컷한다(리더보드와 동일 철학: '서버가 안 본 것은 미집계'). 실제로 앱으로 공부한 학생은 동기화
+    //   시 att[그날]이 기록되므로 0 이 되지 않는다. 워커 OFF/무응답(vb=null)이면 전원 raw 폴백(무회귀).
+    if(useServerRank && vb){
+      const days=(vb.byUid&&vb.byUid[s.uid]&&vb.byUid[s.uid].days)||{};
+      let bound=0; for(const day of weekDays){ const v=days[day]; if(typeof v==='number'&&v>0){ const f=Math.floor(v); bound+=(f<DCAP?f:DCAP); } }
+      if(bound>WCAP)bound=WCAP;
+      return raw<bound?raw:bound;                 // min(자기보고, 서버원장 상한) · att 없으면 0
+    }
+    return raw;                                   // 워커 미배포/무응답 → 폴백(기존 동작, 무회귀)
   };
   const ranked=active.map(s=>({s,w:weekWordsOf(s),ver:!!(vb&&vb.byUid[s.uid])})).sort((a,b)=>(b.w-a.w)||(((a.s.name||a.s.email||'')<(b.s.name||b.s.email||''))?-1:1));
   let html='';
