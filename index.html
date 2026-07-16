@@ -1151,13 +1151,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=100"></script>
-<script src="pack-hs1.js?v=100"></script>
-<script src="pack-hs2.js?v=100"></script>
-<script src="pack-hs3.js?v=100"></script>
-<script src="pack-confuse.js?v=100"></script>
-<script src="pack-vacation.js?v=100"></script>
-<script src="firebase-config.js?v=100"></script>
+<script src="words.js?v=101"></script>
+<script src="pack-hs1.js?v=101"></script>
+<script src="pack-hs2.js?v=101"></script>
+<script src="pack-hs3.js?v=101"></script>
+<script src="pack-confuse.js?v=101"></script>
+<script src="pack-vacation.js?v=101"></script>
+<script src="firebase-config.js?v=101"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2176,7 +2176,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v100';
+var BUILD='v101';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3578,21 +3578,24 @@ async function renderTeacherStudents(){
   const card=s=>{
     const sm=s.summary||{};
     const v=vb&&vb.byUid[s.uid];   // 이 학생의 서버 검증 지표(없으면 undefined = 아직 서버가 관측 못함)
-    // 연속일수·오늘·히트맵·학습일수: 검증 ON 이면 '서버 관측' 값만, 아니면 자기보고(폴백).
-    //   → 검증 ON 이면 학생이 summary.streak/daily 를 위조해도 대시보드에 안 뜬다.
-    const dailySrc=verifiedOn?(v?vDaily(v.days):{}):(sm.daily||{});
+    // 연속일수·오늘·히트맵·학습일수: '학생별로' 서버 검증값(v)이 있으면 그 값(위조 불가, ✓ 표시),
+    //   아직 서버가 관측 못한 학생은 자기보고(summary.daily)로 폴백한다. ★서버가 아직 관측 못했다고
+    //   화면을 통째로 비우면 안 된다(워커 배포 직후·att 저장 실패 시 전원 공백 사고 방지). 검증값은
+    //   학생이 접속·동기화하며 서버에 쌓이므로, 관측된 학생부터 순차로 ✓ 검증값으로 바뀐다.
+    const verifiedHere=!!v;
+    const dailySrc=verifiedHere?vDaily(v.days):(sm.daily||{});
     const todayE=dailySrc[t]||null;
     const studied=!!todayE;
     const todayCount=todayE?int(todayE.w!=null?todayE.w:todayE.ok):0;
-    const streak=verifiedOn?(v?int(v.streak):0):((sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0);
-    const studyDays=verifiedOn?(v?int(v.studyDays):0):Object.keys(sm.daily||{}).filter(d=>heatInt((sm.daily[d]||{}).a)>0).length;
+    const streak=verifiedHere?int(v.streak):((sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0);
+    const studyDays=verifiedHere?int(v.studyDays):Object.keys(sm.daily||{}).filter(d=>heatInt((sm.daily[d]||{}).a)>0).length;
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';   // 정답률·포획은 앱 기록(서버 검증 대상 아님)
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
     const nm=esc(s.name||s.email||'(이름 없음)');
     const heat=heatStripHTML(dailySrc,28);
     const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
-    const detail=dailyBreakdownHTML(dailySrc,verifiedOn);
-    const chk=verifiedOn?' <span title="서버가 관측한 값 · 위조 불가" style="color:#5fe06a;font-size:10px;">✓</span>':'';
+    const detail=dailyBreakdownHTML(dailySrc,verifiedHere);
+    const chk=verifiedHere?' <span title="서버가 관측한 값 · 위조 불가" style="color:#5fe06a;font-size:10px;">✓</span>':'';
     return '<div class="tccard" data-uid="'+esc(s.uid)+'" title="눌러서 매일 학습량 보기" style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
         +'<div style="font-size:14px;font-weight:700;color:#e8e8f0;">'+dot+nm+'</div>'
@@ -3615,7 +3618,7 @@ async function renderTeacherStudents(){
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
   if(verifiedOn)
-    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — 🔥연속·📅학습일·히트맵은 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">🎯정답률·⭐포획은 학생 앱 기록. 검증값은 워커 배포 시점부터 쌓입니다.</span></div>';
+    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일·히트맵은 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">검증값은 학생이 접속·동기화하면서 쌓여요 — 아직 ✓ 없는 학생은 앱 보고값으로 보여주고, 접속하면 자동으로 검증값(✓)으로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
   else
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#ffd27a;">⚠️ <b>서버 검증 미적용</b> — 아래 🔥연속·📅학습일·히트맵은 <b>학생 앱이 보고한 값</b>이라 조작될 수 있어요. rank-worker를 재배포하면 서버 검증값으로 자동 전환됩니다.</div>';
   if(!active.length) html+='<div class="dexempty">'+(removed.length?'활성 학생이 없어요.':'아직 이 반에 참여한 학생이 없어요.')+'</div>';
@@ -3839,7 +3842,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=100"></script>
+<script type="module" src="cloud.js?v=101"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
