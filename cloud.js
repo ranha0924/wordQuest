@@ -225,6 +225,19 @@
       if (!dh[d2] || ((ldh[d2] && ldh[d2].a) || 0) >= ((dh[d2] && dh[d2].a) || 0)) dh[d2] = ldh[d2];
     }
     if (Object.keys(dh).length) mergedMeta.dailyHistory = dh;
+    // doneByDay(날짜별 완료 단어 id 목록): 랭킹 집계('이번 주 완료 단어수')의 원천이라 절대 유실되면
+    //   안 된다 → dailyHistory 처럼 '날짜별 union'으로 합친다. LWW로 덮으면 다른 세션/기기의 오래된
+    //   값(이번 주 비어있는)에 밀려 로컬의 이번 주 완료가 0으로 사라질 수 있다(랭킹 미등재의 원인).
+    var dbd = {};
+    var ldbd = lm.doneByDay || {}, rdbd = rm.doneByDay || {};
+    for (var dd1 in rdbd) if (Object.prototype.hasOwnProperty.call(rdbd, dd1) && Array.isArray(rdbd[dd1])) dbd[dd1] = rdbd[dd1].slice();
+    for (var dd2 in ldbd) {
+      if (!Object.prototype.hasOwnProperty.call(ldbd, dd2) || !Array.isArray(ldbd[dd2])) continue;
+      var uni = {}, list = (dbd[dd2] || []).concat(ldbd[dd2]), o = [];
+      for (var ui = 0; ui < list.length; ui++) { var iv = String(list[ui]).toLowerCase(); if (!uni[iv]) { uni[iv] = 1; o.push(list[ui]); } }
+      dbd[dd2] = o.slice(0, 2000);
+    }
+    if (Object.keys(dbd).length) mergedMeta.doneByDay = dbd;
     // 최고기록성 값은 LWW가 아니라 max로 보존(다른 기기에서 사소한 저장에 덮이지 않게)
     mergedMeta.bestCombo = Math.max((lm.bestCombo || 0), (rm.bestCombo || 0));
     mergedMeta.exp = Math.max((lm.exp || 0), (rm.exp || 0));
