@@ -1081,13 +1081,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=87"></script>
-<script src="pack-hs1.js?v=87"></script>
-<script src="pack-hs2.js?v=87"></script>
-<script src="pack-hs3.js?v=87"></script>
-<script src="pack-confuse.js?v=87"></script>
-<script src="pack-vacation.js?v=87"></script>
-<script src="firebase-config.js?v=87"></script>
+<script src="words.js?v=88"></script>
+<script src="pack-hs1.js?v=88"></script>
+<script src="pack-hs2.js?v=88"></script>
+<script src="pack-hs3.js?v=88"></script>
+<script src="pack-confuse.js?v=88"></script>
+<script src="pack-vacation.js?v=88"></script>
+<script src="firebase-config.js?v=88"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1157,8 +1157,19 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random
 /* ===== 오답지 근사치화용 유사도 ===== */
 function posOf(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.pos:null;}
 function firstSense(m){return (m||'').split(/[;,\/·]/)[0].trim();}
-// 한국어 뜻 어미로 대략적 품사 유형 추정 (동사~다 / 형용사~ㄴ·적 / 그외 명사)
-function koType(m){const s=firstSense(m);if(/다$/.test(s))return 'v';if(/[은운는한인]$|적$/.test(s))return 'a';return 'n';}
+// 한국어 뜻 어미로 대략적 품사 유형 추정 (동사~다 / 형용사~ㄴ(은·운·는·한·인, '~적인' 포함) / 그외 명사)
+// '적$'는 뺀다: 이 은행에서 형용사는 모두 '~적인'(인$로 처리)이고, '적$'는 흔적·목적 같은 명사만 형용사로 오분류했다.
+function koType(m){const s=firstSense(m);if(/다$/.test(s))return 'v';if(/[은운는한인]$/.test(s))return 'a';return 'n';}
+// 정답·오답을 '진짜 품사'로 묶는 키: 단어은행에 있으면 큐레이션된 품사(posOf), 없으면(사용자 커스텀) 어미로 추정(koType).
+// koType만으로는 '뛰어난·예쁜'(형용사)을 명사로, '원인·개인'(명사)을 형용사로 오판 → 은행 품사를 우선해 오출제를 막는다.
+function posKey(w){return (w&&posOf(w))||koType(w&&w.m);}
+// 단어은행 뜻을 품사별(v/a/n/ad…)로 1회 캐시. e2k 오답이 '내 단어'에 부족할 때 같은 품사 뜻으로 보충한다(접사로 답 유추 방지).
+let _bankByPos=null;
+function bankMeaningsByPos(p){
+  if(!_bankByPos){_bankByPos={};
+    for(const k in BANK){const e=BANK[k];if(!e||!e.m)continue;const t=e.pos||koType(e.m);(_bankByPos[t]||(_bankByPos[t]=[])).push(String(e.m));}}
+  return shuffle((_bankByPos[p]||[]).slice());
+}
 function lev(a,b){const m=a.length,n=b.length;if(!m)return n;if(!n)return m;const d=Array.from({length:m+1},(_,i)=>{const r=new Array(n+1).fill(0);r[0]=i;return r;});for(let j=0;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[m][n];}
 // 철자 유사도: 접두 공유·접미 일치는 가점, 길이차·편집거리는 감점 → 헷갈리는 근사어일수록 높음
 function engSim(a,b){a=(a||'').toLowerCase();b=(b||'').toLowerCase();let pre=0;while(pre<a.length&&pre<b.length&&a[pre]===b[pre])pre++;const suf=(a.slice(-1)===b.slice(-1))?1:0;return pre*1.3+suf*0.6-Math.abs(a.length-b.length)*0.35-lev(a,b)*0.3;}
@@ -2095,7 +2106,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v87';
+var BUILD='v88';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2360,18 +2371,32 @@ function makeChoices(w,mode){
   const correct=String((wantEng?w.w:w.m)||'').trim();
   const cl=correct.toLowerCase();
   const wm=String(w.m||'');
-  const tgtPos=posOf(w),tgtType=koType(wm);
+  const tgtPos=posOf(w),tgtType=koType(wm),tgtKey=posKey(w);
   const scored=S.words.filter(x=>x.id!==w.id&&String(x.m||'')!==wm).map(x=>{
     const v=String((wantEng?x.w:x.m)||'').trim();
     let s=Math.random()*0.6; // 동점 흔들기 → 매번 같은 오답만 나오지 않게
     if(wantEng){s+=engSim(correct,v);if(tgtPos&&posOf(x)===tgtPos)s+=1.2;}
     else{if(koType(String(x.m||''))===tgtType)s+=1.5;if(tgtPos&&posOf(x)===tgtPos)s+=0.8;}
-    return {v,s};
+    return {v,s,pk:posKey(x)};
   }).filter(c=>c.v).sort((a,b)=>b.s-a.s); // 빈 값은 오답 후보에서 제외
   const pool=[];const seen=new Set(cl?[cl]:[]);
-  for(const c of scored){if(pool.length>=3)break;const vl=c.v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(c.v);}}
-  if(pool.length<3){const fb=shuffle((wantEng?FALLBACK_EN:FALLBACK).slice());let fi=0;
-    while(pool.length<3&&fi<fb.length){const v=fb[fi++];const vl=v.toLowerCase();if(!seen.has(vl)){seen.add(vl);pool.push(v);}}}
+  const push=v=>{v=String(v||'').trim();const vl=v.toLowerCase();if(v&&pool.length<3&&!seen.has(vl)){seen.add(vl);pool.push(v);}};
+  if(wantEng){
+    // 영어 선지: 철자 근사 오답 우선(품사가 영어라 겉으로 드러나지 않아 유형 제약 불필요).
+    for(const c of scored){if(pool.length>=3)break;push(c.v);}
+    if(pool.length<3){const fb=shuffle(FALLBACK_EN.slice());for(let i=0;i<fb.length&&pool.length<3;i++)push(fb[i]);}
+  }else{
+    // e2k(뜻 고르기)는 선지가 한국어 뜻이라 품사가 드러난다(동사 …다 / 형용사 …ㄴ / 명사 무접사).
+    // 품사만 보고 답을 유추하지 못하게 오답도 '정답과 같은 품사'로 맞춘다. 품사는 은행 기준(posKey)으로 판정하고,
+    // 같은 품사 안에서는 표시 어미(koType)까지 같은 오답을 우선한다(뛰어난·원인처럼 어미 추정이 틀리는 단어 대응).
+    //   ① 내 단어(같은 품사) → ② 부족하면 단어은행에서 같은 품사 뜻 보충 → ③ 폴백(같은 어미) → 안전망(4지선다 보장)
+    for(const c of scored){if(pool.length>=3)break;if(c.pk===tgtKey)push(c.v);}
+    if(pool.length<3){const bm=bankMeaningsByPos(tgtKey).sort((a,b)=>(koType(b)===tgtType)-(koType(a)===tgtType));
+      for(const m of bm){if(pool.length>=3)break;if(m!==wm)push(m);}}
+    if(pool.length<3){const fb=shuffle(FALLBACK.slice());for(let i=0;i<fb.length&&pool.length<3;i++)if(koType(fb[i])===tgtType)push(fb[i]);}
+    for(const c of scored){if(pool.length>=3)break;push(c.v);}
+    if(pool.length<3){const fb=shuffle(FALLBACK.slice());for(let i=0;i<fb.length&&pool.length<3;i++)push(fb[i]);}
+  }
   const all=pool.map(v=>({t:v,ok:false}));
   all.push({t:correct||String((wantEng?w.w:w.m)||'?'),ok:true}); // 정답 텍스트도 빈 값 방어
   return shuffle(all);
@@ -3661,7 +3686,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=87"></script>
+<script type="module" src="cloud.js?v=88"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
