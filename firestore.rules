@@ -162,36 +162,25 @@ service cloud.firestore {
         );
     }
 
-    // 전체(글로벌) 랭킹: 로그인한 누구나 서로의 표시용 항목(이름·마스터/총 단어수)만 읽고, 각자 자기 것만 쓴다.
+    // 전체(글로벌) 랭킹: 로그인한 누구나 서로의 표시용 항목(이름·주간 단어수·연속)만 읽는다.
     //   경로가 더 구체적이라 아래 반 랭킹 규칙과 OR 로 평가되어, _global 은 이 규칙으로 허용된다.
     match /leaderboards/_global/entries/{uid} {
       allow read: if signedIn();
-      // ★ 값 상한은 걸지 않는다(열심히 한 학생의 큰 값도 진짜라면 그대로). 구조만 검증:
-      //   본인 항목 + 필드 화이트리스트 + 타입/음수 방지 + days 맵 크기(정크 저장 차단).
-      //   숫자 위조(치팅) 자체의 근본 차단은 서버 집계(워커+KV)로 별도 대응 — docs/security-review (4) 참고.
-      allow write: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name','wk','streak','days','at'])
-        && request.resource.data.name is string && request.resource.data.name.size() <= 40
-        && request.resource.data.wk is number && request.resource.data.wk >= 0
-        && request.resource.data.streak is number && request.resource.data.streak >= 0
-        && (!('days' in request.resource.data) || (request.resource.data.days is map && request.resource.data.days.size() <= 9));
+      // ★ 클라이언트 직접 쓰기 전면 차단(2026-07-16). 점수는 랭킹 워커(RANK_ENDPOINT)가
+      //   서버에서 doneByDay 를 읽어 KV 에만 기록한다 → 콘솔에서 wk/streak/days 를 직접 써서
+      //   1등이 되던 경로(실제 치팅 사건)를 원천 봉쇄. 이 Firestore 경로는 워커 미설정 시의
+      //   레거시 폴백일 뿐이고, 그 폴백 자체가 위조 가능한 구멍이므로 쓰기를 잠근다(심층방어).
+      //   ⚠ 이 잠금은 워커가 살아있어야(=RANK_ENDPOINT 설정) 랭킹이 정상 표시된다(현재 설정됨).
+      allow write: if false;
       allow delete: if signedIn() && (request.auth.uid == uid || isMaster());
     }
 
-    // 반 주간 랭킹: 같은 반 학생끼리 서로의 항목(이름·주간 단어수·연속)을 읽고, 각자 자기 것만 쓴다.
+    // 반 주간 랭킹: 같은 반 학생끼리 서로의 항목(이름·주간 단어수·연속)을 읽는다.
     //   (이메일·상세 요약은 노출하지 않음 — 표시용 필드만 저장)
     match /leaderboards/{cid}/entries/{uid} {
       allow read: if signedIn() && (requesterClassId() == cid || ownsClass(cid) || isMaster());
-      // ★ 값 상한 없음(정상 고득점 보존). 구조만 검증(본인·필드·타입·음수·맵크기).
-      allow write: if signedIn()
-        && request.auth.uid == uid
-        && requesterClassId() == cid
-        && request.resource.data.keys().hasOnly(['name','wk','streak','days','at'])
-        && request.resource.data.name is string && request.resource.data.name.size() <= 40
-        && request.resource.data.wk is number && request.resource.data.wk >= 0
-        && request.resource.data.streak is number && request.resource.data.streak >= 0
-        && (!('days' in request.resource.data) || (request.resource.data.days is map && request.resource.data.days.size() <= 9));
+      // ★ 클라이언트 직접 쓰기 전면 차단(2026-07-16) — 위 _global 과 동일 이유. 점수는 워커만 기록.
+      allow write: if false;
       allow delete: if signedIn() && (request.auth.uid == uid || ownsClass(cid) || isMaster());
     }
 

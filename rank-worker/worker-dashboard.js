@@ -11,7 +11,8 @@
         못하게 한다(근본 차단). 점수는 클라이언트가 못 쓰고 이 워커만 KV에 기록한다.
 
    엔드포인트:
-     POST /sync   body {week, today, name}  → 서버가 doneByDay 읽어 카운트·KV 저장, {wk} 반환
+     POST /sync   body {name}  → 서버가 doneByDay(유효 단어만)·서버시계로 카운트·KV 저장, {wk} 반환
+                                 (week/today 는 더 이상 신뢰하지 않음 — 서버 KST 로 산정)
      GET  /board?scope=class|global&week=YYYY-MM-DD  → 정렬된 순위 반환
      GET  /teacher?class=CLASSID  → (소유 선생님·마스터만) 반 학생별 '서버 관측' 연속일수·
                                     학습일수·출석맵 반환. 선생님 대시보드가 위조 불가값을 표시.
@@ -73,17 +74,24 @@ const TTL = 60 * 60 * 24 * 16; // 16일(지난 주 자동 만료)
 
 async function handleSync(req, env, uid, token, cors) {
   const body = await req.json().catch(() => ({}));
-  const week = validWeek(body.week) ? body.week : null;
-  const today = validWeek(body.today) ? body.today : null;
-  if (!week || !today) return json({ error: 'bad_date' }, 400, cors);
   const name = String(body.name || '').slice(0, 40);
+  // ★ 날짜(week/today)는 클라가 보낸 값을 쓰지 않는다. 서버 시계(KST)로만 산정한다.
+  //    (과거: body.today 로 streak 을 계산 → 학생이 연속 날짜를 위조해 임의 연속일수를 만들 수 있었다.)
+  const sToday = kstToday(Date.now());
+  const week = weekMondayKST(Date.now());   // 이번 주 월요일(주 식별자·집계 창) — 서버가 정한다
+  const today = sToday;
 
-  // 집계 원천 = 학생 '본인'의 동기화된 완료기록(users/{uid}/private/state 의 meta.doneByDay)을
-  //   서버가 직접 읽어서 센다. 클라가 보낸 ids/숫자는 신뢰하지 않는다 → 콘솔로 점수 위조 불가.
-  //   배포단어에 국한하지 않고 '완료한 모든 단어'(개인등록·기본팩·배포)를 종류 불문 카운트한다.
-  const doneByDay = await getDoneByDay(env, uid, token);
-  const wk = countWeekDone(doneByDay, week, today);          // 이번 주(week=월 ~ today) 유니크 완료 수
-  const activeToday = normIds(doneByDay[today]).length > 0;  // 오늘 뭐라도 완료했는가(연속일수용)
+  // 집계 원천 = 학생 '본인'의 동기화된 완료기록(users/{uid}/private/state)을 서버가 직접 읽는다.
+  //   ★ 위조 방지: doneByDay 의 id 중 '실제 단어(words 맵 키)에 존재하는 것'만 센다.
+  //     학생이 콘솔로 doneByDay 에 가짜 id 를 무제한 심어도(규칙상 자기 문서라 쓰기 가능),
+  //     그 id 들이 words 맵에 없으면 집계에서 탈락한다. 점수를 부풀리려면 words 맵 자체를
+  //     수천 개 가짜 단어로 채워야 하는데, 그건 앱 단어목록에 그대로 드러나고(감사 가능)
+  //     1MB 문서 한도에 걸린다 → 임의 숫자(99999) 조작은 원천 불가.
+  //     (읽기 실패 시엔 wordIds=null → 판정 보류하고 종전처럼 카운트: 가용성 우선.)
+  const st = await getState(env, uid, token);
+  const doneByDay = st.doneByDay, wordIds = st.wordIds;
+  const wk = countWeekDone(doneByDay, week, today, wordIds);  // 이번 주(월~오늘) 유효 완료 유니크 수
+  const activeToday = countDayDone(doneByDay, today, wordIds) > 0; // 오늘 실제 완료가 있는가(연속일수용)
   const streak = await updateStreak(env, uid, today, activeToday);
   const cid = await getClassId(env, uid, token);             // 반 랭킹 보드 키에만 사용
 
@@ -106,12 +114,11 @@ async function handleSync(req, env, uid, token, cors) {
   //   랭킹(위 KV)과 별개로, 선생님 대시보드가 학생 자기보고(summary.streak/daily)를
   //   그대로 믿던 구멍을 막는다: '서버 시계상 오늘' 실제 완료가 있으면 그날을 att:{uid}에 남긴다.
   //   날짜 키를 서버가 정하므로(클라가 보낸 today 무시) 학생이 과거 날짜/연속을 심을 수 없다.
-  const sToday = kstToday(Date.now());
-  const sCount = normIds(doneByDay[sToday]).length;       // 오늘 서버가 관측한 완료 단어 수(자연 천장)
+  const sCount = countDayDone(doneByDay, sToday, wordIds);  // 오늘 서버가 관측한 유효 완료 수(자연 천장)
   if (sCount > 0) await recordAttendance(env, uid, sToday, sCount);
   if (cid) await recordMember(env, cid, uid, name);       // 반 명단(선생님이 att를 조회하려면 uid 열거 필요)
 
-  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: countAllDone(doneByDay) }, 200, cors);
+  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: countAllDone(doneByDay, wordIds) }, 200, cors);
 }
 
 const ATT_TTL = 60 * 60 * 24 * 45;   // 45일 롤링(선생님 대시보드 히트맵 ~최근 5주)
@@ -199,8 +206,8 @@ async function updateStreak(env, uid, today, activeToday) {
 }
 
 async function handleBoard(env, uid, token, url, cors) {
-  const week = validWeek(url.searchParams.get('week')) ? url.searchParams.get('week') : null;
-  if (!week) return json({ error: 'bad_week' }, 400, cors);
+  // 주(week)도 서버 시계로 고정한다(클라가 보낸 week 무시) — sync 가 서버 주 키로 저장하므로 일치시킨다.
+  const week = weekMondayKST(Date.now());
   const scope = url.searchParams.get('scope') === 'global' ? 'global' : 'class';
 
   let prefix;
@@ -239,19 +246,34 @@ function kstToday(nowMs) { var d = new Date(nowMs + 9 * 3600 * 1000); var z = fu
 function pruneDays(map, keepDays, today) { var cut = isoAddDays(today, -keepDays), out = {}; for (var d in map) { if (Object.prototype.hasOwnProperty.call(map, d) && d > cut) out[d] = map[d]; } return out; }
 // 서버 관측 출석맵에서 연속일수: 오늘(없으면 어제)부터 하루도 안 빠지고 이어진 날 수. 끊기면 0.
 function streakFromDays(days, today) { if (!days) return 0; var cur = today; if (!days[cur]) { cur = isoAddDays(today, -1); if (!days[cur]) return 0; } var n = 0; while (days[cur]) { n++; cur = isoAddDays(cur, -1); } return n; }
-// 이번 주(week=월요일 ~ today, ISO 날짜 문자열 비교) 완료 단어 유니크 수. 종류(개인·기본팩·배포) 불문.
-function countWeekDone(dbd, week, today) {
+// id 가 '유효(실제 단어)'인지: wordIds 가 주어지면 그 집합에 있어야 통과, 없으면(null) 전부 통과.
+//   wordIds=null 은 '상태문서 읽기 실패 → 판정 보류'(가용성 우선). 빈 Set 은 '단어 0개'(전부 탈락).
+function validId(id, wordIds) { return wordIds ? wordIds.has(id) : true; }
+// 이번 주(week=월요일 ~ today, ISO 날짜 문자열 비교) '유효' 완료 단어 유니크 수. 종류(개인·기본팩·배포) 불문.
+function countWeekDone(dbd, week, today, wordIds) {
   const seen = new Set();
   for (const d in dbd) {
-    if (d >= week && d <= today) { const a = normIds(dbd[d]); for (let i = 0; i < a.length; i++) seen.add(a[i]); }
+    if (d >= week && d <= today) { const a = normIds(dbd[d]); for (let i = 0; i < a.length; i++) if (validId(a[i], wordIds)) seen.add(a[i]); }
   }
   return seen.size;
 }
-// 보관된 완료기록(최근 9일 롤링) 전체의 유니크 수 — 응답 참고값(ceiling)용.
-function countAllDone(dbd) {
-  const seen = new Set();
-  for (const d in dbd) { const a = normIds(dbd[d]); for (let i = 0; i < a.length; i++) seen.add(a[i]); }
+// 특정 날짜의 '유효' 완료 유니크 수(오늘 활동 여부·출석 카운트용).
+function countDayDone(dbd, day, wordIds) {
+  const a = normIds(dbd && dbd[day]); const seen = new Set();
+  for (let i = 0; i < a.length; i++) if (validId(a[i], wordIds)) seen.add(a[i]);
   return seen.size;
+}
+// 보관된 완료기록(최근 9일 롤링) 전체의 '유효' 유니크 수 — 응답 참고값(ceiling)용.
+function countAllDone(dbd, wordIds) {
+  const seen = new Set();
+  for (const d in dbd) { const a = normIds(dbd[d]); for (let i = 0; i < a.length; i++) if (validId(a[i], wordIds)) seen.add(a[i]); }
+  return seen.size;
+}
+// 이번 주 월요일(KST) 'YYYY-MM-DD' — sync/board 의 주 식별자. 서버 시계 기준이라 클라가 못 바꾼다.
+function weekMondayKST(nowMs) {
+  const t = kstToday(nowMs), p = t.split('-').map(Number);
+  const dow = (new Date(Date.UTC(p[0], p[1] - 1, p[2])).getUTCDay() + 6) % 7; // 월=0 … 일=6
+  return isoAddDays(t, -dow);
 }
 function sortBoard(a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); }
 // 랭킹 KV 메타데이터({n,w,s})가 동일한가 — 같으면 put 을 건너뛴다(무료 쓰기 한도 보호).
@@ -267,16 +289,26 @@ function parseDoneByDay(doc) {
   }
   return out;
 }
+// 상태문서의 words 맵 '키(단어 id)' 집합 — 완료 id 위조 필터용. words 필드 없으면 빈 Set.
+function parseWordIds(doc) {
+  const w = doc && doc.fields && doc.fields.words && doc.fields.words.mapValue && doc.fields.words.mapValue.fields;
+  const s = new Set();
+  if (w) for (const id in w) { if (Object.prototype.hasOwnProperty.call(w, id)) s.add(String(id).toLowerCase()); }
+  return s;
+}
 
 /* ── 외부 I/O ── */
 async function getClassId(env, uid, token) {
   const doc = await fsGet(env, 'users/' + uid, token);
   return (doc && doc.fields && doc.fields.classId && doc.fields.classId.stringValue) || null;
 }
-// 학생 본인 상태문서(users/{uid}/private/state)의 meta.doneByDay 만 읽는다.
-//   mask=meta 로 words 맵(수백 KB)은 전송받지 않아 읽기 비용을 낮춘다. 규칙상 본인 문서라 학생 토큰으로 읽힘.
-async function getDoneByDay(env, uid, token) {
-  return parseDoneByDay(await fsGet(env, 'users/' + uid + '/private/state', token, 'meta'));
+// 학생 본인 상태문서(users/{uid}/private/state)를 읽어 { doneByDay, wordIds } 반환.
+//   ★ 위조 필터를 위해 words 맵 키가 필요해 mask 없이 읽는다(과거엔 mask=meta 로 words 를 안 받았음).
+//     읽기 실패(null)면 wordIds=null → 판정 보류(가용성). 규칙상 본인 문서라 학생 토큰으로 읽힘.
+async function getState(env, uid, token) {
+  const doc = await fsGet(env, 'users/' + uid + '/private/state', token);
+  if (!doc) return { doneByDay: {}, wordIds: null };
+  return { doneByDay: parseDoneByDay(doc), wordIds: parseWordIds(doc) };
 }
 async function fsGet(env, docPath, idToken, mask) {
   var url = 'https://firestore.googleapis.com/v1/projects/' + env.PROJECT_ID + '/databases/(default)/documents/' + docPath;
