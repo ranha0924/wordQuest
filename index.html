@@ -1081,13 +1081,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=83"></script>
-<script src="pack-hs1.js?v=83"></script>
-<script src="pack-hs2.js?v=83"></script>
-<script src="pack-hs3.js?v=83"></script>
-<script src="pack-confuse.js?v=83"></script>
-<script src="pack-vacation.js?v=83"></script>
-<script src="firebase-config.js?v=83"></script>
+<script src="words.js?v=84"></script>
+<script src="pack-hs1.js?v=84"></script>
+<script src="pack-hs2.js?v=84"></script>
+<script src="pack-hs3.js?v=84"></script>
+<script src="pack-confuse.js?v=84"></script>
+<script src="pack-vacation.js?v=84"></script>
+<script src="firebase-config.js?v=84"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2049,7 +2049,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v83';
+var BUILD='v84';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2365,7 +2365,7 @@ function useBlast(){
   if(!s||s.combo<MANA_FULL||S.phase!=='ask'||S.mode==='match')return;
   const targets=[];
   for(let i=0;i<s.q.length&&targets.length<ULT_CLEAR;i++){const w=byId(s.q[i]);if(w&&w.cap)targets.push(w);}
-  if(!targets.length){ setMsg('소탕할 복습 몬스터가 없다! 새 단어는 직접 풀어야 한다.'); return; }
+  if(!targets.length){ setMsg('소탕할 복습 몬스터가 없다! 새 단어는 직접 풀어야 한다.'); wait(restoreAsk,1200); return; }
   s.combo=0; // 마나 소모
   targets.forEach(w=>matchApplyCorrect(w));
   const ids=new Set(targets.map(w=>w.id));
@@ -2377,16 +2377,19 @@ function useBlast(){
   renderParty();persist();
   wait(()=>nextMon(),1400);
 }
+// 마나 안내 메시지가 대화창(단어·뜻이 표시되는 곳)을 덮으므로, 어떤 경로로 끝나든 문제 텍스트를 반드시 되살린다.
+//   (특히 '하트가 가득/소탕 대상 없음'으로 회복이 무산될 때 예전엔 복구를 안 해 대화창에 단어·뜻이 사라지는 버그가 있었다.)
+function restoreAsk(){ if(S.phase==='ask'&&S.curId){ const w=byId(S.curId); if(w)setMsg(askText(w,S.mode,S.clozePick)); } }
 // 마나로 하트 1 회복(가득이면 소모 안 함). 현재 문제는 그대로 이어서 푼다.
 function useHeal(){
   const s=S.session;
   if(!s||s.combo<MANA_FULL||S.phase!=='ask'||S.mode==='match')return;
-  if(s.hearts>=s.maxH){ setMsg('체력이 이미 가득 찼다!'); return; }
+  if(s.hearts>=s.maxH){ setMsg('체력이 이미 가득 찼다!'); wait(restoreAsk,1000); return; }
   s.combo=0;s.hearts=Math.min(s.maxH,s.hearts+1);
   sfx('correct');
   setMsg('마나로 체력을 회복했다! (하트 +1)');
   renderParty();persist();
-  wait(()=>{ if(S.phase==='ask'&&S.curId){ const w=byId(S.curId); if(w)setMsg(askText(w,S.mode,S.clozePick)); } },1200);
+  wait(restoreAsk,1200);
 }
 function renderMonHP(w){
   // HP바 = 남은 야생성(정착도의 역) — 맞힐수록 줄어들고, 완전 정착(stage MASTER_MAX)에서 0
@@ -3612,7 +3615,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=83"></script>
+<script type="module" src="cloud.js?v=84"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
