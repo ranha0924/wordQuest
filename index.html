@@ -657,27 +657,41 @@ body{-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale;text-renderin
 html.nosvgframe *{border-image:none!important;}
 </style>
 <script>
-/* border-image 용 SVG data-URI 를 이 브라우저가 실제로 "색까지 제대로" 그릴 수 있는지 검사.
-   구글 클래스룸 등 일부 인앱 WebView 는 SVG data-URI 를 회색 깨진 이미지로 그린다 → 감지되면 border-image 를 끄고 solid 테두리 폴백. */
+/* SVG data-URI border-image(픽셀 프레임)를 '테두리로' 제대로 못 그리는 브라우저는 회색 깨짐이 난다
+   (구글 클래스룸·카카오·네이버·인스타 등 인앱 WebView). 감지되면 html.nosvgframe 으로 solid 테두리 폴백.
+   원칙: 조금이라도 의심되면 폴백한다 — solid 테두리는 어디서나 정상이고, 회색 깨짐이 훨씬 나쁘다. */
 (function(){
+  var d=document.documentElement;
+  function mark(){ if((' '+d.className+' ').indexOf(' nosvgframe ')<0){ d.className+=(d.className?' ':'')+'nosvgframe'; } }
+
+  // (1) 알려진 인앱/임베디드 WebView 는 선제 폴백 — 동기 실행이라 첫 페인트 전에 적용된다(회색 깜빡임 없음).
+  //     이 검사가 핵심: <img> 로는 SVG 가 그려져도 border-image 로는 회색이 나는 WebView 가 있어, UA 로 직접 잡는다.
   try{
-    var d=document.documentElement, t=new Image(), done=false;
-    function mark(){ if(done)return; done=true; d.className+=(d.className?' ':'')+'nosvgframe'; }
-    t.onerror=mark;
+    var ua=navigator.userAgent||'';
+    // Android System WebView 는 UA 에 "; wv)" 토큰이 있다(정식 Chrome·삼성인터넷엔 없음). + 국내/소셜 인앱 브라우저들.
+    var inAppWV=/;\s*wv\)|KAKAOTALK|NAVER|Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Daum|Snapchat|MicroMessenger|GSA\/|everytime/i.test(ua);
+    // iOS 인앱(WKWebView)은 UA 에 " Safari/" 토큰이 없다(정식 사파리·크롬/파폭 iOS 엔 있다).
+    var iosInApp=/(iPhone|iPod|iPad)/.test(ua) && /AppleWebKit/.test(ua) && !/ Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    if(inAppWV || iosInApp) mark();
+  }catch(e){}
+
+  // (2) 실제 렌더 색으로 재확인 — <img> 로 그린 SVG 가 노랑이 아니거나, 로드 실패·캔버스 예외 등 '어떤 의심'이든 폴백.
+  try{
+    var t=new Image(), done=false;
+    function decide(bad){ if(done)return; done=true; if(bad) mark(); }
+    t.onerror=function(){ decide(true); };
     t.onload=function(){
-      if(done)return;
-      if(!t.naturalWidth){ mark(); return; }
       try{
+        if(!t.naturalWidth){ decide(true); return; }
         var c=document.createElement('canvas'); c.width=c.height=6;
         var g=c.getContext('2d'); g.drawImage(t,0,0,6,6);
-        var p=g.getImageData(3,3,1,1).data;
-        if(p[3]<8 || Math.abs(p[0]-p[2])<40){ mark(); return; } // 기대색(노랑)이 아니면 회색/깨짐 → 폴백
-      }catch(e){}
-      done=true;
+        var p=g.getImageData(3,3,1,1).data;            // 기대색: 노랑(#ffcc00)
+        decide(p[3]<8 || Math.abs(p[0]-p[2])<40);      // 투명하거나 회색(R≈B)이면 깨짐 → 폴백
+      }catch(e){ decide(true); }                        // getImageData 예외(canvas taint 등) → 안전하게 폴백
     };
     t.src="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='6'%20height='6'%20shape-rendering='crispEdges'%3E%3Crect%20width='6'%20height='6'%20fill='%23ffcc00'/%3E%3C/svg%3E";
-    setTimeout(function(){ if(done)return; if(!t.complete||!t.naturalWidth) mark(); else done=true; },1000);
-  }catch(e){}
+    setTimeout(function(){ decide(!t.complete || !t.naturalWidth); },1000);  // 무응답·지연 → 폴백
+  }catch(e){ mark(); }
 })();
 </script>
 </head>
@@ -1120,13 +1134,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=91"></script>
-<script src="pack-hs1.js?v=91"></script>
-<script src="pack-hs2.js?v=91"></script>
-<script src="pack-hs3.js?v=91"></script>
-<script src="pack-confuse.js?v=91"></script>
-<script src="pack-vacation.js?v=91"></script>
-<script src="firebase-config.js?v=91"></script>
+<script src="words.js?v=92"></script>
+<script src="pack-hs1.js?v=92"></script>
+<script src="pack-hs2.js?v=92"></script>
+<script src="pack-hs3.js?v=92"></script>
+<script src="pack-confuse.js?v=92"></script>
+<script src="pack-vacation.js?v=92"></script>
+<script src="firebase-config.js?v=92"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2145,7 +2159,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v91';
+var BUILD='v92';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3757,7 +3771,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=91"></script>
+<script type="module" src="cloud.js?v=92"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
