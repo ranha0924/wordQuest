@@ -75,7 +75,20 @@
 
   var app = appMod.initializeApp(cfg);
   var auth = authMod.getAuth(app);
-  var db = fsMod.getFirestore(app);
+  // 오프라인 지속성(IndexedDB) — write 를 로컬에 즉시 durable 저장하고 서버로 자동 재전송한다.
+  //   ★ 모바일에서 학습 직후 앱을 닫으면 네트워크 write 가 완료되기 전에 끊겨 'Firestore에 데이터가
+  //     안 쌓이던' 문제를 근본 해결: setDoc 이 IndexedDB 큐에 durable 하게 남아 다음 접속 때 반드시
+  //     서버로 반영된다. persistentMultipleTabManager 로 다중 탭도 안전.
+  //   미지원 환경(일부 인앱 WebView·시크릿 모드 등)에서는 조용히 메모리 캐시로 폴백.
+  var db;
+  try {
+    db = fsMod.initializeFirestore(app, {
+      localCache: fsMod.persistentLocalCache({ tabManager: fsMod.persistentMultipleTabManager() })
+    });
+  } catch (e) {
+    console.warn('[cloud] 오프라인 지속성 초기화 실패 — 메모리 캐시로 폴백', e);
+    db = fsMod.getFirestore(app);
+  }
 
   // ── 문서 참조 헬퍼 ──
   var userRef = function (uid) { return fsMod.doc(db, 'users', uid); };

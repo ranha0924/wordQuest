@@ -1141,13 +1141,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=93"></script>
-<script src="pack-hs1.js?v=93"></script>
-<script src="pack-hs2.js?v=93"></script>
-<script src="pack-hs3.js?v=93"></script>
-<script src="pack-confuse.js?v=93"></script>
-<script src="pack-vacation.js?v=93"></script>
-<script src="firebase-config.js?v=93"></script>
+<script src="words.js?v=94"></script>
+<script src="pack-hs1.js?v=94"></script>
+<script src="pack-hs2.js?v=94"></script>
+<script src="pack-hs3.js?v=94"></script>
+<script src="pack-confuse.js?v=94"></script>
+<script src="pack-vacation.js?v=94"></script>
+<script src="firebase-config.js?v=94"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2166,7 +2166,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v93';
+var BUILD='v94';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2867,6 +2867,9 @@ function endBattle(){
   else next='모든 단어를 다 익혔다! 새 단어를 영입해도 좋다.';
   S.lastResult={win:s.win,hurt:s.hurt,cap:s.cap,combo:s.best,ko:s.hearts<=0,next};
   S.session=null;S.phase='idle';
+  // 학습 세션이 끝나면 즉시 클라우드 write 를 '발행'한다(연속 응답으로 디바운스가 안 튄 경우 대비).
+  //   오프라인 지속성 덕에 이 write 는 곧바로 IndexedDB 에 durable 하게 남아 반드시 서버로 반영된다.
+  try{ if(window.Cloud&&window.Cloud.currentEmail&&window.Cloud.currentEmail()&&window.Cloud.syncNow) window.Cloud.syncNow(); }catch(e){}
   const lr=S.lastResult;
   $('r-title').textContent=lr.ko?'용사, 쓰러지다…':'던전 탐사 완료!';
   $('r-sub').textContent=lr.ko?'하지만 경험은 남는다. 다시 도전하라!':'몬스터들은 잊혀질 때쯤 다시 돌아온다.';
@@ -3778,7 +3781,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=93"></script>
+<script type="module" src="cloud.js?v=94"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
