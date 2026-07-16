@@ -281,9 +281,16 @@
       if (mCount === 0 && rCount > 0) { status('동기화 보류(빈 병합 안전장치)'); return; }
       var busy = false; try { busy = !!(WQ().isBusy && WQ().isBusy()); } catch (e) {}
       if (!busy && WQ().applyMerged) WQ().applyMerged({ words: m.arr, meta: m.meta });
+      // ① 선생님 대시보드용 요약(작음)을 '먼저' 확정한다.
+      //    ~120KB짜리 private/state 쓰기 '뒤'에 두면, 그 사이 앱이 닫히거나 백그라운드로 가면
+      //    요약 write 가 유실돼 DB(doneByDay)엔 기록이 있는데 대시보드는 '오늘 학습 없음'으로
+      //    보이던 문제(표시 불일치)가 난다. 작아서 빨리 끝나는 요약을 앞에 둬 표시 원천부터 살린다.
+      await writeSummaryDoc(m.arr, m.meta);
+      // ② 무거운 학습데이터(private/state) — doneByDay(랭킹 원천) 포함.
       await fsMod.setDoc(sRef, { schema: 2, words: m.map, meta: m.meta, updatedAt: now() });
-      // 최상위 요약 갱신(선생님 대시보드용 — Phase 1은 최소한만)
-      await writeSummary(m.arr, m.meta);
+      // ③ 랭킹 집계 — 워커가 '방금 저장된' private/state.doneByDay 를 서버에서 직접 읽어 세므로
+      //    반드시 ② 뒤에 호출해야 이번 학습분이 점수에 반영된다(② 앞이면 한 sync 뒤처짐).
+      await rankSyncNow(m.meta);
       status('동기화됨 · ' + hhmm());
     } catch (e) {
       console.warn('[cloud] 동기화 실패', e);
@@ -292,7 +299,9 @@
   }
 
   // ── users/{uid} 최상위 문서에 프로필/요약 기록(레거시 words 제거) ──
-  async function writeSummary(arr, meta) {
+  //    선생님 대시보드가 읽는 유일한 원천(summary.daily). syncNow 에서 무거운 쓰기보다 '먼저' 호출된다.
+  //    (예전엔 랭킹 집계까지 한 함수였는데, 랭킹은 ②private/state 저장 '뒤'여야 해서 rankSyncNow 로 분리)
+  async function writeSummaryDoc(arr, meta) {
     if (!user) return;
     var cap = 0, attempts = 0, wrong = 0, i, wd;
     arr = arr || [];
@@ -339,7 +348,15 @@
         });
       } catch (e2) { /* 필드 없으면 무시 */ }
     } catch (e) { console.warn('[cloud] 요약 기록 실패', e); }
-    // ── 주간 랭킹 항목(반·전체 공통) — 최근 8일 일자별 완료 단어수(days) + 연속 ──
+  }
+
+  // ── 주간 랭킹 집계(반·전체 공통) — syncNow ②(private/state 저장) '뒤'에 호출할 것 ──
+  //    워커가 서버에 저장된 meta.doneByDay 를 직접 읽어 세므로, 저장 전에 부르면 이번 학습분이 빠진다.
+  async function rankSyncNow(meta) {
+    if (!user) return;
+    var dh = (meta && meta.dailyHistory) || {};
+    var t = todayStr();
+    // 최근 8일 일자별 완료 단어수(days) + 연속 — 폴백(Firestore 랭킹) 저장용.
     //    days 를 저장해두면 조회 시 '이번 주(월~오늘)' 합을 다시 계산할 수 있다(지난주 점수는 새 주가 되면 자동 제외).
     var rkDays = {};
     for (var wi = 0; wi < 8; wi++) {
@@ -349,7 +366,7 @@
     var rkStreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
     var rkName = ((profile && (profile.displayName || profile.name)) || user.displayName || '익명').slice(0, 40);
     if (rankEndpoint()) {
-      // 서버 집계(워커): 완료 단어 id 를 보내면 워커가 배포단어와 대조해 점수·연속일수를 산정 → 콘솔 위조 불가.
+      // 서버 집계(워커): 워커가 doneByDay 를 읽어 점수·연속일수를 산정 → 콘솔 위조 불가.
       await rankSync(meta, t, rkName);
     } else {
       // 폴백(워커 미설정): 기존 Firestore 경로. days 로 조회 시 '이번 주' 합 재계산.
@@ -480,6 +497,9 @@
       }, { merge: true });
       if (profile) { profile.role = 'student'; profile.classId = cid; profile.className = cname; profile.displayName = name; }
       accountChanged();
+      // 반 참여 직후 곧바로 한 번 동기화 — 랭킹 워커가 새 classId 를 보고 반 보드에 등록하게.
+      //   (이게 없으면 다음 학습/재접속 때까지 반 랭킹에 학생이 안 보인다)
+      try { syncNow(); } catch (eS) { /* 백그라운드 — 실패해도 참여 자체는 성공 */ }
       return { ok: true, name: cname, code: code };
     } catch (e) {
       console.warn('[cloud] 반 참여 실패', e);
