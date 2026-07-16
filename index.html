@@ -316,7 +316,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .choices:empty{visibility:hidden;}
 .choice{display:flex;align-items:center;gap:8px;text-align:left;background:var(--win);border:2px solid var(--ink);color:#fff;font-size:14px;padding:9px 8px;cursor:pointer;min-height:44px;text-shadow:1px 1px 0 rgba(0,0,0,.5);transition:none;}
 .choice .arrow{font-size:11px;color:var(--gold);opacity:0;flex-shrink:0;}
-.choice>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.choice>span:last-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* hover / focus: ▶ cursor + full background invert */
 .choice:hover,.choice:focus-visible{color:var(--ink);background:var(--gold);outline:none;text-shadow:none;}
 .choice:hover .arrow,.choice:focus-visible .arrow{opacity:1;color:var(--ink);animation:wqPoint .5s steps(2) infinite alternate;}
@@ -1079,13 +1079,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=78"></script>
-<script src="pack-hs1.js?v=78"></script>
-<script src="pack-hs2.js?v=78"></script>
-<script src="pack-hs3.js?v=78"></script>
-<script src="pack-confuse.js?v=78"></script>
-<script src="pack-vacation.js?v=78"></script>
-<script src="firebase-config.js?v=78"></script>
+<script src="words.js?v=79"></script>
+<script src="pack-hs1.js?v=79"></script>
+<script src="pack-hs2.js?v=79"></script>
+<script src="pack-hs3.js?v=79"></script>
+<script src="pack-confuse.js?v=79"></script>
+<script src="pack-vacation.js?v=79"></script>
+<script src="firebase-config.js?v=79"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2047,7 +2047,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v78';
+var BUILD='v79';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3568,18 +3568,26 @@ document.addEventListener('visibilitychange',()=>{
 
   /* 대화창 타자기 효과: #b-msg 의 텍스트가 바뀌면 한 글자씩 다시 출력 */
   if(msg && !reduce){
-    var typing=false, timer=null, full='';
+    var typing=false, timer=null, safety=null, full='';
     var typeObs=new MutationObserver(function(){
       if(typing) return;                 // 내가 쓰는 중이면 무시(재귀 방지)
       var text=msg.textContent;
       if(text===full) return;
       full=text; typing=true;
       if(timer) clearInterval(timer);
+      if(safety){ clearTimeout(safety); safety=null; }
       var i=0; msg.textContent='';
       timer=setInterval(function(){
         i++; msg.textContent=full.slice(0,i);
-        if(i>=full.length){ clearInterval(timer); timer=null; typing=false; }
+        if(i>=full.length){ clearInterval(timer); timer=null; typing=false; if(safety){clearTimeout(safety);safety=null;} }
       },20);
+      // 안전장치: 일부 iOS(저전력 모드·백그라운드 타이머 스로틀 등)에서 setInterval 이 지연·정지되면
+      //   대화창이 빈 채로 남아 '단어 뜻이 안 보이는' 현상이 생긴다 → 일정 시간 뒤엔 전체 텍스트를
+      //   무조건 표시해 절대 빈 채로 두지 않는다(정상 기기에선 타이핑이 먼저 끝나 발동 안 함).
+      safety=setTimeout(function(){
+        if(timer){ clearInterval(timer); timer=null; }
+        msg.textContent=full; typing=false; safety=null;
+      }, Math.max(1500, full.length*20+1000));
     });
     typeObs.observe(msg,{childList:true,characterData:true,subtree:true});
   }
@@ -3598,7 +3606,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=78"></script>
+<script type="module" src="cloud.js?v=79"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
