@@ -15,6 +15,8 @@
    엔드포인트:
      POST /sync   body {week, today, name}  → 서버가 doneByDay 읽어 카운트·KV 저장, {wk} 반환
      GET  /board?scope=class|global&week=YYYY-MM-DD  → 정렬된 순위 반환
+     GET  /teacher?class=CLASSID  → (소유 선생님·마스터만) 반 학생별 '서버 관측' 연속일수·
+                                    학습일수·출석맵 반환. 선생님 대시보드가 위조 불가값을 표시.
 
    필요한 바인딩/환경변수(Cloudflare 대시보드):
      RANK_KV            (KV 네임스페이스 바인딩)  — 점수 저장(키 메타데이터에 표시값)
@@ -40,12 +42,14 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    const uid = await verifyFirebase(token, env.FIREBASE_API_KEY);
-    if (!uid) return json({ error: 'unauthorized' }, 401, cors);
+    const authUser = await verifyFirebase(token, env.FIREBASE_API_KEY);
+    if (!authUser || !authUser.uid) return json({ error: 'unauthorized' }, 401, cors);
+    const uid = authUser.uid;
 
     try {
       if (req.method === 'POST' && path.endsWith('/sync')) return await handleSync(req, env, uid, token, cors);
       if (req.method === 'GET' && path.endsWith('/board')) return await handleBoard(env, uid, token, url, cors);
+      if (req.method === 'GET' && path.endsWith('/teacher')) return await handleTeacher(env, authUser, token, url, cors);
       return json({ error: 'not_found' }, 404, cors);
     } catch (e) {
       return json({ error: 'server_error', detail: String((e && e.message) || e).slice(0, 200) }, 500, cors);
@@ -74,7 +78,69 @@ async function handleSync(req, env, uid, token, cors) {
   const meta = { n: name, w: wk, s: streak };
   if (cid) await env.RANK_KV.put('c:' + week + ':' + cid + ':' + uid, '', { metadata: meta, expirationTtl: TTL });
   await env.RANK_KV.put('g:' + week + ':' + uid, '', { metadata: meta, expirationTtl: TTL });
+
+  // ── 선생님 대시보드용 '서버 관측' 출석·명단(위조 불가) ──────────────────────────
+  //   랭킹(위 KV)과 별개로, 선생님 대시보드가 학생 자기보고(summary.streak/daily)를
+  //   그대로 믿던 구멍을 막는다: '서버 시계상 오늘' 실제 완료가 있으면 그날을 att:{uid}에 남긴다.
+  //   날짜 키를 서버가 정하므로(클라가 보낸 today 무시) 학생이 과거 날짜/연속을 심을 수 없다.
+  const sToday = kstToday(Date.now());
+  const sCount = normIds(doneByDay[sToday]).length;       // 오늘 서버가 관측한 완료 단어 수(자연 천장)
+  if (sCount > 0) await recordAttendance(env, uid, sToday, sCount);
+  if (cid) await recordMember(env, cid, uid, name);       // 반 명단(선생님이 att를 조회하려면 uid 열거 필요)
+
   return json({ wk: wk, streak: streak, cid: cid || null, ceiling: countAllDone(doneByDay) }, 200, cors);
+}
+
+const ATT_TTL = 60 * 60 * 24 * 45;   // 45일 롤링(선생님 대시보드 히트맵 ~최근 5주)
+const MEM_TTL = 60 * 60 * 24 * 45;   // 반 명단 마커: 45일 내 동기화한 학생만 열거
+
+// att:{uid} = { 'YYYY-MM-DD': 그날 서버가 관측한 완료 단어수 } — 서버 시계상 오늘만 기록/증가.
+async function recordAttendance(env, uid, today, count) {
+  const key = 'att:' + uid;
+  let map = null;
+  try { map = await env.RANK_KV.get(key, { type: 'json' }); } catch (e) { /* 없음 */ }
+  map = pruneDays((map && typeof map === 'object') ? map : {}, 40, today);
+  const prev = (typeof map[today] === 'number') ? map[today] : 0;
+  map[today] = prev > count ? prev : count;   // 하루 중 진행하며 늘어난 값 반영(감소 없음)
+  try { await env.RANK_KV.put(key, JSON.stringify(map), { expirationTtl: ATT_TTL }); } catch (e) { /* 무시 */ }
+  return map;
+}
+async function recordMember(env, cid, uid, name) {
+  try { await env.RANK_KV.put('mem:' + cid + ':' + uid, '', { metadata: { n: String(name || '').slice(0, 40) }, expirationTtl: MEM_TTL }); } catch (e) { /* 무시 */ }
+}
+
+// 소유 선생님(또는 마스터)만: 반 학생별 서버 관측 연속일수·학습일수·출석맵을 반환.
+async function handleTeacher(env, authUser, token, url, cors) {
+  const cid = String(url.searchParams.get('class') || '').slice(0, 64);
+  if (!cid) return json({ error: 'bad_class' }, 400, cors);
+
+  // 인가: 마스터거나, 이 반의 소유 선생님만. 반 문서 ownerUid 를 '요청자 토큰'으로 확인 →
+  //   firestore.rules(소유 선생님만 classes 문서 read)와 동일한 신뢰선. 남의 반은 열람 불가.
+  let ok = isMasterUser(authUser, env);
+  if (!ok) {
+    const cls = await fsGet(env, 'classes/' + cid, token);
+    const owner = cls && cls.fields && cls.fields.ownerUid && cls.fields.ownerUid.stringValue;
+    ok = !!owner && owner === authUser.uid;
+  }
+  if (!ok) return json({ error: 'forbidden' }, 403, cors);
+
+  const today = kstToday(Date.now());
+  const out = [];
+  let cursor;
+  const prefix = 'mem:' + cid + ':';
+  do {
+    const res = await env.RANK_KV.list({ prefix: prefix, cursor: cursor, limit: 1000 });
+    for (const k of res.keys) {
+      const suid = k.name.slice(prefix.length);
+      const nm = (k.metadata && k.metadata.n) || '';
+      let att = null;
+      try { att = await env.RANK_KV.get('att:' + suid, { type: 'json' }); } catch (e) { /* 없음 */ }
+      att = (att && typeof att === 'object') ? att : {};
+      out.push({ uid: suid, name: nm, streak: streakFromDays(att, today), studyDays: Object.keys(att).length, days: att });
+    }
+    cursor = res.list_complete ? null : res.cursor;
+  } while (cursor);
+  return json({ list: out, today: today }, 200, cors);
 }
 
 const STREAK_TTL = 60 * 60 * 24 * 45; // 45일 무활동 시 기록 만료(어차피 연속은 하루만 빠져도 끊김)
@@ -133,6 +199,13 @@ function validWeek(w) { return typeof w === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 function clampInt(n, lo, hi) { n = parseInt(n, 10); if (!isFinite(n)) n = 0; return n < lo ? lo : (n > hi ? hi : n); }
 function normIds(a) { return Array.isArray(a) ? a.slice(0, 2000).map(function (x) { return String(x).toLowerCase(); }) : []; }
 function isoAddDays(ds, n) { var p = ds.split('-').map(Number); var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)); var z = function (x) { return String(x).padStart(2, '0'); }; return d.getUTCFullYear() + '-' + z(d.getUTCMonth() + 1) + '-' + z(d.getUTCDate()); }
+// KST(UTC+9, 서머타임 없음) 기준 'YYYY-MM-DD' — 클라이언트 today()(로컬=한국)·doneByDay 키와 일치시킨다.
+//   nowMs 는 Date.now(). 서버 시계 기준이라 학생이 날짜를 못 바꾼다(출석·연속 위조 차단의 핵심).
+function kstToday(nowMs) { var d = new Date(nowMs + 9 * 3600 * 1000); var z = function (x) { return String(x).padStart(2, '0'); }; return d.getUTCFullYear() + '-' + z(d.getUTCMonth() + 1) + '-' + z(d.getUTCDate()); }
+// 출석맵에서 today-keepDays 보다 오래된 날짜 제거(KV 크기 억제).
+function pruneDays(map, keepDays, today) { var cut = isoAddDays(today, -keepDays), out = {}; for (var d in map) { if (Object.prototype.hasOwnProperty.call(map, d) && d > cut) out[d] = map[d]; } return out; }
+// 서버 관측 출석맵에서 연속일수: 오늘(없으면 어제)부터 하루도 안 빠지고 이어진 날 수. 끊기면 0.
+function streakFromDays(days, today) { if (!days) return 0; var cur = today; if (!days[cur]) { cur = isoAddDays(today, -1); if (!days[cur]) return 0; } var n = 0; while (days[cur]) { n++; cur = isoAddDays(cur, -1); } return n; }
 // 이번 주(week=월요일 ~ today, ISO 날짜 문자열 비교) 완료 단어 유니크 수. 종류(개인·기본팩·배포) 불문.
 function countWeekDone(dbd, week, today) {
   const seen = new Set();
@@ -178,6 +251,7 @@ async function fsGet(env, docPath, idToken, mask) {
   return await r.json();
 }
 // Firebase ID 토큰 검증(OCR 워커와 동일 방식): Identity Toolkit accounts:lookup.
+//   { uid, email, emailVerified } 반환(선생님/마스터 판정에 email 필요). 실패 시 null.
 async function verifyFirebase(idToken, apiKey) {
   if (!idToken || !apiKey) return null;
   try {
@@ -187,12 +261,19 @@ async function verifyFirebase(idToken, apiKey) {
     );
     if (!r.ok) return null;
     const d = await r.json();
-    return (d.users && d.users[0] && d.users[0].localId) || null;
+    const u = d.users && d.users[0];
+    if (!u || !u.localId) return null;
+    return { uid: u.localId, email: u.email || '', emailVerified: u.emailVerified === true };
   } catch (e) { return null; }
+}
+// 마스터(운영자) 판정 — firestore.rules 의 isMaster() 와 동일 이메일. env.MASTER_EMAIL 로 재정의 가능.
+function isMasterUser(authUser, env) {
+  const master = String((env && env.MASTER_EMAIL) || 'ranha.park@gmail.com').toLowerCase();
+  return !!(authUser && authUser.emailVerified && authUser.email && authUser.email.toLowerCase() === master);
 }
 function json(o, status, cors) {
   return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', ...cors } });
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countAllDone, parseDoneByDay };
+export const _internals = { validWeek, clampInt, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countAllDone, parseDoneByDay, kstToday, pruneDays, streakFromDays, isMasterUser };
