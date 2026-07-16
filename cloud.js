@@ -141,13 +141,15 @@
     }
     return out.slice(0, 2000);
   }
-  async function rankSync(meta, t, name, streak) {
+  async function rankSync(meta, t, name) {
     var ep = rankEndpoint(); if (!ep || !user) return false;
     try {
       var tok = await user.getIdToken(); if (!tok) return false;
+      var todayIds = (meta && meta.doneByDay && meta.doneByDay[t]) || [];
       await fetch(ep + '/sync', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
-        body: JSON.stringify({ week: weekMonday(t), ids: collectWeekIds(meta, t), streak: streak, name: name })
+        // streak 은 워커가 '오늘 실제 배포단어 완료' 관측으로 산정 → 클라는 보내지 않는다(위조 차단).
+        body: JSON.stringify({ week: weekMonday(t), today: t, ids: collectWeekIds(meta, t), todayIds: todayIds.slice(0, 2000), name: name })
       });
       return true;
     } catch (e) { return false; }
@@ -303,8 +305,8 @@
     var rkStreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
     var rkName = ((profile && (profile.displayName || profile.name)) || user.displayName || '익명').slice(0, 40);
     if (rankEndpoint()) {
-      // 서버 집계(워커): 이번 주 완료 단어 id 를 보내면 워커가 배포단어와 대조해 카운트 → 콘솔 위조 불가.
-      await rankSync(meta, t, rkName, rkStreak);
+      // 서버 집계(워커): 완료 단어 id 를 보내면 워커가 배포단어와 대조해 점수·연속일수를 산정 → 콘솔 위조 불가.
+      await rankSync(meta, t, rkName);
     } else {
       // 폴백(워커 미설정): 기존 Firestore 경로. days 로 조회 시 '이번 주' 합 재계산.
       try {
