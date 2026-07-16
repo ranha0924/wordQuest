@@ -1115,12 +1115,21 @@ html.nosvgframe *{border-image:none!important;}
   </div>
 </div>
 
-<!-- 업데이트 소식 팝업 — 버전당 1회(localStorage) 자동 표시. 최근 개선사항 안내. -->
+<!-- 공지사항 팝업 — 버전당 1회(localStorage) 자동 표시. 공지(사과 등) + 최근 개선사항 안내. -->
 <div id="news-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(4,4,10,.86);align-items:center;justify-content:center;padding:24px;">
   <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:18px 16px;max-width:360px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6);">
-    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">📢 업데이트 소식</div>
-    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">이번에 이렇게 좋아졌어요</div>
+    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">📢 공지사항</div>
+    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">꼭 확인해 주세요</div>
     <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:56vh;overflow-y:auto;">
+      <div style="background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.55);border-radius:9px;padding:12px 13px;margin:0 0 14px;">
+        <div style="font-size:13px;font-weight:700;color:#ff9b9b;margin-bottom:6px;">⚠️ 데이터 유실 안내 · 사과 말씀</div>
+        <div style="font-size:12px;color:#ecdada;line-height:1.75;">
+          <b style="color:#ffd0d0;">7월 16일 6교시부터 오후 5시 30분경</b>까지 학습한 기록이 <b style="color:#ffd0d0;">데이터베이스 장애</b>로 유실되었습니다.<br>
+          해당 시간대 기록은 안타깝게도 복구가 어렵습니다. 큰 불편을 끼쳐 드려 <b style="color:#ffd0d0;">정말 죄송합니다.</b><br>
+          <span style="color:#c8a8a8;">그 시간에 학습한 단어는 번거로우시더라도 다시 풀어 주세요. 현재는 정상적으로 저장되고 있습니다.</span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:0 0 10px;">— 이번 업데이트 소식 —</div>
       <div style="margin:0 0 9px;">🆕 <b style="color:#fcbc3c;">'포획하는 법' 안내가 생겼어요</b><br><span style="color:#a8a8c8;font-size:11.5px;">포획은 하루가 아니라 여러 날에 걸쳐 3번! 홈 오른쪽 위 ❓ 아이콘에서 확인하세요</span></div>
       <div style="margin:0 0 9px;">📸 <b style="color:#fcbc3c;">사진 인식(OCR) 대폭 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">AI 고품질 인식으로 단어·뜻을 훨씬 정확하게 읽어와요</span></div>
       <div style="margin:0 0 9px;">❤️ <b style="color:#fcbc3c;">하트 충전 후 단어 안 나오던 문제</b> 수정</div>
@@ -1153,13 +1162,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=107"></script>
-<script src="pack-hs1.js?v=107"></script>
-<script src="pack-hs2.js?v=107"></script>
-<script src="pack-hs3.js?v=107"></script>
-<script src="pack-confuse.js?v=107"></script>
-<script src="pack-vacation.js?v=107"></script>
-<script src="firebase-config.js?v=107"></script>
+<script src="words.js?v=108"></script>
+<script src="pack-hs1.js?v=108"></script>
+<script src="pack-hs2.js?v=108"></script>
+<script src="pack-hs3.js?v=108"></script>
+<script src="pack-confuse.js?v=108"></script>
+<script src="pack-vacation.js?v=108"></script>
+<script src="firebase-config.js?v=108"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -3263,7 +3272,7 @@ show('home');
 
 /* ================= 업데이트 소식 팝업 (버전당 1회) ================= */
 // NEWS_VER 을 바꾸면 다음 접속 때 모두에게 다시 1회 뜬다. 본 적 있으면(localStorage 일치) 안 뜸.
-var NEWS_VER='20260716c';
+var NEWS_VER='20260716d';
 function closeNews(){ var m=$('news-modal'); if(m)m.style.display='none'; try{localStorage.setItem('wq_news',NEWS_VER);}catch(e){} }
 function maybeShowNews(){
   try{ if(localStorage.getItem('wq_news')===NEWS_VER) return; }catch(e){}
@@ -3933,7 +3942,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=107"></script>
+<script type="module" src="cloud.js?v=108"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
