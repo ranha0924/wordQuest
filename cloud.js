@@ -78,12 +78,19 @@
 
   var app = appMod.initializeApp(cfg);
   var auth = authMod.getAuth(app);
-  // Firestore 초기화는 기본(메모리 캐시)로 둔다.
-  //   ★ v94 에서 오프라인 지속성(persistentLocalCache)을 켰다가 v97 에서 되돌림: 일부 인앱 브라우저
-  //     (카톡·인스타 등 WebView)가 IndexedDB 를 막으면 persistentLocalCache 는 읽기/쓰기 자체가
-  //     실패해 동기화가 통째로 깨졌다(로그인돼 있어도 학습이 클라우드에 안 쌓임). getFirestore 는
-  //     IDB 없이 네트워크 write 로 동작해 인앱에서도 정상. 지속성 재도입은 실기기(특히 인앱) 검증 후에만.
-  var db = fsMod.getFirestore(app);
+  // Firestore 초기화: 메모리 캐시(IndexedDB 미사용 → 인앱 WebView에서도 안전) + long-polling 자동감지.
+  //   ★ 인앱 브라우저(카톡·인스타 등 WebView)는 Firestore 기본 전송(WebChannel 스트리밍)을 막는
+  //     경우가 많아 읽기/쓰기가 통째로 안 됐다(크롬/사파리는 정상). experimentalAutoDetectLongPolling
+  //     이 그런 환경을 감지해 long-polling 으로 전환 → 인앱에서도 동기화가 된다.
+  //   ★ IndexedDB(오프라인 지속성)는 쓰지 않는다: v94에서 persistentLocalCache 가 IDB 막힌 인앱을
+  //     통째로 깨뜨렸음(→ v97 되돌림). 여기선 localCache 미지정 = 메모리 캐시라 IDB 의존 없음.
+  var db;
+  try {
+    db = fsMod.initializeFirestore(app, { experimentalAutoDetectLongPolling: true });
+  } catch (e) {
+    console.warn('[cloud] initializeFirestore 실패 — 기본 getFirestore 로 폴백', e);
+    db = fsMod.getFirestore(app);
+  }
 
   // ── 문서 참조 헬퍼 ──
   var userRef = function (uid) { return fsMod.doc(db, 'users', uid); };
