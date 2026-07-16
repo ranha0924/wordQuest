@@ -7,6 +7,9 @@
 <!-- PWA: 설치형 + 오프라인 셸 (sw.js) -->
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#101010">
+<!-- 이미 다크 UI 임을 명시 → 삼성 인터넷·크롬 '자동 다크모드'가 페이지를 다시 어둡게(회색) 처리하지 않게 -->
+<meta name="color-scheme" content="dark">
+<style>:root{color-scheme:dark;}</style>
 <link rel="apple-touch-icon" href="assets/icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -668,11 +671,15 @@ html.nosvgframe *{border-image:none!important;}
   //     이 검사가 핵심: <img> 로는 SVG 가 그려져도 border-image 로는 회색이 나는 WebView 가 있어, UA 로 직접 잡는다.
   try{
     var ua=navigator.userAgent||'';
-    // Android System WebView 는 UA 에 "; wv)" 토큰이 있다(정식 Chrome·삼성인터넷엔 없음). + 국내/소셜 인앱 브라우저들.
+    // Android System WebView 는 UA 에 "; wv)" 토큰이 있다. + 국내/소셜 인앱 브라우저들.
     var inAppWV=/;\s*wv\)|KAKAOTALK|NAVER|Instagram|FBAN|FBAV|FB_IAB|FBIOS|Line\/|Daum|Snapchat|MicroMessenger|GSA\/|everytime/i.test(ua);
+    // 인앱은 아니지만 SVG border-image 를 회색으로 깨뜨리는 게 확인된 비주류 모바일 브라우저들.
+    //   ★삼성 인터넷: <img> 로는 SVG 가 정상이라 (2) 캔버스 검사를 통과해 버린다 → border-image 만 회색.
+    //     그래서 캔버스로는 못 잡고 UA 로만 잡힌다. (Chrome·Firefox·Edge·사파리·웨일 등 주류는 프레임 유지)
+    var riskyBrowser=/SamsungBrowser|MiuiBrowser|HeyTapBrowser|VivoBrowser|OppoBrowser|UCBrowser|UCWEB|QQBrowser|MQQBrowser|Quark|Puffin/i.test(ua);
     // iOS 인앱(WKWebView)은 UA 에 " Safari/" 토큰이 없다(정식 사파리·크롬/파폭 iOS 엔 있다).
     var iosInApp=/(iPhone|iPod|iPad)/.test(ua) && /AppleWebKit/.test(ua) && !/ Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
-    if(inAppWV || iosInApp) mark();
+    if(inAppWV || riskyBrowser || iosInApp) mark();
   }catch(e){}
 
   // (2) 실제 렌더 색으로 재확인 — <img> 로 그린 SVG 가 노랑이 아니거나, 로드 실패·캔버스 예외 등 '어떤 의심'이든 폴백.
@@ -1134,13 +1141,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=92"></script>
-<script src="pack-hs1.js?v=92"></script>
-<script src="pack-hs2.js?v=92"></script>
-<script src="pack-hs3.js?v=92"></script>
-<script src="pack-confuse.js?v=92"></script>
-<script src="pack-vacation.js?v=92"></script>
-<script src="firebase-config.js?v=92"></script>
+<script src="words.js?v=93"></script>
+<script src="pack-hs1.js?v=93"></script>
+<script src="pack-hs2.js?v=93"></script>
+<script src="pack-hs3.js?v=93"></script>
+<script src="pack-confuse.js?v=93"></script>
+<script src="pack-vacation.js?v=93"></script>
+<script src="firebase-config.js?v=93"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2159,7 +2166,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v92';
+var BUILD='v93';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3771,7 +3778,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=92"></script>
+<script type="module" src="cloud.js?v=93"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
