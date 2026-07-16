@@ -20,8 +20,18 @@ API 키를 앱(학생 손)에 노출하지 않으려고 둡니다. **약 10분, 
 | `FIREBASE_API_KEY` | Variable(Text) | `firebase-config.js` 의 `apiKey` 값 (공개값이라 OK) |
 | `MODEL` | Variable(선택) | 비우면 `claude-haiku-4-5-20251001` |
 | `ALLOW_ORIGIN` | Variable(선택) | 앱 도메인(예: `https://내앱.web.app`). 모르면 `*` |
+| `ANTHROPIC_BASE` | Variable(선택) | **워커가 `upstream_error`(403 "Request not allowed")로 실패할 때만** 필요. Cloudflare AI Gateway 주소를 넣어 리전 차단을 우회. 아래 §3.5 참고 |
 
 저장 후 우측 상단 **Deploy** 한 번 더.
+
+### (필요 시) 403 "Request not allowed" — AI Gateway 경유로 우회  §3.5
+Cloudflare Worker 에서 나가는 요청을 Anthropic 이 리전 차단하면 `upstream_error`(403)가 난다
+(같은 키를 PC 에서 `curl` 하면 정상이면 이 경우다). **AI Gateway** 를 끼우면 해결된다:
+1. **Cloudflare 대시보드 → AI → AI Gateway → Create Gateway** → 이름 예: `wordquest`.
+2. 만든 게이트웨이의 **Anthropic** 엔드포인트 주소를 확인:
+   `https://gateway.ai.cloudflare.com/v1/<account_id>/<gateway>/anthropic`
+3. 워커 **Settings → Variables** 에 `ANTHROPIC_BASE` = 위 주소(끝에 `/anthropic` 까지) 추가 → **Deploy**.
+   - 워커는 자동으로 `<ANTHROPIC_BASE>/v1/messages` 로 호출한다(헤더·본문 동일).
 
 ### (선택) 하루 전체 상한 걸기 — 더 안전하게
 1. **Workers & Pages → KV → Create namespace**(예: `ocr`).

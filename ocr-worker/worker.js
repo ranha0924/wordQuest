@@ -79,7 +79,12 @@ export default {
       }
 
       // 4) Claude 비전 호출
-      const ar = await fetch('https://api.anthropic.com/v1/messages', {
+      // 기본은 Anthropic 직접 호출. 다만 Cloudflare Worker egress 가 Anthropic 에 막히는 리전
+      // (403 "Request not allowed")이면, env.ANTHROPIC_BASE 에 Cloudflare AI Gateway 주소를 넣어
+      // 게이트웨이 경유로 우회한다. 예: https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic
+      //   (헤더·본문 동일. 게이트웨이가 /v1/messages 를 그대로 Anthropic 으로 전달.)
+      const base = (env.ANTHROPIC_BASE || 'https://api.anthropic.com').replace(/\/+$/, '');
+      const ar = await fetch(base + '/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': env.ANTHROPIC_API_KEY,
