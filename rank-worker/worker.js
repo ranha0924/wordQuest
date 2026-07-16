@@ -57,19 +57,45 @@ const TTL = 60 * 60 * 24 * 16; // 16일(지난 주 자동 만료)
 async function handleSync(req, env, uid, token, cors) {
   const body = await req.json().catch(() => ({}));
   const week = validWeek(body.week) ? body.week : null;
-  if (!week) return json({ error: 'bad_week' }, 400, cors);
-  const ids = Array.isArray(body.ids) ? body.ids.slice(0, 2000).map(x => String(x).toLowerCase()) : [];
-  const streak = clampInt(body.streak, 0, 100000);
+  const today = validWeek(body.today) ? body.today : null;
+  if (!week || !today) return json({ error: 'bad_date' }, 400, cors);
+  const ids = normIds(body.ids);              // 이번 주 완료 단어 id
+  const todayIds = normIds(body.todayIds);    // 오늘 완료 단어 id(연속일수 산정용)
   const name = String(body.name || '').slice(0, 40);
 
   const cid = await getClassId(env, uid, token);
   const classSet = cid ? await getClassWords(env, cid, token) : null;
-  const wk = classSet ? countIntersection(ids, classSet) : 0; // 배포 단어와 교집합(천장=배정 단어수)
+  const wk = classSet ? countIntersection(ids, classSet) : 0;                 // 천장=배정 단어수
+  // 연속일수: 클라가 보낸 값은 무시하고, '오늘 실제로 배포단어를 완료했는지'를 서버가 보고 산정.
+  const activeToday = classSet ? countIntersection(todayIds, classSet) > 0 : false;
+  const streak = await updateStreak(env, uid, today, activeToday);
 
   const meta = { n: name, w: wk, s: streak };
   if (cid) await env.RANK_KV.put('c:' + week + ':' + cid + ':' + uid, '', { metadata: meta, expirationTtl: TTL });
   await env.RANK_KV.put('g:' + week + ':' + uid, '', { metadata: meta, expirationTtl: TTL });
-  return json({ wk: wk, cid: cid || null, ceiling: classSet ? classSet.size : 0 }, 200, cors);
+  return json({ wk: wk, streak: streak, cid: cid || null, ceiling: classSet ? classSet.size : 0 }, 200, cors);
+}
+
+const STREAK_TTL = 60 * 60 * 24 * 45; // 45일 무활동 시 기록 만료(어차피 연속은 하루만 빠져도 끊김)
+// 연속일수 순수 전이: rec={last,n} → 오늘 활동 여부로 다음 상태·표시값 계산.
+//   활동한 날만 늘고, 오늘/어제까지 이어질 때만 표시(끊기면 0). 클라가 못 부풀린다(서버 관측일 기준).
+function streakCompute(rec, today, activeToday) {
+  var n = (rec && rec.n) || 0, last = (rec && rec.last) || null, store = null;
+  if (activeToday) {
+    if (last === today) { /* 오늘 이미 반영됨 */ }
+    else if (last === isoAddDays(today, -1)) { n = n + 1; } // 어제 이어서 → +1
+    else { n = 1; }                                          // 공백/최초 → 1
+    last = today; store = { last: last, n: n };
+  }
+  var alive = (last === today || last === isoAddDays(today, -1));
+  return { store: store, display: alive ? n : 0 };
+}
+async function updateStreak(env, uid, today, activeToday) {
+  var key = 'st:' + uid, rec = null;
+  try { rec = await env.RANK_KV.get(key, { type: 'json' }); } catch (e) { /* 없음 */ }
+  var r = streakCompute(rec, today, activeToday);
+  if (r.store) { try { await env.RANK_KV.put(key, JSON.stringify(r.store), { expirationTtl: STREAK_TTL }); } catch (e) { /* 무시 */ } }
+  return r.display;
 }
 
 async function handleBoard(env, uid, token, url, cors) {
@@ -104,6 +130,8 @@ async function handleBoard(env, uid, token, url, cors) {
 /* ── 순수 로직(단위 테스트 대상) ── */
 function validWeek(w) { return typeof w === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(w); }
 function clampInt(n, lo, hi) { n = parseInt(n, 10); if (!isFinite(n)) n = 0; return n < lo ? lo : (n > hi ? hi : n); }
+function normIds(a) { return Array.isArray(a) ? a.slice(0, 2000).map(function (x) { return String(x).toLowerCase(); }) : []; }
+function isoAddDays(ds, n) { var p = ds.split('-').map(Number); var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)); var z = function (x) { return String(x).padStart(2, '0'); }; return d.getUTCFullYear() + '-' + z(d.getUTCMonth() + 1) + '-' + z(d.getUTCDate()); }
 function countIntersection(ids, classSet) {
   const seen = new Set(); let c = 0;
   for (let i = 0; i < ids.length; i++) { const id = ids[i]; if (classSet.has(id) && !seen.has(id)) { seen.add(id); c++; } }
@@ -164,4 +192,4 @@ function json(o, status, cors) {
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, countIntersection, sortBoard, parseClassWords };
+export const _internals = { validWeek, clampInt, countIntersection, sortBoard, parseClassWords, normIds, isoAddDays, streakCompute };
