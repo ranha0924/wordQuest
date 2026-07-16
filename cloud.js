@@ -127,6 +127,42 @@
     return s;
   }
 
+  // ── 서버 집계 랭킹(치팅 근본 차단) 도우미 ──
+  //   window.RANK_ENDPOINT(랭킹 워커) 가 설정되면 점수를 클라가 못 쓰고 워커가 센다:
+  //   클라는 '이번 주 완료 단어 id'만 보고 → 워커가 그 반 배포단어와 대조해 카운트(천장=배정 단어수).
+  //   비어 있으면 아래 Firestore 경로로 폴백 → 워커 배포 전에도 앱은 그대로 동작한다.
+  function rankEndpoint() { try { return (typeof window !== 'undefined' && (window.RANK_ENDPOINT || '')).trim().replace(/\/+$/, ''); } catch (e) { return ''; } }
+  function weekMonday(t) { var wd = weekDates(t); return wd[wd.length - 1]; } // 이번 주 월요일(주 식별자)
+  function collectWeekIds(meta, t) {
+    var by = (meta && meta.doneByDay) || {}, wd = weekDates(t), seen = {}, out = [];
+    for (var i = 0; i < wd.length; i++) {
+      var a = by[wd[i]];
+      if (a && a.length) for (var j = 0; j < a.length; j++) { var id = String(a[j]).toLowerCase(); if (!seen[id]) { seen[id] = 1; out.push(id); } }
+    }
+    return out.slice(0, 2000);
+  }
+  async function rankSync(meta, t, name, streak) {
+    var ep = rankEndpoint(); if (!ep || !user) return false;
+    try {
+      var tok = await user.getIdToken(); if (!tok) return false;
+      await fetch(ep + '/sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        body: JSON.stringify({ week: weekMonday(t), ids: collectWeekIds(meta, t), streak: streak, name: name })
+      });
+      return true;
+    } catch (e) { return false; }
+  }
+  async function rankBoard(scope, t) {
+    var ep = rankEndpoint(); if (!ep || !user) return null;
+    try {
+      var tok = await user.getIdToken(); if (!tok) return null;
+      var r = await fetch(ep + '/board?scope=' + scope + '&week=' + encodeURIComponent(weekMonday(t)), { headers: { 'Authorization': 'Bearer ' + tok } });
+      if (!r.ok) return null;
+      var d = await r.json(), list = (d && d.list) || [];
+      return list.map(function (e) { return { uid: e.uid, name: e.name || '익명', wk: e.wk | 0, streak: e.streak | 0, me: !!e.me }; });
+    } catch (e) { return null; }
+  }
+
   // ── 병합: 단어별 updatedAt 최신 우선, meta는 스칼라 LWW + dailyHistory 날짜별 병합 ──
   function merge(local, remote) {
     var lWords = (local && local.words) || [];
@@ -266,18 +302,22 @@
     }
     var rkStreak = (meta && meta.lastDay && (meta.lastDay === t || meta.lastDay === addDaysStr(t, -1))) ? (meta.streak || 0) : 0;
     var rkName = ((profile && (profile.displayName || profile.name)) || user.displayName || '익명').slice(0, 40);
-    // 반 랭킹(학생 + 반 소속)
-    try {
-      if (profile && profile.role === 'student' && profile.classId) {
-        await fsMod.setDoc(fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid),
+    if (rankEndpoint()) {
+      // 서버 집계(워커): 이번 주 완료 단어 id 를 보내면 워커가 배포단어와 대조해 카운트 → 콘솔 위조 불가.
+      await rankSync(meta, t, rkName, rkStreak);
+    } else {
+      // 폴백(워커 미설정): 기존 Firestore 경로. days 로 조회 시 '이번 주' 합 재계산.
+      try {
+        if (profile && profile.role === 'student' && profile.classId) {
+          await fsMod.setDoc(fsMod.doc(db, 'leaderboards', profile.classId, 'entries', user.uid),
+            { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
+        }
+      } catch (eL) { /* 규칙 미배포·오프라인 등 조용히 */ }
+      try {
+        await fsMod.setDoc(fsMod.doc(db, 'leaderboards', '_global', 'entries', user.uid),
           { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
-      }
-    } catch (eL) { /* 규칙 미배포·오프라인 등 조용히 */ }
-    // 전체 랭킹 — 반 랭킹과 동일하게 '이번 주 완료 단어수' 기준. 로그인 사용자 누구나 자기 것만 기록.
-    try {
-      await fsMod.setDoc(fsMod.doc(db, 'leaderboards', '_global', 'entries', user.uid),
-        { name: rkName, wk: weekSum(rkDays, t), streak: rkStreak, days: rkDays, at: now() });
-    } catch (eG) { /* 규칙 미배포·오프라인 등 조용히 */ }
+      } catch (eG) { /* 규칙 미배포·오프라인 등 조용히 */ }
+    }
   }
 
   function notifyChanged() {
@@ -535,6 +575,7 @@
   // ── 반 주간 랭킹 조회(같은 반 학생/소유 선생님/마스터). 규칙 미배포·오프라인이면 null(그래스풀). ──
   async function getRank() {
     if (!user || !profile || !profile.classId) return null;
+    if (rankEndpoint()) return await rankBoard('class', todayStr());
     try {
       var col = fsMod.collection(db, 'leaderboards', profile.classId, 'entries');
       var res = await fsMod.getDocs(col);
@@ -556,6 +597,7 @@
   // ── 전체(글로벌) 랭킹 조회: 누적 마스터 단어수 내림차순. 규칙 미배포·오프라인이면 null(그레이스풀). ──
   async function getGlobalRank() {
     if (!user) return null;
+    if (rankEndpoint()) return await rankBoard('global', todayStr());
     try {
       var col = fsMod.collection(db, 'leaderboards', '_global', 'entries');
       var res = await fsMod.getDocs(col);

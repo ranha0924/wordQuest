@@ -1079,13 +1079,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=76"></script>
-<script src="pack-hs1.js?v=76"></script>
-<script src="pack-hs2.js?v=76"></script>
-<script src="pack-hs3.js?v=76"></script>
-<script src="pack-confuse.js?v=76"></script>
-<script src="pack-vacation.js?v=76"></script>
-<script src="firebase-config.js?v=76"></script>
+<script src="words.js?v=77"></script>
+<script src="pack-hs1.js?v=77"></script>
+<script src="pack-hs2.js?v=77"></script>
+<script src="pack-hs3.js?v=77"></script>
+<script src="pack-confuse.js?v=77"></script>
+<script src="pack-vacation.js?v=77"></script>
+<script src="firebase-config.js?v=77"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2047,7 +2047,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v76';
+var BUILD='v77';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2200,12 +2200,21 @@ const HEARTS_MAX=3;
 const MANA_FULL=5, ULT_CLEAR=3; // 마나 가득(콤보 5) 시 필살기/회복 가능, 소탕 마리수
 // 하루 최대 완료 단어 수(정답 기준·중복 제외). 던전은 이 한도까지만 몬스터를 내준다.
 const DAILY_GOAL=20; // 하루 기본 분량(권장 목표). 한도가 아니다 — 다 풀면 다시 입장해 원하는 만큼 계속(미리 학습 포함).
-function dailyReset_(){ const t=today(); if(S.meta.doneDay!==t){S.meta.doneDay=t;S.meta.doneIds=[];} }
-function dailyDone(){ dailyReset_(); return (S.meta.doneIds||[]).length; }
-function markDone(id){ dailyReset_(); if(!S.meta.doneIds)S.meta.doneIds=[]; if(S.meta.doneIds.indexOf(id)<0){S.meta.doneIds.push(id);
+// 완료 단어 id 를 '날짜별'(doneByDay)로 보관 → 주간 랭킹을 서버(워커)가 배포단어와 대조해
+//   집계할 수 있게 한다(콘솔 점수 위조 차단). 최근 9일만 유지. 예전 doneDay/doneIds(오늘치)는
+//   1회 마이그레이션. dailyDone()/markDone() 의 겉보기 동작(오늘 완료 수·중복 제외)은 그대로.
+function _rkPrune(){
+  if(!S.meta.doneByDay)S.meta.doneByDay={};
+  if(S.meta.doneDay && Array.isArray(S.meta.doneIds) && !S.meta.doneByDay[S.meta.doneDay]) S.meta.doneByDay[S.meta.doneDay]=S.meta.doneIds.slice();
+  const cut=addDays(today(),-9);
+  Object.keys(S.meta.doneByDay).forEach(function(d){ if(d<cut) delete S.meta.doneByDay[d]; });
+}
+function dailyReset_(){ _rkPrune(); const t=today(); if(!S.meta.doneByDay[t])S.meta.doneByDay[t]=[]; }
+function dailyDone(){ dailyReset_(); return S.meta.doneByDay[today()].length; }
+function markDone(id){ dailyReset_(); const t=today(); const arr=S.meta.doneByDay[t]; if(arr.indexOf(id)<0){ arr.push(id);
   // 날짜별 '완료 단어 수'(w)도 함께 기록 → 리텐션/분량/중앙값 분석용(클라우드 summary.daily 로 자동 전파, 과거 데이터는 ok로 근사)
-  if(!S.meta.dailyHistory)S.meta.dailyHistory={}; const _t=today(); const _e=S.meta.dailyHistory[_t]||{a:0,ok:0}; _e.w=(_e.w||0)+1; S.meta.dailyHistory[_t]=_e;
-  S.meta.updatedAt=Date.now();} }
+  if(!S.meta.dailyHistory)S.meta.dailyHistory={}; const _e=S.meta.dailyHistory[t]||{a:0,ok:0}; _e.w=(_e.w||0)+1; S.meta.dailyHistory[t]=_e;
+  S.meta.updatedAt=Date.now(); } }
 $('enterbtn').addEventListener('click',()=>{
   const done=dailyDone();
   const budget=DAILY_GOAL-done;                 // 오늘 기본 분량(20)에서 남은 몫
@@ -3589,7 +3598,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=76"></script>
+<script type="module" src="cloud.js?v=77"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
