@@ -1151,13 +1151,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=101"></script>
-<script src="pack-hs1.js?v=101"></script>
-<script src="pack-hs2.js?v=101"></script>
-<script src="pack-hs3.js?v=101"></script>
-<script src="pack-confuse.js?v=101"></script>
-<script src="pack-vacation.js?v=101"></script>
-<script src="firebase-config.js?v=101"></script>
+<script src="words.js?v=102"></script>
+<script src="pack-hs1.js?v=102"></script>
+<script src="pack-hs2.js?v=102"></script>
+<script src="pack-hs3.js?v=102"></script>
+<script src="pack-confuse.js?v=102"></script>
+<script src="pack-vacation.js?v=102"></script>
+<script src="firebase-config.js?v=102"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2176,7 +2176,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v101';
+var BUILD='v102';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3615,12 +3615,33 @@ async function renderTeacherStudents(){
       +'<div class="tcdetail" style="display:none;">'+detail+'</div>'
     +'</div>';
   };
+  // ── 🏆 이번 주 반 랭킹(대시보드) ─────────────────────────────────────────────
+  //   인게임 '우리 반' 탭은 '보는 사람이 소속된 반'만 보여준다 → 여러 반을 '관리'하는 선생님은
+  //   자기가 소속된 반(다를 수 있음)이 떠서 학생이 안 보인다. 그래서 여기(반 선택 맥락이 있는
+  //   대시보드)에서 '지금 선택한 반'의 랭킹을 학생 카드와 같은 출처로 집계해 보여준다.
+  //   집계 = 이번 주(월~오늘) 완료 단어 합. 서버 검증값(v.days)이 있으면 그걸(✓), 없으면 summary.daily.
+  const weekDays=(()=>{ const p=t.split('-').map(Number); const mon=(new Date(p[0],p[1]-1,p[2]).getDay()+6)%7; const a=[]; for(let i=0;i<=mon;i++)a.push(addDays(t,-i)); return a; })();
+  const dsrcOf=s=>{ const sm=s.summary||{}; const vv=vb&&vb.byUid[s.uid]; return vv?vDaily(vv.days):(sm.daily||{}); };
+  const weekWordsOf=s=>{ const dd=dsrcOf(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n; };
+  const ranked=active.map(s=>({s,w:weekWordsOf(s),ver:!!(vb&&vb.byUid[s.uid])})).sort((a,b)=>(b.w-a.w)||(((a.s.name||a.s.email||'')<(b.s.name||b.s.email||''))?-1:1));
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
   if(verifiedOn)
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일·히트맵은 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">검증값은 학생이 접속·동기화하면서 쌓여요 — 아직 ✓ 없는 학생은 앱 보고값으로 보여주고, 접속하면 자동으로 검증값(✓)으로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
   else
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#ffd27a;">⚠️ <b>서버 검증 미적용</b> — 아래 🔥연속·📅학습일·히트맵은 <b>학생 앱이 보고한 값</b>이라 조작될 수 있어요. rank-worker를 재배포하면 서버 검증값으로 자동 전환됩니다.</div>';
+  // 🏆 이번 주 반 랭킹 — 선택한 반의 학생을 이번 주 완료 단어 순으로.
+  if(active.length){
+    const medal=i=>['🥇','🥈','🥉'][i]||('<b style="color:#8a8ab0;">'+(i+1)+'</b>');
+    html+='<div class="flabel" style="margin-top:2px;">🏆 이번 주 반 랭킹 <span class="sub">완료 단어 순'+(cls&&cls.name?(' · '+esc(cls.name)):'')+'</span></div>';
+    html+='<div style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:6px 10px;margin-bottom:10px;">'
+      + ranked.map((r,i)=>'<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;'+(i<ranked.length-1?'border-bottom:1px solid #23233a;':'')+'">'
+        + '<span style="flex:0 0 26px;text-align:center;">'+medal(i)+'</span>'
+        + '<span style="flex:1;min-width:0;color:#e8e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(r.s.name||r.s.email||'(이름 없음)')+(r.ver?' <span title="서버 검증값 · 위조 불가" style="color:#5fe06a;font-size:9px;">✓</span>':'')+'</span>'
+        + '<span style="flex:0 0 auto;color:#ffc63a;font-weight:700;">'+r.w+'<span style="font-size:10px;color:#8a8ab0;font-weight:400;margin-left:1px;">단어</span></span>'
+      + '</div>').join('')
+    + '</div>';
+  }
   if(!active.length) html+='<div class="dexempty">'+(removed.length?'활성 학생이 없어요.':'아직 이 반에 참여한 학생이 없어요.')+'</div>';
   else html+=active.map(card).join('');
   if(removed.length){
@@ -3842,7 +3863,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=101"></script>
+<script type="module" src="cloud.js?v=102"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
