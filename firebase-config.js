@@ -23,3 +23,9 @@ window.FIREBASE_CONFIG = {
 window.OCR_ENDPOINT = "https://crimson-leaf-7345.ranha-park.workers.dev/";
 /* 학생 1인당 하루 AI 스캔 제한(비용 통제). */
 window.OCR_DAILY_LIMIT = 8;
+
+/* 랭킹 집계 프록시(Cloudflare Worker) 주소.
+   비어 있으면 기존 Firestore 랭킹으로 동작(값 위조 가능). 워커 배포 후 주소를 넣으면
+   "이번 주 완료한 배포 단어 수"를 서버가 세서(콘솔로 점수 위조 불가) 랭킹을 매긴다.
+   배포 방법: rank-worker/README.md. 예: "https://wordquest-rank.xxx.workers.dev" */
+window.RANK_ENDPOINT = "";

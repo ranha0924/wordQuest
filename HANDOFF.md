@@ -64,6 +64,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| (v77) | **랭킹 서버 집계 도입 — 점수 위조 근본 차단(선택 활성화)** — 점수를 클라가 못 쓰고 Cloudflare 워커(`rank-worker/`)가 "이번 주 완료한 배포 단어 수"를 배포단어 대조로 집계(천장=배정 단어수, 상한 없음). `markDone`→`doneByDay`(날짜별 보관), `cloud.js`가 워커 `/sync`·`/board` 사용. `window.RANK_ENDPOINT`로 게이트(미설정 시 기존 Firestore 폴백 → 워커 배포 전 앱 정상). 배포: `rank-worker/README.md`, 설계: §4.12 |
 | (v76) | **랭킹 상한(cap) 제거 — 정상 고득점 보존** — v75의 값 상한(하루 500·주간 2000)은 진짜 열심히 한 학생의 큰 값까지 깎아 부적절 → 제거. `firestore.rules`·`cloud.js` 모두 값 상한 없이 **구조 검증(필드 화이트리스트·타입·음수 방지·days 맵크기)** + 숫자 타입가드(정렬 오염 방지)만 유지. 숫자 위조의 **근본 차단은 서버 집계(Cloudflare 워커+KV, OCR 워커와 동일 패턴)로 별도 대응 예정** — 검토 문서 참고 |
 | (v75) | **랭킹 점수 위조(치팅) 차단** — 학생이 콘솔로 `days`/`wk` 를 조작해 1등을 만든 사건 대응. ①`firestore.rules`: 랭킹 항목 `wk`(0~2000)·`streak`(0~4000)·`days`(map, ≤9키) 상한 + 필드 화이트리스트로 서버가 과대 기록을 거부. ②`cloud.js`: `weekSum`/`getRank`/`getGlobalRank` 에 하루 500·주간 2000·연속 4000 상한을 걸어 조작 값이 표시·정렬을 지배하지 못하게 함(기록·조회 양쪽). 보안 리뷰 (2)·(4) 해소. ★규칙은 Firebase 콘솔에 수동 게시 필요 |
 | (v74) | **중복 종류 정리** — 종류가 겹치는 몬스터 3종 제거(원본 유지·신규 삭제): `snowbun`(↔moonrabbit 토끼)·`direwolf`(↔werewolf 늑대)·`irongolem`(↔rock/armor 골렘). 63종 → **60종** |
@@ -223,6 +224,15 @@
 - **버전 관리**: `sw.js`의 `VERSION` 상수(현재 `v1`). 셸 파일 크게 바꾸면 올려서 구 캐시(`wq-v1`) 무효화. activate에서 현재 캐시 외 전부 삭제 + `clients.claim()`.
 - **아이콘**: `assets/icons/`(앰버 픽셀 몬스터, 다크 네이비 방사배경). 192·512(any) + maskable-512(넉넉한 안전지대) + apple-180. `scratchpad/gen-icon.mjs`로 수학 래스터화 후 Chromium 렌더 생성(교체 시 재생성).
 - **검증**: `file://`은 SW 미동작 → HTTP 서버 필요(`python3 -m http.server 8792`). Playwright로 SW 등록·제어·캐시 적재·**오프라인 리로드 부팅(WORDBANK 전량)**·manifest 파싱·아이콘 200 전부 통과.
+
+### 4.12 랭킹 서버 집계 (치팅 근본 차단 · 선택)
+- **문제**: 랭킹 점수(`wk`/`days`)를 클라이언트가 자유 기록 → 콘솔에서 `99999` 위조로 1등 가능(실제 사건). 값 상한(cap)은 정상 고득점자를 깎아 부적절하고 근본 해결도 아님(v76에서 제거).
+- **해법**: 점수를 **서버(Cloudflare 워커 `rank-worker/`)가 집계.** OCR 워커와 동일하게 Firebase 토큰을 검증하고, 학생이 보낸 "이번 주 완료 단어 id"를 **그 반 배포단어(`classPacks`)와 교집합**해 카운트 → KV에 기록. 점수를 클라가 못 쓴다.
+- **핵심 성질**: 교집합이라 **천장 = 배정 단어 수(전부 했을 때)**. 임의 큰 값이 원천 불가, 정상 값은 상한 없이 그대로. 지표는 '이번 주 완료한 **배포 단어** 수'(개인 추가 단어 제외 → 공정 비교).
+- **클라이언트**: `markDone`이 완료 id를 **날짜별 `meta.doneByDay`**(최근 9일)로 보관(기존 `doneIds` 마이그레이션). `cloud.js`가 이번 주 id를 워커 `/sync`로 보고하고 `/board`로 순위를 읽는다. **`window.RANK_ENDPOINT`(firebase-config.js)로 게이트** — 비어 있으면 기존 Firestore 랭킹으로 폴백(워커 배포 전에도 앱 정상).
+- **엔드포인트**: `POST /sync {week,ids,streak,name}` · `GET /board?scope=class|global&week=`. 배포단어는 5분 KV 캐시.
+- **배포/설정**: `rank-worker/README.md`(워커 생성 + `RANK_KV` 바인딩 + `FIREBASE_API_KEY`·`PROJECT_ID` 변수 + `RANK_ENDPOINT` 기입). 선택적 심층방어로 `leaderboards/*` 쓰기를 규칙에서 `if false`로 잠글 수 있음.
+- **한계**: 완전 방어는 아님(작정하면 유효 id 스크립트 호출 가능, 그래도 최대치=배정 단어 전부). 콘솔 임의값 치팅은 불가.
 
 ---
 
