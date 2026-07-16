@@ -1081,13 +1081,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=86"></script>
-<script src="pack-hs1.js?v=86"></script>
-<script src="pack-hs2.js?v=86"></script>
-<script src="pack-hs3.js?v=86"></script>
-<script src="pack-confuse.js?v=86"></script>
-<script src="pack-vacation.js?v=86"></script>
-<script src="firebase-config.js?v=86"></script>
+<script src="words.js?v=87"></script>
+<script src="pack-hs1.js?v=87"></script>
+<script src="pack-hs2.js?v=87"></script>
+<script src="pack-hs3.js?v=87"></script>
+<script src="pack-confuse.js?v=87"></script>
+<script src="pack-vacation.js?v=87"></script>
+<script src="firebase-config.js?v=87"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2018,11 +2018,28 @@ async function runOCRApi(file,endpoint){
     r=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({image:dataUri}) });
   }catch(e){ _ocrApiFail='서버 연결 실패(CORS·네트워크)'; ocrStatus('서버에 연결하지 못했어요. 기기 내 인식으로 대신 시도할게요…'); return false; }
   if(!r.ok){
-    let msg='인식 서버 오류', code='', jlim=0; try{ const j=await r.json(); code=(j&&j.error)||''; jlim=(j&&j.limit)||0; if(code==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(code==='unauthorized')msg='로그인이 필요해요. 로그아웃 후 다시 로그인해 주세요.'; else if(code==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
+    let msg='인식 서버 오류', code='', jlim=0, ust=0, udet='';
+    try{ const j=await r.json(); code=(j&&j.error)||''; jlim=(j&&j.limit)||0; ust=(j&&j.status)||0; udet=(j&&j.detail)||''; if(code==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(code==='unauthorized')msg='로그인이 필요해요. 로그아웃 후 다시 로그인해 주세요.'; else if(code==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
     // 계정 기준 하루 한도 초과(서버 강제) — 로컬 카운터도 소진 처리해 표시 일치시키고 안내.
     if(code==='user_daily_cap_reached'){ const lim=jlim||window.OCR_DAILY_LIMIT||8; try{ localStorage.setItem(ocrQuotaKey(),String(lim)); }catch(e){} ocrStatus('오늘 AI 사진 인식 횟수를 다 썼어요(하루 '+lim+'장). 내일 다시 이용하거나, 아래 칸에 직접 입력해 주세요.'); return true; }
-    // 서버 설정 미완(500/502) 등은 기기 내 OCR로 폴백
-    if(r.status>=500 || code==='server_misconfig' || code==='upstream_error'){ _ocrApiFail='AI 서버 오류 '+(code||('HTTP '+r.status)); ocrStatus('AI 서버가 아직 준비 중이라 기기 내 인식으로 대신 시도할게요… (원인: '+(code||('HTTP '+r.status))+')'); return false; }
+    // 서버 설정 미완(500/502) 등은 기기 내 OCR로 폴백. upstream_error 는 워커→Anthropic 호출이
+    //   '거부'된 것 → 실제 원인(키/크레딧/모델/한도)을 드러내야 고칠 수 있으므로 status·detail 을 분류해 표시.
+    if(r.status>=500 || code==='server_misconfig' || code==='upstream_error'){
+      let why=code||('HTTP '+r.status);
+      if(code==='upstream_error'){
+        const d=(udet||'').toLowerCase();
+        why = ust===401 ? 'Anthropic API 키 오류(키 값·공백 확인)'
+            : ust===403 ? 'Anthropic 접근 거부(키 권한/모델 접근 확인)'
+            : ust===404 ? '모델 이름 오류(워커 MODEL 값 확인)'
+            : (ust===400 && /credit|balance|billing/.test(d)) ? 'Anthropic 크레딧 잔액 부족(콘솔 결제 확인)'
+            : (ust===429 || /rate|overload|limit/.test(d)) ? 'Anthropic 요청 한도·과부하(잠시 후 재시도)'
+            : ('AI 호출 거부(HTTP '+(ust||'?')+')');
+        console.warn('[ocr] upstream_error 상세 — status:', ust, '· detail:', udet);
+      }
+      // 폴백 후 Tesseract가 상태문구를 덮으므로, 최종 메시지(ocrApiFailNote)에 남도록 _ocrApiFail 에 원인+detail 을 담는다.
+      _ocrApiFail='AI 서버 오류: '+why+(udet?(' ['+String(udet).slice(0,140)+']'):'');
+      ocrStatus('AI 인식이 안 돼 기기 내 인식으로 대신 할게요 · 원인: '+why); return false;
+    }
     ocrStatus(msg+' (오류: '+(code||('HTTP '+r.status))+')'); return true;
   }
   // 정상 응답이지만 본문 파싱이 실패하면(중간 프록시 HTML 등) 폴백.
@@ -2078,7 +2095,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v86';
+var BUILD='v87';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3644,7 +3661,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=86"></script>
+<script type="module" src="cloud.js?v=87"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
