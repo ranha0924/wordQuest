@@ -65,7 +65,8 @@ export default {
   },
 };
 
-const REV = 'r4';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r5';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r5: 완료단어 위조 id 필터 + 연속일수/주간창 서버 KST 산정(치팅 차단).
 const TTL = 60 * 60 * 24 * 16; // 16일(지난 주 자동 만료)
 
 async function handleSync(req, env, uid, token, cors) {
