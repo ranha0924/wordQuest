@@ -336,6 +336,9 @@
   // ── Google 로그인 (팝업 → 실패 시 리디렉트 폴백) ──
   async function signInGoogle() {
     var provider = new authMod.GoogleAuthProvider();
+    // 항상 계정 선택 화면을 띄운다 — 기기에 여러 구글 계정이 있어도 원하는 계정으로 로그인할 수 있게.
+    // (이 파라미터가 없으면 마지막/단일 세션으로 자동 로그인돼 계정을 못 고른다)
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
       await authMod.signInWithPopup(auth, provider);
     } catch (e) {
