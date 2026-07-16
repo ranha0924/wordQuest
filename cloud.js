@@ -347,6 +347,18 @@
     var daily = {}, t = todayStr();
     for (i = 0; i < 35; i++) { var ds = addDaysStr(t, -i); if (dh[ds]) daily[ds] = dh[ds]; }
     var todayE = dh[t] || null;
+    // ── 이번 주(월~오늘) 완료 '유효' 단어 유니크 수 ──────────────────────────────────
+    //   선생님 대시보드의 '이번 주 반 랭킹'이 인게임 랭킹(서버 워커 countWeekDone)과 '같은 원천
+    //   (meta.doneByDay)·같은 의미(주간 유니크)'로 뜨게 하려고 여기서 미리 계산해 요약에 싣는다.
+    //   기존 대시보드는 att/summary.daily 의 '날짜별 합'을 써서, KV 절약 스로틀로 undercount 된
+    //   att 가 정확한 자기보고를 덮어 랭킹보다 작게 뜨던 불일치가 있었다(예: 대시보드 9 vs 랭킹 20).
+    //   ★ 이 값은 학생이 자기 문서에 쓰는 '자기보고'다(정답률·포획과 동일 신뢰수준 — 서버 검증 아님).
+    //     현재 단어목록(arr)에 실재하는 id 만 세어(collectWeekIds 의 주간 유니크와 결합) 정직한 학생은
+    //     워커 집계와 정확히 일치하고, 흘러든 비단어 id 는 제외한다(위조 방지가 아니라 표시 일관성 목적).
+    var validIds = {};
+    for (i = 0; i < arr.length; i++) { if (arr[i] && arr[i].id) validIds[String(arr[i].id).toLowerCase()] = 1; }
+    var weekIds = collectWeekIds(meta, t), weekWords = 0;
+    for (i = 0; i < weekIds.length; i++) { if (validIds[weekIds[i]]) weekWords++; }
     var top = {
       schema: 2,
       profile: {
@@ -364,7 +376,11 @@
         accuracy: accuracy,
         studiedToday: !!todayE,
         todayCount: todayE ? (todayE.a || 0) : 0,
-        daily: daily
+        daily: daily,
+        // 이번 주 완료 단어(유니크) + 그 값이 계산된 '이번 주 월요일'. 대시보드가 weekOf 로
+        //   '이번 주에 계산된 값'만 신뢰해 인게임 랭킹과 같은 수를 보여준다(주 경계 stale 방지).
+        weekWords: weekWords,
+        weekOf: weekMonday(t)
       },
       updatedAt: now()
     };

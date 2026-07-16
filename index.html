@@ -1162,13 +1162,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=108"></script>
-<script src="pack-hs1.js?v=108"></script>
-<script src="pack-hs2.js?v=108"></script>
-<script src="pack-hs3.js?v=108"></script>
-<script src="pack-confuse.js?v=108"></script>
-<script src="pack-vacation.js?v=108"></script>
-<script src="firebase-config.js?v=108"></script>
+<script src="words.js?v=109"></script>
+<script src="pack-hs1.js?v=109"></script>
+<script src="pack-hs2.js?v=109"></script>
+<script src="pack-hs3.js?v=109"></script>
+<script src="pack-confuse.js?v=109"></script>
+<script src="pack-vacation.js?v=109"></script>
+<script src="firebase-config.js?v=109"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -3697,11 +3697,22 @@ async function renderTeacherStudents(){
   // ── 🏆 이번 주 반 랭킹(대시보드) ─────────────────────────────────────────────
   //   인게임 '우리 반' 탭은 '보는 사람이 소속된 반'만 보여준다 → 여러 반을 '관리'하는 선생님은
   //   자기가 소속된 반(다를 수 있음)이 떠서 학생이 안 보인다. 그래서 여기(반 선택 맥락이 있는
-  //   대시보드)에서 '지금 선택한 반'의 랭킹을 학생 카드와 같은 출처로 집계해 보여준다.
-  //   집계 = 이번 주(월~오늘) 완료 단어 합. 학생 카드와 같은 합집합(서버 출석 ∪ 앱 보고)으로 집계해
-  //   서버가 아직 오늘을 관측 못한 학생이 랭킹에서 실제보다 뒤로 밀리지 않게 한다.
+  //   대시보드)에서 '지금 선택한 반'의 랭킹을 인게임 랭킹과 '같은 집계'로 보여준다.
   const weekDays=(()=>{ const p=t.split('-').map(Number); const mon=(new Date(p[0],p[1]-1,p[2]).getDay()+6)%7; const a=[]; for(let i=0;i<=mon;i++)a.push(addDays(t,-i)); return a; })();
-  const weekWordsOf=s=>{ const dd=mergedDaily(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n; };
+  const weekMon=weekDays[weekDays.length-1]; // 이번 주 월요일(뷰어 기준) — cloud.js weekMonday(t) 와 동일 계산
+  // 인게임 랭킹이 '서버 워커(주간 유니크, countWeekDone)'냐 '폴백 Firestore(날짜별 합, weekSum)'냐에
+  //   맞춰 대시보드도 같은 집계를 써야 두 구성 모두에서 대시보드=인게임 랭킹이 된다.
+  //   · 워커 ON: summary.weekWords(주간 유니크, doneByDay 원천)를 쓴다(weekOf 로 '이번 주 값'만 신뢰).
+  //             기존엔 날짜별 att/summary 합을 써서 undercount 된 att 가 랭킹보다 작게 뜨는 불일치가 있었다
+  //             (예: 대시보드 9 vs 랭킹 20). weekWords 는 인게임 랭킹과 같은 원천·같은 의미라 일치한다.
+  //   · 워커 OFF(폴백): 폴백 인게임 랭킹이 날짜별 합(weekSum)이므로 대시보드도 날짜별 합으로 맞춘다.
+  //   요약에 weekWords 가 없거나(구버전 앱) 지난주 값이면 날짜별 합으로 폴백(무회귀).
+  const useServerRank=(()=>{ try{ return !!String(window.RANK_ENDPOINT||'').trim(); }catch(e){ return false; } })();
+  const weekWordsOf=s=>{
+    const sm=s.summary||{};
+    if(useServerRank && sm.weekWords!=null && sm.weekOf===weekMon) return int(sm.weekWords);
+    const dd=mergedDaily(s); let n=0; for(const day of weekDays){ const e=dd[day]; if(e) n+=int(e.w!=null?e.w:e.ok); } return n;
+  };
   const ranked=active.map(s=>({s,w:weekWordsOf(s),ver:!!(vb&&vb.byUid[s.uid])})).sort((a,b)=>(b.w-a.w)||(((a.s.name||a.s.email||'')<(b.s.name||b.s.email||''))?-1:1));
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
@@ -3942,7 +3953,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=108"></script>
+<script type="module" src="cloud.js?v=109"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
