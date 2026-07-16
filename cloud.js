@@ -47,6 +47,9 @@
     setClassPack: function () { return Promise.resolve({ ok: false }); },
     getClassPack: function () { return Promise.resolve(null); },
     isMaster: function () { return false; },
+    listTeachers: function () { return Promise.resolve([]); },
+    addTeacher: function () { return Promise.resolve({ ok: false }); },
+    removeTeacher: function () { return Promise.resolve({ ok: false }); },
     onChange: function () {}
   };
 
@@ -84,6 +87,8 @@
   var classesCol = function () { return fsMod.collection(db, 'classes'); };
   var codeRef = function (code) { return fsMod.doc(db, 'classCodes', code); }; // 코드→반 매핑(코드 유일성·비열거)
   var packRef = function (cid) { return fsMod.doc(db, 'classPacks', cid); };   // 반 배포 단어(선생님→반 학생 전원)
+  var teacherAllowRef = function (email) { return fsMod.doc(db, 'teacherAllow', email); }; // 선생님 허용목록(문서 ID = 이메일)
+  var teacherAllowCol = function () { return fsMod.collection(db, 'teacherAllow'); };
 
   // ── 마스터(운영자): 모든 반·학생 열람 권한. ★서버 강제는 firestore.rules 의 isMaster() 로.
   //   여기 이메일과 firestore.rules 의 이메일을 반드시 동일하게 유지할 것.
@@ -661,6 +666,59 @@
     }
   }
 
+  // ── 선생님 허용목록 관리(마스터 전용) — teacherAllow/{이메일} 추가·삭제·조회 ──
+  //   · 서버 규칙(firestore.rules)이 teacherAllow 읽기·쓰기를 isMaster() 로만 허용한다.
+  //     → 마스터가 아닌 계정이 아래를 호출해도 서버가 permission-denied 로 거부(이중 방어).
+  //   · 문서 ID = 선생님 Google 이메일. 로그인 토큰의 email(구글은 소문자로 내려줌)과
+  //     "정확히" 일치해야 규칙이 선생님으로 인정하므로, 저장 전 trim+소문자로 정규화한다.
+  function normTeacherEmail(email) { return (email || '').trim().toLowerCase(); }
+  function validTeacherEmail(email) {
+    // 슬래시(/)는 Firestore 문서 ID 로 쓸 수 없고, 기본 이메일 형태만 통과.
+    return /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(email);
+  }
+  // 현재 선생님 허용목록 조회 → [{ email, name }]. 실패 시 빈 배열.
+  async function listTeachers() {
+    if (!user) return [];
+    try {
+      var res = await fsMod.getDocs(teacherAllowCol());
+      var out = [];
+      res.forEach(function (d) { var v = d.data() || {}; out.push({ email: d.id, name: v.name || '' }); });
+      out.sort(function (a, b) { return a.email < b.email ? -1 : (a.email > b.email ? 1 : 0); });
+      return out;
+    } catch (e) { console.warn('[cloud] 선생님 목록 조회 실패', e); return []; }
+  }
+  // 선생님 추가(허용목록에 이메일 문서 생성). 마스터만.
+  async function addTeacher(email, name) {
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    email = normTeacherEmail(email);
+    if (!validTeacherEmail(email)) return { ok: false, msg: '올바른 이메일을 입력해 주세요. (예: teacher@goedu.kr)' };
+    if (email === MASTER_EMAIL) return { ok: false, msg: '운영자(마스터) 계정은 이미 항상 선생님이에요. 추가할 필요 없어요.' };
+    if (!isMaster()) return { ok: false, msg: '운영자(마스터)만 선생님을 추가할 수 있어요.' };
+    try {
+      await fsMod.setDoc(teacherAllowRef(email), { name: (name || '').trim().slice(0, 40), addedAt: now(), addedBy: user.email || '' }, { merge: true });
+      return { ok: true, email: email };
+    } catch (e) {
+      console.warn('[cloud] 선생님 추가 실패', e);
+      var denied = e && (e.code === 'permission-denied' || /permission|insufficient/i.test(e.message || ''));
+      return { ok: false, msg: denied ? '권한이 없어요. 운영자(마스터) 계정으로 로그인했는지 확인해 주세요.' : ('선생님 추가에 실패했어요: ' + (e && e.message ? e.message : e)) };
+    }
+  }
+  // 선생님 삭제(허용목록에서 제거 = 해임). 마스터만. 이미 만든 반은 남으니 필요 시 대시보드에서 별도 정리.
+  async function removeTeacher(email) {
+    if (!user) return { ok: false, msg: '로그인이 필요해요.' };
+    email = normTeacherEmail(email);
+    if (!email) return { ok: false, msg: '이메일이 비어 있어요.' };
+    if (!isMaster()) return { ok: false, msg: '운영자(마스터)만 선생님을 삭제할 수 있어요.' };
+    try {
+      await fsMod.deleteDoc(teacherAllowRef(email));
+      return { ok: true, email: email };
+    } catch (e) {
+      console.warn('[cloud] 선생님 삭제 실패', e);
+      var denied = e && (e.code === 'permission-denied' || /permission|insufficient/i.test(e.message || ''));
+      return { ok: false, msg: denied ? '권한이 없어요. 운영자(마스터) 계정으로 로그인했는지 확인해 주세요.' : ('선생님 삭제에 실패했어요: ' + (e && e.message ? e.message : e)) };
+    }
+  }
+
   // ── 인증 상태 변화 → 프로필 로드 + 상태표시 + 최초 동기화 ──
   authMod.onAuthStateChanged(auth, async function (u) {
     user = u || null;
@@ -702,6 +760,9 @@
     getRank: getRank,
     getGlobalRank: getGlobalRank,
     isMaster: isMaster,
+    listTeachers: listTeachers,
+    addTeacher: addTeacher,
+    removeTeacher: removeTeacher,
     onChange: function (cb) { document.addEventListener('cloud-account', cb); }
   };
 

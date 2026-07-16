@@ -946,6 +946,16 @@ html.nosvgframe *{border-image:none!important;}
           </div>
           <!-- 역할이 정해진 뒤 다시 바꾸기 -->
           <button class="subbtn" id="acct-rolechange" style="display:none;width:100%;margin-top:8px;font-size:12px;color:#b7b7d8;">🔁 역할 바꾸기 (학생 ↔ 선생님)</button>
+          <!-- 운영자(마스터) 전용: 선생님 허용목록 관리 (파이어베이스 콘솔 없이 앱에서 추가/삭제) -->
+          <div id="acct-master" style="display:none;margin-top:10px;padding-top:10px;border-top:2px solid #34345a;">
+            <div class="regmsg" style="display:block;margin-bottom:6px;">🛡️ <b style="color:#ffc63a;">운영자 · 선생님 관리</b><br><span class="sub">여기 추가한 이메일 계정만 앱에서 선생님이 됩니다. (그 선생님이 로그인에 쓰는 구글 이메일 그대로 입력)</span></div>
+            <div class="grid2" style="margin-bottom:8px;">
+              <input id="acct-teacher-email" placeholder="선생님 이메일 (예: teacher@goedu.kr)" maxlength="80" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" style="height:34px;padding:0 10px;background:#0d0d1a;color:#e8e8f0;border:2px solid #34345a;border-radius:6px;font-family:inherit;font-size:13px;">
+              <button class="subbtn" id="acct-teacher-add">➕ 선생님 추가</button>
+            </div>
+            <div id="acct-teacher-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+            <div class="regmsg" id="acct-teacher-msg" style="display:none;margin-top:6px;"></div>
+          </div>
           <div class="grid2" style="margin-top:8px;">
             <button class="subbtn" id="cloud-syncnow"><svg class="ic" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 2A6 6 0 1 1 3 5L5 5L2 8L2 3L3 4A7 7 0 1 0 8 1Z"/></svg>지금 동기화</button>
             <button class="subbtn" id="cloud-signout">로그아웃</button>
@@ -1141,13 +1151,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=93"></script>
-<script src="pack-hs1.js?v=93"></script>
-<script src="pack-hs2.js?v=93"></script>
-<script src="pack-hs3.js?v=93"></script>
-<script src="pack-confuse.js?v=93"></script>
-<script src="pack-vacation.js?v=93"></script>
-<script src="firebase-config.js?v=93"></script>
+<script src="words.js?v=94"></script>
+<script src="pack-hs1.js?v=94"></script>
+<script src="pack-hs2.js?v=94"></script>
+<script src="pack-hs3.js?v=94"></script>
+<script src="pack-confuse.js?v=94"></script>
+<script src="pack-vacation.js?v=94"></script>
+<script src="firebase-config.js?v=94"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2166,7 +2176,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v93';
+var BUILD='v94';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3300,12 +3310,27 @@ function renderAccount(){
   }
   if(role==='teacher') renderClassList();
   toggleTeacherBtn();
+  try{renderMasterTeachers();}catch(e){}
 }
 async function renderClassList(){
   const box=$('acct-classlist'); if(!box||!window.Cloud||!window.Cloud.listMyClasses) return;
   const list=await window.Cloud.listMyClasses();
   if(!list.length){ box.innerHTML='<div class="regmsg" style="display:block;">아직 만든 반이 없어요.</div>'; return; }
   box.innerHTML=list.map(c=>'<div class="acctcls" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:#0d0d1a;border:2px solid #34345a;border-radius:6px;margin-bottom:6px;font-size:13px;"><span>'+esc(c.name)+'</span><b style="letter-spacing:2px;color:#ffc63a;">'+esc(c.code)+'</b></div>').join('');
+}
+// 운영자(마스터) 전용: 선생님 허용목록(teacherAllow) 관리 UI — 마스터만 노출·조작.
+async function renderMasterTeachers(){
+  const box=$('acct-master'); if(!box) return;
+  const C=window.Cloud;
+  const master=!!(C&&C.isMaster&&C.isMaster());
+  box.style.display=master?'':'none';
+  if(!master) return;
+  const list=$('acct-teacher-list'); if(!list) return;
+  list.innerHTML='<div class="regmsg" style="display:block;">불러오는 중…</div>';
+  let teachers=[];
+  try{ teachers=await C.listTeachers(); }catch(e){ teachers=[]; }
+  if(!teachers.length){ list.innerHTML='<div class="regmsg" style="display:block;">아직 등록된 선생님이 없어요. 위 칸에 이메일을 넣고 추가하세요.</div>'; return; }
+  list.innerHTML=teachers.map(t=>'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;background:#0d0d1a;border:2px solid #34345a;border-radius:6px;font-size:13px;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🧑‍🏫 '+esc(t.email)+(t.name?' <span class="sub">('+esc(t.name)+')</span>':'')+'</span><button class="subbtn acct-teacher-del" data-email="'+esc(t.email)+'" style="flex:0 0 auto;padding:4px 10px;font-size:12px;">삭제</button></div>').join('');
 }
 // 홈 메뉴의 선생님 대시보드 버튼: 선생님 로그인 시에만 노출
 function toggleTeacherBtn(){
@@ -3622,6 +3647,23 @@ async function renderTeacherStudents(){
   on('acct-role-teacher','click',async()=>{ if(!(await teacherGate()))return; roleEditing=false; try{renderAccount();}catch(e){} });
   on('acct-rolechange','click',()=>{ roleEditing=true; try{renderAccount();}catch(e){} });
   on('acct-role-cancel','click',()=>{ roleEditing=false; try{renderAccount();}catch(e){} });
+  // 운영자(마스터): 선생님 추가/삭제 (허용목록 teacherAllow 관리)
+  const doAddTeacher=async()=>{
+    const inp=$('acct-teacher-email'),msg=$('acct-teacher-msg'); if(!inp||!C()||!C().addTeacher) return;
+    const r=await C().addTeacher(inp.value);
+    if(msg){ msg.style.display='block'; msg.style.color=(r&&r.ok)?'#7fd08a':'#ff8a8a'; msg.textContent=(r&&r.ok)?('추가했어요: '+r.email+' — 그 계정으로 로그인하면 선생님이 됩니다.'):((r&&r.msg)||'선생님 추가에 실패했어요.'); }
+    if(r&&r.ok){ inp.value=''; try{renderMasterTeachers();}catch(e){} }
+  };
+  on('acct-teacher-add','click',doAddTeacher);
+  on('acct-teacher-email','keydown',e=>{if(e.key==='Enter'){e.preventDefault();doAddTeacher();}});
+  on('acct-teacher-list','click',async(e)=>{
+    const btn=(e.target&&e.target.closest)?e.target.closest('.acct-teacher-del'):null; if(!btn) return;
+    const email=btn.getAttribute('data-email'); if(!email||!C()||!C().removeTeacher) return;
+    if(!window.confirm('“'+email+'” 선생님을 목록에서 삭제할까요?\n이 계정은 더 이상 반을 만들거나 단어를 배포할 수 없게 됩니다.\n(이미 만든 반은 남아요 — 필요하면 선생님 대시보드에서 따로 정리하세요.)')) return;
+    const r=await C().removeTeacher(email),msg=$('acct-teacher-msg');
+    if(msg){ msg.style.display='block'; msg.style.color=(r&&r.ok)?'#7fd08a':'#ff8a8a'; msg.textContent=(r&&r.ok)?('삭제했어요: '+r.email):((r&&r.msg)||'삭제에 실패했어요.'); }
+    if(r&&r.ok){ try{renderMasterTeachers();}catch(e){} }
+  });
   // 학생: 이름 저장
   const doSaveName=async()=>{
     const nm=$('acct-name'); if(!nm||!C()||!C().setDisplayName) return;
@@ -3778,7 +3820,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=93"></script>
+<script type="module" src="cloud.js?v=94"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
