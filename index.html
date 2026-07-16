@@ -269,7 +269,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .nameplate{display:inline-flex;align-items:center;gap:9px;padding:5px 13px 6px;margin-bottom:14px;max-width:94%;
   border:6px solid var(--gold-dk);border-image:var(--frame-steel) 3 fill;background:var(--night);box-shadow:0 4px 0 rgba(0,0,0,.55);}
 .rtag{font-family:'Galmuri9',monospace;font-size:10px;padding:3px 7px;border:2px solid;letter-spacing:.5px;flex-shrink:0;line-height:1.1;}
-.monname{font-size:17px;text-shadow:2px 2px 0 var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.monname{font-size:17px;text-shadow:2px 2px 0 var(--ink);white-space:normal;overflow-wrap:anywhere;line-height:1.15;min-width:0;}
 /* 발음 버튼(스피커) */
 .spk{display:inline-flex;align-items:center;justify-content:center;background:var(--night);border:2px solid var(--line);color:var(--gold);padding:2px 5px;cursor:pointer;line-height:0;flex-shrink:0;vertical-align:middle;transition:transform .08s steps(2);}
 .spk:hover{background:var(--gold);border-color:var(--ink);color:var(--ink);}
@@ -1081,13 +1081,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=82"></script>
-<script src="pack-hs1.js?v=82"></script>
-<script src="pack-hs2.js?v=82"></script>
-<script src="pack-hs3.js?v=82"></script>
-<script src="pack-confuse.js?v=82"></script>
-<script src="pack-vacation.js?v=82"></script>
-<script src="firebase-config.js?v=82"></script>
+<script src="words.js?v=83"></script>
+<script src="pack-hs1.js?v=83"></script>
+<script src="pack-hs2.js?v=83"></script>
+<script src="pack-hs3.js?v=83"></script>
+<script src="pack-confuse.js?v=83"></script>
+<script src="pack-vacation.js?v=83"></script>
+<script src="firebase-config.js?v=83"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2049,7 +2049,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v82';
+var BUILD='v83';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3612,7 +3612,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=82"></script>
+<script type="module" src="cloud.js?v=83"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
