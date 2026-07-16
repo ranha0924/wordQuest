@@ -13,6 +13,9 @@
 ## 배포 (약 5분, Cloudflare 대시보드)
 1. **Workers & Pages → Create → Worker** 로 새 워커 생성(예: `wordquest-rank`).
 2. 코드에 이 폴더의 `worker.js` 내용을 통째로 붙여넣고 **Deploy**.
+   > ⚠️ **"Unexpected token 'export'" 오류가 나면**: 그 워커는 예전 **Service Worker 형식**으로
+   > 만들어진 것 → `worker.js` 대신 **`worker-dashboard.js`**(로직 동일한 형식 변환본)를
+   > 통째로 붙여넣는다. 기존 바인딩·주소는 그대로 유지된다. 코드를 고칠 땐 두 파일을 함께 갱신.
 3. **Settings → Variables and Secrets** 에 추가:
    - `FIREBASE_API_KEY` — `firebase-config.js` 의 `apiKey`(공개값).
    - `PROJECT_ID` — Firebase `projectId` (예: `wordquest-a250d`).
