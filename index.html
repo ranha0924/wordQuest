@@ -1151,13 +1151,13 @@ html.nosvgframe *{border-image:none!important;}
 </div>
 
 <!-- ?v= 는 서비스워커 캐시 지연 방지: 새 index.html이 항상 짝 맞는 새 JS를 받도록 배포마다 올린다(sw.js VERSION과 동일하게). -->
-<script src="words.js?v=102"></script>
-<script src="pack-hs1.js?v=102"></script>
-<script src="pack-hs2.js?v=102"></script>
-<script src="pack-hs3.js?v=102"></script>
-<script src="pack-confuse.js?v=102"></script>
-<script src="pack-vacation.js?v=102"></script>
-<script src="firebase-config.js?v=102"></script>
+<script src="words.js?v=103"></script>
+<script src="pack-hs1.js?v=103"></script>
+<script src="pack-hs2.js?v=103"></script>
+<script src="pack-hs3.js?v=103"></script>
+<script src="pack-confuse.js?v=103"></script>
+<script src="pack-vacation.js?v=103"></script>
+<script src="firebase-config.js?v=103"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -1409,29 +1409,54 @@ async function openRank(tab){
   else await renderClassRank(body,C);
 }
 const _rkMedal=i=>['🥇','🥈','🥉'][i]||('<span class="rk">'+(i+1)+'</span>');
-// 반 랭킹: 이번 주 완료 단어 순(오늘 안 했어도 이번 주 기록 반영, 0단어 제외)
+const _rkMsg=h=>'<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">'+h+'</div>';
+// 서버 오류 시 안내 — 마지막 /sync 가 서버에서 확인해 준 '내 점수'가 있으면 같이 보여준다(내 노력은 안 사라졌음을 안심).
+function _rkErrHTML(C){
+  let mine=''; try{ const st=(C&&C.rankStatus)?C.rankStatus():null; if(st) mine='<br><br>내 이번 주 완료: <b style="color:#ffc63a;">'+(st.wk|0)+'단어</b> <small>(서버 확인값 · 랭킹 반영은 잠시 뒤)</small>'; }catch(e){}
+  return _rkMsg('🛰 랭킹 서버에 연결하지 못했어요.<br><small>잠시 후 다시 열어 주세요. 계속 안 되면 선생님께 알려 주세요.</small>'+mine);
+}
+// 워커가 KV 쓰기 한도(무료 플랜)로 보드 기록을 미룬 상태면 목록 아래에 알린다(조용한 누락 방지).
+function _rkDegradedNote(C){
+  try{ const st=(C&&C.rankStatus)?C.rankStatus():null; if(st&&st.degraded) return '<div style="font-size:10px;color:#8a8ab0;text-align:center;padding:8px 6px 2px;">⏳ 서버 저장 한도로 일부 친구의 점수 반영이 늦어질 수 있어요(내 점수는 항상 최신).</div>'; }catch(e){}
+  return '';
+}
+// 반 랭킹: 이번 주 완료 단어 순(오늘 안 했어도 이번 주 기록 반영, 0단어 제외).
+//   '서버 오류'와 '빈 랭킹'을 구분해 표시 — 오류를 "아직 푼 친구가 없어요"로 뭉개면 원인 파악이
+//   안 된다(실사고 2026-07-16: KV 쓰기 한도 초과로 워커가 죽었는데 화면은 빈 랭킹처럼 보임).
 async function renderClassRank(body,C){
-  let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){}
-  const active=(list||[]).filter(e=>(e.wk|0)>0);
-  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 친구가 없어요.<br>(반에 참여해야 반 랭킹이 보여요)<br>먼저 단어를 풀어 1등을 차지해요!</div>'; return; }
+  let info=null;
+  try{ info=(C&&C.getRankInfo)?await C.getRankInfo('class'):null; }catch(e){}
+  if(!info){ let list=null; try{ list=(C&&C.getRank)?await C.getRank():null; }catch(e){} info=list?{ok:true,list:list}:{ok:false,reason:'server'}; } // 구버전 cloud.js 폴백
+  if(!info.ok){
+    if(info.reason==='noauth'){ body.innerHTML=_rkMsg('로그인하면 우리 반 랭킹을 볼 수 있어요.'); return; }
+    if(info.reason==='noclass'){ body.innerHTML=_rkMsg('반에 참여하면 반 랭킹이 보여요.<br>선생님께 <b>반 코드</b>를 받아 참여해 보세요!'); return; }
+    body.innerHTML=_rkErrHTML(C); return;
+  }
+  const active=(info.list||[]).filter(e=>(e.wk|0)>0);
+  if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!'); return; }
   const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
   let html=active.map(row).join('');   // 반 전원 다 표시(이번 주 푼 반 애들 전부) — 상한 없음
   const mi=active.findIndex(e=>e.me);
   if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
-  body.innerHTML=html;
+  body.innerHTML=html+_rkDegradedNote(C);
 }
 // 전체 랭킹: 이번 주 완료 단어 수 순(로그인 사용자 전체) — 반 랭킹과 동일 기준
 async function renderGlobalRank(body,C){
-  let list=null; try{ list=(C&&C.getGlobalRank)?await C.getGlobalRank():null; }catch(e){}
-  if(list===null){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">전체 랭킹을 불러오지 못했어요.<br><small>로그인 상태·네트워크를 확인해 주세요.<br>(전체 랭킹은 Firebase 보안 규칙 배포가 필요해요)</small></div>'; return; }
-  const active=list.filter(e=>(e.wk|0)>0);
-  if(!active.length){ body.innerHTML='<div style="color:#8a8ab0;padding:22px 10px;text-align:center;line-height:1.8;">아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!</div>'; return; }
+  let info=null;
+  try{ info=(C&&C.getRankInfo)?await C.getRankInfo('global'):null; }catch(e){}
+  if(!info){ let list=null; try{ list=(C&&C.getGlobalRank)?await C.getGlobalRank():null; }catch(e){} info=list?{ok:true,list:list}:{ok:false,reason:'server'}; } // 구버전 cloud.js 폴백
+  if(!info.ok){
+    if(info.reason==='noauth'){ body.innerHTML=_rkMsg('로그인하면 전체 랭킹을 볼 수 있어요.'); return; }
+    body.innerHTML=_rkErrHTML(C); return;
+  }
+  const active=(info.list||[]).filter(e=>(e.wk|0)>0);
+  if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!'); return; }
   const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
   let html=active.slice(0,100).map(row).join('');   // 전체 랭킹 상위 100
   const mi=active.findIndex(e=>e.me);
   if(mi>=100) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
   else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
-  body.innerHTML=html;
+  body.innerHTML=html+_rkDegradedNote(C);
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
 // 최근 weeks*7일 히트맵 SVG-less 그리드 HTML. dh: dailyHistory 맵.
@@ -3863,7 +3888,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=102"></script>
+<script type="module" src="cloud.js?v=103"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){

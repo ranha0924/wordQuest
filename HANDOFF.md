@@ -60,6 +60,12 @@
 3. 오답지 무작위 → 철자·품사·뜻유형 유사도 기반 근사치.
 4. 단일 뜻·발음 없음 → 다의어 + 센스별 예문 + TTS.
 
+### 이번 세션(2026-07-16) 추가 — 랭킹 미등재(KV 쓰기 한도) 근본 대응
+
+| 커밋 | 내용 |
+|---|---|
+| (v103) | **"대시보드엔 기록이 있는데 랭킹엔 학생이 없다" 근본 수정 — KV 무료 한도(1,000회/일) 사고 대응 완성판(워커 r4)** — 원인: 랭킹 보드는 워커가 KV에 쓴 키(`c:`/`g:`)로만 만들어지는데, 무료 플랜 쓰기 한도 초과로 put 이 throw → 구버전 워커는 `/sync` 전체가 500 → **이후 동기화한 학생들의 보드 키가 안 생겨 랭킹 통째 미등재**(대시보드는 v101부터 Firestore 직읽이라 정상 → 증상 불일치처럼 보임). 80a09ff(쓰기 절약·미배포 보관)도 ①점수 변경마다 put 2회는 남아 전교 규모면 여전히 초과 가능 ②한도 소진 시 **조용히 누락**(학생이 보드에 안 뜸) ③`/board` list 실패가 '빈 랭킹'으로 위장되는 구멍이 있었음. **워커 r4**(worker.js·worker-dashboard.js 쌍둥이): ⓐ**등재 우선** — 이번 주 키 없으면 무조건 기록(학생당 주 2회면 등재 완료) ⓑ**갱신 스로틀** — 등재 후엔 이름/연속 변경·`RANK_STEP`(기본 5)단어 진행·`RANK_FLUSH_MIN`(기본 15)분 경과 시에만 갱신(sync 폭주≠put 폭주) ⓒ**한도 내성+가시화** — put 실패해도 200 + `degraded:true` ⓓ**`/board` 내 행 즉석 병합** — 본인 점수·연속을 KV 무관하게 서버가 즉석 계산해 병합(쓰기 0회 → put 밀려도 "내가 안 보임" 원천 차단), 전체 보드 상위 100 밖이면 내 행 끝에 보존 ⓔ**list 실패는 503 `kv_limit`**(빈 랭킹 위장 금지) ⓕ**모든 응답에 `v:'r4'` 리비전** — 워커 주소만 브라우저로 열어도 배포 여부 확인 가능. **클라**: `cloud.js` 가 `/sync` 응답(내 점수·degraded)을 보관(`rankStatus`), 신규 `getRankInfo` 가 '서버 오류/미로그인/미소속/빈 보드'를 구분 반환(기존 `getRank` 시그니처는 구버전 호환 유지) → `index.html` 랭킹 모달이 오류를 "아직 푼 친구가 없어요"로 뭉개지 않고 **오류 안내 + 내 점수(서버 확인값) 표시**, degraded 면 "반영 지연" 알림. 검증: 워커 순수함수 31/31 + 통합(모의 KV/fetch, 등재우선·스로틀·degraded·내행합성·503·top100+내행) 21/21 + 렌더 분기 12/12(XSS 포함), 쌍둥이 공유구간 기계적 동일, 전 스크립트 구문 무결. 캐시 v102→v103. **⚠️ 적용하려면 rank-worker 재배포 필요**(서비스워커 형식이면 worker-dashboard.js 붙여넣기·Deploy, 새 바인딩 불필요 — 배포 확인은 워커 주소 열어 `v:"r4"` 확인). 무료 한도가 계속 빠듯하면 `RANK_STEP=10` 또는 Workers Paid 전환(README). 참고 `rank-worker/README.md` §무료 플랜 |
+
 ### 이번 세션(2026-07-15) 추가
 
 | 커밋 | 내용 |
@@ -324,7 +330,7 @@
 - **② 도감 나가기 버튼(상단)** — `scr-dex`(index.html:852)의 '◀ 마을로 돌아가기'가 `dexgrid`(867) **아래**(868)에만 있어, 도감이 길면 맨 밑까지 스크롤해야 나감. 화면 상단(스크롤 없이 보이는 위치)에 나가기 버튼/헤더 고정 추가. 안전한 UI 작업.
 - **③ DDoS/남용 (서브에이전트 감사 완료 · 미조치)** — 결론: **돈은 안전**(OCR→Anthropic 은 uid별 캡 `USER_DAILY_LIMIT`·`DAILY_CAP`+KV 게이트로 방어; `ocr-worker/worker.js`). **가용성 위험 高**: Firebase **Spark(무료)** 할당량(읽기 5만·쓰기 2만/일)을 로그인 사용자가 브라우저 루프로 소진 → 하루짜리 무료 outage($0·자정 리셋). 벡터 (a) `rank-worker /sync` 는 요청당 Firestore **2읽기**(`getDoneByDay`+`getClassId`) 무가드 → ~2.5만 요청이면 프로젝트 읽기 할당량 고갈; (b) `firestore.rules` 가 본인 문서 **무제한 self-write** 허용 → 쓰기 할당량 고갈; (c) 잘못된 토큰이라도 워커가 매 요청 구글 `accounts:lookup` 호출(증폭). **오픈 가입**이라 공격자 풀 = 구글 계정 아무나. 대응(cheap→proper): **P1** 워커 `/sync` 에 uid·분당 throttle(OCR 워커 KV 카운터 패턴 재사용, ~10/min); **P2** `verifyFirebase` 결과 KV 캐시 or ID토큰 JWT 로컬 검증(구글 호출 증폭 제거); **P3 Firebase App Check**(reCAPTCHA/Play Integrity) — 스크립트/콘솔 클라 차단(근본책); **P4** 워커 `ALLOW_ORIGIN` 앱 도메인으로·Firebase apiKey HTTP referrer 제한. **대시보드에서 확인 필요**: `OCR_KV` 바인딩 존재 · Anthropic 월 스펜드 캡. (`docs/security-review-2026-07-15.md` §2-3 의 오픈가입·global 노출 지적과 연결.)
 - **④ JSON 변조 잔여 점검 (미조사)** — 랭킹 `wk`·연속·학습일은 서버(rank-worker) 관측으로 위조 차단 완료. 남은 것: 대시보드의 `summary.accuracy/captured/total/attempts` 등은 여전히 **학생 앱 자기보고**(`users/{uid}` self-write)라 위조 가능(표시용). 위험도·차단 필요성 점검 필요.
-- **+ rank-worker 쓰기 절약본 미배포** — `rank-worker/worker.js`·`worker-dashboard.js` 에 KV 쓰기 절약(`sameMeta` 스킵)+한도 내성(put별 try/catch) 반영돼 있으나(커밋 `80a09ff`, 단위테스트 통과), **Cloudflare 수동 재배포는 안 함**(Workers Paid 결제로 급하지 않아짐). KV 비용/견고성 위해 다음에 붙여넣기 배포 권장. **붙여넣기 시 "Unexpected token 'export'" 나면** 그 워커가 Service Worker 형식 → 모듈형 `worker.js` 대신 **`worker-dashboard.js`**(형식 변환 쌍둥이) 사용.
+- **+ rank-worker 쓰기 절약본 미배포** — ~~커밋 `80a09ff` 붙여넣기 배포 권장~~ → **v103 세션에서 r4 로 대체·강화됨**(등재 우선 + 스로틀 + `/board` 내 행 즉석 병합 + degraded/503 가시화 + `v` 리비전 마커). **여전히 Cloudflare 수동 재배포 필요** — `worker-dashboard.js` 붙여넣기·Deploy 후 워커 주소를 브라우저로 열어 `v:"r4"` 확인. 위 "이번 세션(2026-07-16) — 랭킹 미등재 근본 대응" 항목 참고.
 
 ---
 
