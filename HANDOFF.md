@@ -323,6 +323,15 @@
 - 오답 통계 대시보드 확장, 콜로케이션, `vocamon.html` 레거시 정리.
 - ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**, **PWA 설치형·오프라인 셸(§4.11)**.
 
+### 미해결 백로그 (2026-07-16 세션 이후)
+이 세션은 랭킹/대시보드 표시·동기화 사고 대응에 집중했다(전부 해결·배포 완료 — v100~v102, Cloudflare Workers Paid 전환으로 KV 한도 해소, 저장소 Private 전환으로 죽었던 Pages는 Public 복귀+Source=GitHub Actions 재설정으로 복구, 워크플로에 `enablement: true` 자동복구 추가). 아래는 **손 안 댄 4건 + 미배포 1건**.
+
+- **① 한글 뜻 앞 `(` 단어 (16개)** — `pack-hs1.js`(1)·`pack-hs2.js`(1)·`pack-hs3.js`(3)·`pack-confuse.js`(8)·`pack-vacation.js`(3). 예: `(생물) 종`, `(짧은) 여행`, `(돈·시간을) 쓰다`. **전수 괄호 균형 검사 → 불균형 0개**: 전부 닫는 괄호가 있는 정상 사전식 문맥 표기다. 사용자가 "깨져 보인다"고 지적 → **표기 정책 결정 필요**(그대로 둘지 / 선행 괄호를 떼거나 뒤로 옮길지). `firstSense()`(index.html:1198, `[;,/·]`로 첫 뜻만 자름)가 괄호를 끊지는 않음(별개 확인).
+- **② 도감 나가기 버튼(상단)** — `scr-dex`(index.html:852)의 '◀ 마을로 돌아가기'가 `dexgrid`(867) **아래**(868)에만 있어, 도감이 길면 맨 밑까지 스크롤해야 나감. 화면 상단(스크롤 없이 보이는 위치)에 나가기 버튼/헤더 고정 추가. 안전한 UI 작업.
+- **③ DDoS/남용 (서브에이전트 감사 완료 · 미조치)** — 결론: **돈은 안전**(OCR→Anthropic 은 uid별 캡 `USER_DAILY_LIMIT`·`DAILY_CAP`+KV 게이트로 방어; `ocr-worker/worker.js`). **가용성 위험 高**: Firebase **Spark(무료)** 할당량(읽기 5만·쓰기 2만/일)을 로그인 사용자가 브라우저 루프로 소진 → 하루짜리 무료 outage($0·자정 리셋). 벡터 (a) `rank-worker /sync` 는 요청당 Firestore **2읽기**(`getDoneByDay`+`getClassId`) 무가드 → ~2.5만 요청이면 프로젝트 읽기 할당량 고갈; (b) `firestore.rules` 가 본인 문서 **무제한 self-write** 허용 → 쓰기 할당량 고갈; (c) 잘못된 토큰이라도 워커가 매 요청 구글 `accounts:lookup` 호출(증폭). **오픈 가입**이라 공격자 풀 = 구글 계정 아무나. 대응(cheap→proper): **P1** 워커 `/sync` 에 uid·분당 throttle(OCR 워커 KV 카운터 패턴 재사용, ~10/min); **P2** `verifyFirebase` 결과 KV 캐시 or ID토큰 JWT 로컬 검증(구글 호출 증폭 제거); **P3 Firebase App Check**(reCAPTCHA/Play Integrity) — 스크립트/콘솔 클라 차단(근본책); **P4** 워커 `ALLOW_ORIGIN` 앱 도메인으로·Firebase apiKey HTTP referrer 제한. **대시보드에서 확인 필요**: `OCR_KV` 바인딩 존재 · Anthropic 월 스펜드 캡. (`docs/security-review-2026-07-15.md` §2-3 의 오픈가입·global 노출 지적과 연결.)
+- **④ JSON 변조 잔여 점검 (미조사)** — 랭킹 `wk`·연속·학습일은 서버(rank-worker) 관측으로 위조 차단 완료. 남은 것: 대시보드의 `summary.accuracy/captured/total/attempts` 등은 여전히 **학생 앱 자기보고**(`users/{uid}` self-write)라 위조 가능(표시용). 위험도·차단 필요성 점검 필요.
+- **+ rank-worker 쓰기 절약본 미배포** — `rank-worker/worker.js`·`worker-dashboard.js` 에 KV 쓰기 절약(`sameMeta` 스킵)+한도 내성(put별 try/catch) 반영돼 있으나(커밋 `80a09ff`, 단위테스트 통과), **Cloudflare 수동 재배포는 안 함**(Workers Paid 결제로 급하지 않아짐). KV 비용/견고성 위해 다음에 붙여넣기 배포 권장. **붙여넣기 시 "Unexpected token 'export'" 나면** 그 워커가 Service Worker 형식 → 모듈형 `worker.js` 대신 **`worker-dashboard.js`**(형식 변환 쌍둥이) 사용.
+
 ---
 
 ## 9. 참고 — 주요 함수 위치
