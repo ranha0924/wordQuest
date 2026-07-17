@@ -1,0 +1,158 @@
+# 서버 권위 채점(server-authoritative scoring) — 설계·운영 요약
+
+랭킹 점수를 **"서버가 발급한 퀴즈 세션에서 실제로 푼 것"** 으로만 인정하도록 바꾼 기능이다.
+학생이 콘솔로 완료기록을 심어도 랭킹에 반영되지 않는다(**T1 완전 차단**). 워커 세션 엔드포인트
+`/quiz/start`·`/quiz/submit` + 정답 해시 번들 + App Check(심층방어)로 구성된다.
+
+> 이 문서는 **설계/스펙 요약본**이다. 콘솔 App Check 셋업은 `docs/appcheck-setup.md`,
+> 워커 배포·기존 env·확인 방법은 `rank-worker/README.md` 를 참고한다.
+
+---
+
+## 1. 무엇을 바꿨나 — T1 완전 차단
+
+**이전(att 상한 모델, r6~r12)**: 워커가 학생 문서의 `doneByDay`(완료기록)를 읽어 주간 완료수를
+세되, 백데이트 불가 원장 `att` 로 **상한**만 씌웠다. 문제: `doneByDay`·`words` 는 **둘 다 학생이 자기
+문서에 쓰는 값** → 콘솔로 통째 위조해도 (여러 날에 걸쳐 매일 캡만큼) 상한까지는 점수를 만들 수 있었다.
+
+**이번(세션 채점, r13)**: 랭킹 크레딧을 **서버가 발급한 세션 안에서 실제 제출·정답대조를 통과한
+단어**에만 준다.
+- 전투 시작 → 클라가 `/quiz/start` 로 이번 판 단어 id 를 서버에 알림 → 서버가 **HMAC 서명 세션(sid)**
+  발급(위조 불가·1회성·TTL 20분).
+- 정답마다 클라가 `/quiz/submit` 으로 제출 → 서버가 **정답 해시와 대조**(팩 단어) 또는 세션 정합
+  확인(개인 단어) → 통과분만 **검증 원장(`ver_pack`/`ver_pers`)** 에 (id×날짜) 유니크로 적립.
+- **★핵심 성과: 학생이 콘솔로 `doneByDay` 를 심어도 무의미하다.** 랭킹은 `ver` 원장만 보고,
+  `ver` 는 서버 세션을 거쳐야만 쌓인다 → 이 저장소에서 실제로 일어난 해킹 벡터(T1)가 죽는다.
+
+## 2. 점수 정의 — 하이브리드(팩/개인)
+
+주간 랭킹 점수는 팩 단어와 개인 단어를 **분리 집계** 후 합산한다:
+
+```
+packWk     = min( { 이번 주 검증된 팩 단어 유니크 id 수 },     PACK_WEEK_CAP )      // 기본 2000
+personalWk = min( { 이번 주 검증된 개인 단어 유니크 id 수 },   PERSONAL_WEEK_CAP )  // 기본 500
+wk         = packWk + personalWk
+```
+
+- **팩 단어**(기본 단어은행·고1 팩·교사 배포팩)는 서버가 정답을 알아 **대조 검증**이 되므로
+  `PACK_WEEK_CAP`(기본 2000, 커리큘럼이 ~1,399개라 자연 상한) 까지 **사실상 무제한**으로 인정한다.
+- **개인/OCR 등록 단어**는 서버가 정답을 모른다(C1) → 무제한이 원천 불가.
+  `PERSONAL_WEEK_CAP`(기본 500/주 ≈ 하루 ~70개) 내에서만 반영한다.
+- **일 버스트**: 그날 새로 검증된 **'이번 주 신규' 팩 id** 는 `PACK_DAILY_BURST`(기본 350) 까지만
+  카운트한다(rate-limit 성격). **정직한 최대치(하루 ~300)에 여유를 더한 값** — 복습으로 이미 이번
+  주에 센 id 재제출은 버스트를 소모하지 않으므로 **헤비 복습자도 안 깎인다.**
+- 대다수 학생의 순위 주지표는 **팩 단어 검증완료**(커리큘럼 학습)라, 정직한 학생은 상한을 체감하지
+  않는다.
+
+## 3. 엔드포인트 (rank-worker, 트윈 동시)
+
+두 엔드포인트 모두 헤더 `Authorization: Bearer <idToken>` + `X-Firebase-AppCheck: <token>` 를 받는다.
+
+### `POST /quiz/start`
+- 바디 `{ ids:[단어id…] }`(이번 판 due 단어, 최대 `SESSION_MAX`=40).
+- 서버: 토큰·App Check 검증 → 학생 state 를 읽어 각 id 가 **실재+due** 인지 확인(위조 id 탈락)
+  → 각 id 를 **팩/개인 분류** → rate-limit 검사 → **`sid = HMAC-SHA256(QUIZ_SECRET, …)`** 세션 발급
+  (KV `qs:<uid>:<sid>`, TTL 20분).
+- 응답 `{ sid, exp, kind:[{id,pack}] }`. **정답/해시는 안 준다**(클라는 이미 알지만 서버는 미전송).
+
+### `POST /quiz/submit`
+- 바디 `{ sid, ans:[{ id, a, mode, t }] }`(`a`=제출한 답, `mode`=출제모드=로깅용, `t`=제출시각 보조).
+- 서버: 토큰·App Check 검증 → 세션 로드·1회성 소비 → rate-limit(분당 제출·버스트 잔량) →
+  각 답 대조:
+  - **팩**: `norm_en(a)==he` **또는** `norm_ko(a)==hk` 이면 통과(§4, **모드 무관**). 오답=미집계
+    (학습엔 영향 없음).
+  - **개인**: App Check 통과 + 세션 정합 + 사람 속도면 인정(서버가 정답을 모르므로).
+- 통과분을 `ver_pack`/`ver_pers` 에 (id×날짜) 유니크 적립 → 보드 KV 재계산 → 응답
+  `{ accepted, packWk, personalWk, wk, streak, capped, degraded }`.
+
+> **★리플레이 안전성의 근거는 세션 `used` 플래그가 아니라 원장의 (id×날짜) 유니크성이다.**
+> KV 에 CAS 가 없어 병렬 이중제출이 `used` 게이트를 두 번 통과해도, 원장이 (id×날짜) 유니크라
+> 이중집계되지 않는다.
+
+## 4. 정답 번들 (팩 단어 검증의 원천)
+
+서버가 팩 단어 정답을 알아야 대조가 되므로, **정답 해시**를 워커에 **인라인 번들**한다.
+
+- **빌드 스크립트**: `scripts/build-pack-answers.mjs`.
+  단어 파일(`words.js`·`pack-hs1.js`·`pack-hs2.js`·`pack-hs3.js`·`pack-confuse.js`·`pack-vacation.js`)을
+  읽어 **id → {he, hk} 해시 맵** + **팩 id 화이트리스트**를 데이터 블록 텍스트로 만든다.
+  - `he = sha256( ANSWER_SALT | 'en' | norm_en(w.w) )` — **영어 답 모드**(k2e·k2e4·cloze·listen)용.
+  - `hk = sha256( ANSWER_SALT | 'ko' | norm_ko(w.m 전체) )` — **e2k(뜻 고르기)** 용.
+    (다의어 `w.m`="버리다; 포기하다" 는 **전체 문자열** 해시로 둔다 — 센스별 해시만 두면 정직한
+    e2k 를 오답처리하는 버그가 나므로.)
+  - 산출물엔 **해시만** 들어가고 원문 정답·salt 는 안 들어간다.
+- **인라인 삽입(단일파일 배포 호환)**: 워커는 Service Worker 형식이라 `import` 를 못 쓴다. 그래서
+  빌드 스크립트가 `rank-worker/worker.js` **와** `rank-worker/worker-dashboard.js` **두 파일 모두**의
+  마커 주석 사이 `/*__PACK_ANSWERS_START__*/ … /*__PACK_ANSWERS_END__*/` 를 데이터 블록으로 **치환**한다.
+  (~1,399개 × 해시 2종 ≈ 240KB < Workers 1MB 한도.)
+- **동적 배포팩**: 교사가 배포한 `classPacks/{cid}` 단어는 런타임에 워커가 읽어(규칙상 워커=소유교사
+  토큰 read) 같은 he/hk 방식으로 해시 + 5분 KV 캐시. 이 id 도 팩 화이트리스트에 편입된다.
+- **재생성 시점**: **단어 파일이 바뀔 때마다** `ANSWER_SALT` 를 지정해 스크립트를 다시 실행 → 두
+  워커 파일이 갱신됨 → **트윈 재배포.**
+  ```
+  ANSWER_SALT="<워커 env 와 동일한 값>" node scripts/build-pack-answers.mjs
+  ```
+  ⚠️ 스크립트의 salt 와 **워커 env `ANSWER_SALT` 가 반드시 같아야** 한다(불일치 시 전 팩 검증 실패).
+
+## 5. 환경 변수(env) — 워커 신규
+
+기존 `RANK_KV`(바인딩)·`FIREBASE_API_KEY`·`PROJECT_ID`·`RANK_DAILY_CAP`·`RANK_WEEK_CAP` 등은 그대로
+쓰고(`rank-worker/README.md`), 아래를 **추가**한다.
+
+| 변수 | 기본값 | 용도 |
+|---|---|---|
+| `QUIZ_SECRET` | (필수) | 세션 `sid` HMAC 서명 비밀키. 길고 무작위로 생성(예: `openssl rand -hex 32`). **비밀** — 커밋 금지. |
+| `ANSWER_SALT` | (필수) | 팩 정답 해시 salt. **빌드 스크립트와 동일값**이어야 함. **비밀** — 커밋 금지. |
+| `PROJECT_NUMBER` | (필수) | App Check JWT `aud=projects/<번호>` 검증용. **projectId 문자열이 아니라 숫자**(= `messagingSenderId` = `363343730753`). `docs/appcheck-setup.md`. |
+| `APPCHECK_ENFORCE` | `false` | `false`=모니터링(App Check 실패해도 통과·로깅), `true`=강제(실패 시 거부). 사이트키/PROJECT_NUMBER 미설정이면 App Check 스킵. |
+| `PACK_DAILY_BURST` | `350` | 하루 신규 팩 검증 상한(정직 최대 ~300 + 여유). 정직 클리핑 시 상향·T3 우려 시 하향. |
+| `PACK_WEEK_CAP` | `2000` | 주간 팩 유니크 상한(커리큘럼 ~1,399로 자연 상한). |
+| `PERSONAL_WEEK_CAP` | `500` | 주간 개인 단어 유니크 상한(≈ 하루 ~70). |
+| `RL_ANS_PER_MIN` | `90` | 분당 정답 제출 상한(300/일 순간 최대 대비 넉넉히). |
+| `RL_SESS_PER_MIN` | `5` | 분당 세션 시작 상한. |
+| `SESSION_MAX` | `40` | 한 세션 최대 단어 수. |
+| `SESSION_TTL` | `1200` | 세션 유효시간(초, 20분). |
+
+> `QUIZ_SECRET`·`ANSWER_SALT` 는 **진짜 비밀**이다(공개 저장소·`firebase-config.js` 의 공개값들과
+> 다름). Cloudflare 대시보드 **Settings → Variables and Secrets** 에 **Secret** 으로 넣고 커밋하지 않는다.
+
+## 6. 롤아웃 순서 (무중단)
+
+1. **(옵션) 즉시 헤지**: env `RANK_DAILY_CAP` 60→150·`RANK_WEEK_CAP` 300→900(재배포 0) — 기존 att
+   상한에 잘리는 정직 학생을 즉시 구제.
+2. **r13 배포(모니터링 모드)**: `/quiz/*` + App Check(`APPCHECK_ENFORCE=false`) + 정답 번들 + 클라
+   세션 훅 배포. `ver` 원장 축적 시작. 이 단계에선 `wk = de-dup(att, ver)` — 기존 att 경로와 신규 ver
+   를 **(id×주) 합집합** 후 상한 적용(전환기 무중단, `ver` 가 비면 오늘과 동일 = 회귀 0).
+3. **모니터링 → 검증**: App Check 측정항목에서 정상 학생 검증 비율이 ~100% 로 안정될 때까지 관찰
+   (`docs/appcheck-setup.md` 3단계).
+4. **강제 전환**: 검증 안정 후 App Check 강제 ON(Firestore) + 워커 `APPCHECK_ENFORCE=true`.
+5. **상한 상향**: 정직 학생 여유를 보며 `PACK_DAILY_BURST`/`PACK_WEEK_CAP` 를 목표치(350/2000)로.
+6. **att 경로 은퇴**: `ver` 원장이 충분히 쌓이면 카운트를 ver only 로. att 상한은 안전판으로 잔존 가능.
+
+> 각 단계는 트윈 파리티(`worker.js`↔`worker-dashboard.js`)·`node --check`·순수로직 테스트를 거친다.
+
+## 7. 정직한 한계 (숨기지 않고 명시)
+
+이 앱은 **클라이언트 권위**(정답이 브라우저에 있음)라는 구조적 제약을 가진다. 그래서:
+
+- **C1 — 정답을 아는 봇은 완전히는 못 막는다.** 팩 정답 대조는 **T1(안 풀고 콘솔로 위조)을 완전
+  차단**하는 게 주효과다. 하지만 e2k·k2e4 는 4지선다라 '정답 선택'만 확인되므로, **정답을 아는 자동화
+  (T3: App Check 우회 + 자동 정답)** 는 정답을 넣어 통과할 수 있다. 이 잔여 위협은 (a) **App Check**
+  (reCAPTCHA v3 — 진짜 앱·사람 판정, `docs/appcheck-setup.md`) (b) **버스트 350**(정직 최대 근처)
+  으로 억제한다. 서버조차 '정직한 300 플레이'와 '봇 300 플레이'를 구분 못 하므로, 버스트를 300에
+  맞추면 App Check 를 뚫는 봇도 하루 ~350까지는 가능하다 — 그 대신 정직한 300/일 학생이 안 깎인다.
+  T3 는 정교한 자동화를 요구해 학교 앱 상대로 비용이 매우 크다(반면 죽은 T1 은 트리비얼했다).
+- **개인/OCR 단어는 하루 ~70(주 500)이 넘으면 불가피하게 깎인다.** 서버가 개인단어 정답을 검증할
+  수 없어(C1) 무제한 반영이 원천 불가하다. 개인단어만으로 매일 100+ 를 하는 경우 `PERSONAL_WEEK_CAP`
+  에 걸린다 — 웹앱 구조상 불가피(정직 표기). 커리큘럼(팩) 중심 학생은 해당 없음.
+- **인출 강도**: 타이핑 모드(k2e·cloze·listen)가 4지선다(e2k·k2e4)보다 검증 강도가 높다. 팩 정답
+  대조는 모드 무관하게 "그 모드의 정답을 제출해야 통과"라 C1 하에서 동일 난이도다.
+
+---
+
+## 참고
+
+- 콘솔 App Check 셋업·강제 전환 순서·디버그 토큰: **`docs/appcheck-setup.md`**.
+- 워커 배포·기존 env·확인(`v:"r13"`)·KV 한도·치팅 항목 제거: **`rank-worker/README.md`**.
+- 학습·오프라인·무로그인·SRS·도감은 **전부 불변**(회귀 0) — 세션 채점은 '추가 크레딧 경로'이고,
+  오프라인/미로그인/실패 시 기존 폴백으로 로컬 진도만 유지된다(그 판은 랭킹 미반영).
