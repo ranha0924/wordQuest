@@ -1447,10 +1447,15 @@ async function renderClassRank(body,C){
   }
   const active=(info.list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!'); return; }
-  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
+  // 🔥연속: '내 행'은 앱이 아는 실제 연속(liveStreak)을 서버값과 max 로 표시 → 서버가 아직 관측 못한
+  //   정직한 연속이 랭킹에서 빠지지 않게(홈·대시보드와 일치). 남의 행은 서버값 그대로(다른 클라 신뢰
+  //   불가·위조 방지). 순위 정렬은 서버(sortBoard)가 하므로 표시만 바뀌고 순위엔 영향 없음.
+  const myLive=liveStreak();
+  const row=(e,i)=>{ const st=e.me?Math.max(e.streak|0,myLive):(e.streak|0);
+    return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
   let html=active.map(row).join('');   // 반 전원 다 표시(이번 주 푼 반 애들 전부) — 상한 없음
   const mi=active.findIndex(e=>e.me);
-  if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
+  if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span>'+(myLive>0?'<span class="rkst">🔥'+myLive+'</span>':'')+'</div>';
   body.innerHTML=html+_rkDegradedNote(C);
 }
 // 전체 랭킹: 이번 주 완료 단어 수 순(로그인 사용자 전체) — 반 랭킹과 동일 기준
@@ -1464,11 +1469,14 @@ async function renderGlobalRank(body,C){
   }
   const active=(info.list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!'); return; }
-  const row=(e,i)=>'<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+((e.streak|0)>0?'<span class="rkst">🔥'+(e.streak|0)+'</span>':'')+'</div>';
+  // '내 행'은 실제 연속(liveStreak)을 서버값과 max 로 표시(renderClassRank 와 동일 철학 — 남의 행·정렬 무관).
+  const myLive=liveStreak();
+  const row=(e,i)=>{ const st=e.me?Math.max(e.streak|0,myLive):(e.streak|0);
+    return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
   let html=active.slice(0,100).map(row).join('');   // 전체 랭킹 상위 100
   const mi=active.findIndex(e=>e.me);
   if(mi>=100) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
-  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
+  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span>'+(myLive>0?'<span class="rkst">🔥'+myLive+'</span>':'')+'</div>';
   body.innerHTML=html+_rkDegradedNote(C);
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
@@ -2245,7 +2253,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v113';
+var BUILD='v114';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
