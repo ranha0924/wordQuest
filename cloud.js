@@ -108,14 +108,16 @@
     var d = new Date();
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
+  // ★날짜 키 KST 고정(index.html today()/워커 kstToday 와 동일 계산) — 기기 시간대 skew 제거.
+  //   KST 기기(한국 학생 대다수)는 로컬=KST 라 문자열 동일 → 회귀 0. 비-KST 기기만 서버와 정렬됨.
   function todayStr() {
-    var d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    var d = new Date(Date.now() + 9 * 3600 * 1000);
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
   }
   function addDaysStr(ds, n) {
     var p = ds.split('-').map(Number);
-    var d = new Date(p[0], p[1] - 1, p[2] + n);
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
   }
   // 이번 주(월요일~오늘) 날짜들 — 반 랭킹의 '이번 주' 기준(읽는 시점에 다시 계산해 오래된 점수 자동 제외)
   function weekDates(t) {
