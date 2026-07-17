@@ -137,6 +137,15 @@
     for (var i = 0; i < wd.length; i++) s += numOr0(days[wd[i]]);
     return s;
   }
+  // 폴백(워커 OFF) 랭킹의 '읽기 시점 연속 감쇠': 저장된 days(최근 8일)에 오늘/어제 활동이 없으면
+  //   그 연속은 이미 끊긴 것 → 0 으로 본다. 대시보드가 view 시점에 감쇠하는 것과 같은 철학이라
+  //   폴백 랭킹의 낡은 연속 잔존(대시보드=0인데 랭킹만 🔥) 불일치를 없앤다. days 없는 옛 항목은 판정
+  //   불가라 저장값 유지(근사). ★ leaderboards 쓰기는 firestore.rules 로 잠겨(2026-07-16) 이 폴백
+  //   경로의 항목은 갱신되지 않는 '동결 레거시'다 → 읽기 감쇠가 이 경로의 유일한 정합 수단(영구 동작).
+  function streakAliveByDays(days, t) {
+    if (!days) return false;
+    return !!(numOr0(days[t]) || numOr0(days[addDaysStr(t, -1)]));
+  }
 
   // ── 서버 집계 랭킹(치팅 근본 차단) 도우미 ──
   //   window.RANK_ENDPOINT(랭킹 워커) 가 설정되면 점수를 클라가 못 쓰고 워커가 센다:
@@ -703,7 +712,10 @@
         var v = d.data() || {};
         // '이번 주' 합을 읽는 시점에 다시 계산(days 있으면). 옛 항목(days 없음)은 저장된 wk 폴백.
         var wk = v.days ? weekSum(v.days, t) : numOr0(v.wk);
-        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: numOr0(v.streak), me: d.id === user.uid });
+        // 읽기 시점 연속 감쇠: days 가 있는데 오늘/어제 활동이 없으면 끊긴 연속 → 0(대시보드와 일치).
+        var stk = numOr0(v.streak);
+        if (v.days && !streakAliveByDays(v.days, t)) stk = 0;
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: stk, me: d.id === user.uid });
       });
       out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
       return out;
@@ -724,7 +736,9 @@
       res.forEach(function (d) {
         var v = d.data() || {};
         var wk = v.days ? weekSum(v.days, t) : numOr0(v.wk); // 조회 시점에 '이번 주' 합 재계산
-        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: numOr0(v.streak), me: d.id === user.uid });
+        var stk = numOr0(v.streak);                          // 읽기 시점 연속 감쇠(getRank 와 동일)
+        if (v.days && !streakAliveByDays(v.days, t)) stk = 0;
+        out.push({ uid: d.id, name: (v.name || '익명'), wk: wk, streak: stk, me: d.id === user.uid });
       });
       out.sort(function (a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.name < b.name ? -1 : 1); });
       return out;

@@ -65,7 +65,10 @@ export default {
   },
 };
 
-const REV = 'r10';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r11';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r11: 랭킹 연속(🔥)을 '대시보드와 동일한 max 산식'(unifiedStreak: att ∪ 자기보고 스칼라·활동일)으로 통일 →
+                              //        대시보드 표시값과 100% 일치(사용자 요구). 보드 meta 에 감쇠 anchor(d) 저장 → 오늘/어제가 아니면 0 표시
+                              //        (끊긴 연속이 랭킹에 잔존하던 역방향 불일치 해소). r10 레거시(d 없음)는 at 로 근사 감쇠 후 다음 sync 에 치유.
                               //   r10: 랭킹 연속(streak)을 att 기반(streakFromDays)으로 통일 → 대시보드 서버검증값(✓)과 일치. 취약한 st: 러닝카운터 제거. 위조불가 유지(att 는 서버 오늘키만·백데이트 불가).
                               //   r9: /teacher 가 학생별 반 보드 점수(weekWords) 실어보냄 → 대시보드가 인게임과 '같은 값' 표시(단일 소스·false-0 제거).
                               //   r8: 반 보드 점수 스로틀 완화(RANK_STEP 기본 5→1) → 인게임 반 랭킹이 대시보드만큼 신선(freshness 파리티).
@@ -104,10 +107,24 @@ async function handleSync(req, env, uid, token, cors) {
   //   보드 KV(meta.s)·/sync 응답에 실어, 랭킹 '남의 행'도 그 값을 읽게 한다(취약한 st: 카운터가 끊겨
   //   0 으로 뜨던 문제 해소). att 는 서버 오늘키에만 기록(백데이트 불가)이라 위조 불가 유지. att 읽기
   //   실패(인프라 장애·희귀) 시에만 기존 st: 폴백(가용성).
-  const streak = att.ok ? streakFromDays(att.map, today) : await updateStreak(env, uid, today, activeToday);
+  //   ★ r11: att 걷기만이 아니라 '자기보고(대시보드가 이미 표시하는 값)까지 합친 unifiedStreak' 로 산정 →
+  //     대시보드 🔥값과 랭킹 🔥값이 같아진다. anchor(d)도 함께 산정해 보드에 저장(감쇠·역방향 불일치 해소).
+  const self = pst.self;
+  let streak, anchor;
+  if (att.ok) {
+    streak = unifiedStreak(att.map, self, today);
+    anchor = anchorDay(att.map, self, today);
+  } else {
+    // att 읽기 실패(인프라 장애·희귀) — 자기보고(att 없음) unified 와 기존 st: 카운터 폴백의 max(가용성).
+    const un = unifiedStreak({}, self, today);
+    const fb = await updateStreak(env, uid, today, activeToday);
+    streak = fb > un ? fb : un;
+    anchor = anchorDay({}, self, today);
+    if (anchor === null && streak > 0) anchor = activeToday ? today : isoAddDays(today, -1);   // st: 폴백이 이긴 경우 anchor 보정
+  }
   const cid = await getClassId(env, uid, token);             // 반 랭킹 보드 키에만 사용
 
-  const meta = { n: name, w: wk, s: streak };
+  const meta = { n: name, w: wk, s: streak, d: anchor };
   // ── KV 쓰기 절약(무료 플랜 하루 1,000회 한도 보호) ──────────────────────────────
   //   실사고(2026-07-16): sync당 최대 5회 put × 전교생 종일 동기화 → 한도 초과 →
   //   put 이 throw → /sync 전체가 500 → 이후 학생들 점수가 안 올라갔다(랭킹 미등재).
@@ -136,7 +153,7 @@ async function putBoard(env, key, meta, nowSec, step, flushSec) {
   try { prev = (await env.RANK_KV.getWithMetadata(key)).metadata; } catch (e) { /* 없음 */ }
   if (!boardWriteDue(prev, meta, nowSec, step, flushSec)) return true;
   try {
-    await env.RANK_KV.put(key, '', { metadata: { n: meta.n, w: meta.w, s: meta.s, at: nowSec }, expirationTtl: TTL });
+    await env.RANK_KV.put(key, '', { metadata: { n: meta.n, w: meta.w, s: meta.s, d: meta.d || null, at: nowSec }, expirationTtl: TTL });
     return true;
   } catch (e) { return false; } // 한도 등 — 다음 sync 때 재시도
 }
@@ -238,6 +255,7 @@ async function updateStreak(env, uid, today, activeToday) {
 async function handleBoard(env, uid, token, url, cors) {
   // 주(week)도 서버 시계로 고정한다(클라가 보낸 week 무시) — sync 가 서버 주 키로 저장하므로 일치시킨다.
   const week = weekMondayKST(Date.now());
+  const today = kstToday(Date.now()), yesterday = isoAddDays(today, -1);   // 연속 감쇠 판정용
   const scope = url.searchParams.get('scope') === 'global' ? 'global' : 'class';
 
   // users/{uid} 를 한 번 읽어 반ID(반 보드 프리픽스)와 표시이름('내 행' 즉석 병합)을 얻는다.
@@ -258,7 +276,15 @@ async function handleBoard(env, uid, token, url, cors) {
       for (const k of res.keys) {
         const m = k.metadata || {};
         const kid = k.name.slice(prefix.length);
-        out.push({ uid: kid, name: m.n || '익명', wk: m.w || 0, streak: m.s || 0, me: kid === uid });
+        // ★ 연속 감쇠(정렬 이전에 적용 → tiebreak 도 감쇠 후 값 사용): 끊긴 연속이 랭킹에 잔존하던 문제 해소.
+        //   r11 meta 는 anchor(d) 로 오늘/어제가 아니면 0. r10 레거시(d 없음)는 at(마지막 기록)로 근사 감쇠.
+        const rawS = m.s || 0;
+        let dispS = rawS;
+        if (rawS > 0) {
+          if (typeof m.d === 'string') dispS = (m.d === today || m.d === yesterday) ? rawS : 0;
+          else dispS = staleByAt(m.at, today) ? 0 : rawS;
+        }
+        out.push({ uid: kid, name: m.n || '익명', wk: m.w || 0, streak: dispS, me: kid === uid });
       }
       cursor = res.list_complete ? null : res.cursor;
     } while (cursor);
@@ -287,9 +313,11 @@ async function handleBoard(env, uid, token, url, cors) {
       const wkLive = rawLive < bound ? rawLive : bound;
       let st = null;
       try { st = await env.RANK_KV.get('st:' + uid, { type: 'json' }); } catch (e) { /* 없음 */ }
-      // ★ 내 행 연속도 att 기반(attMap 은 위에서 오늘 live 보정됨) → 대시보드·남의 행과 동일 산식.
-      //   att 읽기 실패 시에만 st: 폴백(가용성).
-      const stLive = attOk ? streakFromDays(attMap, sToday) : streakCompute(st, sToday, countDayDone(dbd, sToday, wordIds) > 0).display;
+      // ★ 내 행 연속도 unifiedStreak(att ∪ 자기보고) — 대시보드·남의 행과 동일 산식(오늘 live att 보정 포함).
+      //   unifiedStreak 는 오늘/어제 anchor 가 없으면 0 을 반환하므로 별도 감쇠 불필요(끊긴 내 연속도 0).
+      //   att 읽기 실패 시에만 unified(att 없음)와 기존 st: 폴백의 max(가용성).
+      let stLive = unifiedStreak(attMap, pst.self, sToday);
+      if (!attOk) { const _fb = streakCompute(st, sToday, countDayDone(dbd, sToday, wordIds) > 0).display; if (_fb > stLive) stLive = _fb; }
       const idx = out.findIndex(function (e) { return e.uid === uid; });
       const meRow = { uid: uid, name: info.name || (idx >= 0 ? out[idx].name : '') || '익명', wk: wkLive, streak: stLive, me: true };
       if (idx >= 0) out[idx] = meRow;   // 무조건 교체: wkLive 는 지금 계산한 캡 권위값(스로틀 지연·옛 위조 KV 모두 정정)
@@ -334,6 +362,68 @@ function kstToday(nowMs) { var d = new Date(nowMs + 9 * 3600 * 1000); var z = fu
 function pruneDays(map, keepDays, today) { var cut = isoAddDays(today, -keepDays), out = {}; for (var d in map) { if (Object.prototype.hasOwnProperty.call(map, d) && d > cut) out[d] = map[d]; } return out; }
 // 서버 관측 출석맵에서 연속일수: 오늘(없으면 어제)부터 하루도 안 빠지고 이어진 날 수. 끊기면 0.
 function streakFromDays(days, today) { if (!days) return 0; var cur = today; if (!days[cur]) { cur = isoAddDays(today, -1); if (!days[cur]) return 0; } var n = 0; while (days[cur]) { n++; cur = isoAddDays(cur, -1); } return n; }
+// Firestore REST 숫자 안전 파싱: 정수는 integerValue:"문자열", 실수는 doubleValue(숫자/문자열)로 온다.
+function fsNum(v) {
+  if (!v || typeof v !== 'object') return 0;
+  var raw = (v.integerValue != null) ? v.integerValue : (v.doubleValue != null ? v.doubleValue : null);
+  if (raw == null) return 0;
+  var n = Number(raw); return isFinite(n) ? n : 0;
+}
+// 상태문서(private/state)의 meta 에서 '자기보고 연속 원천' 파싱 — 대시보드 card() 가 쓰는
+//   summary.streak / summary.daily 와 같은 원천(meta.streak/lastDay/dailyHistory)·같은 창(35일)이다.
+//   { streak: 0..99999(클램프), lastDay: 'YYYY-MM-DD'|null, activeDays: {날짜:1}(dailyHistory 의 a>0, 최근 35일) }
+function parseSelfReport(doc, today) {
+  var out = { streak: 0, lastDay: null, activeDays: {} };
+  var meta = doc && doc.fields && doc.fields.meta && doc.fields.meta.mapValue && doc.fields.meta.mapValue.fields;
+  if (!meta) return out;
+  var s = Math.floor(fsNum(meta.streak));             // 스칼라 연속(콘솔 위조 상한 0..99999)
+  out.streak = s < 0 ? 0 : (s > 99999 ? 99999 : s);
+  var ld = meta.lastDay && meta.lastDay.stringValue;  // 'YYYY-MM-DD' 형식만 신뢰
+  if (typeof ld === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ld)) out.lastDay = ld;
+  var dh = meta.dailyHistory && meta.dailyHistory.mapValue && meta.dailyHistory.mapValue.fields;
+  if (dh) {
+    var cut = isoAddDays(today, -35);                 // 대시보드 summary.daily 창(최근 35일)과 동일
+    for (var day in dh) {
+      if (!Object.prototype.hasOwnProperty.call(dh, day)) continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day <= cut || day > today) continue;
+      var ef = dh[day] && dh[day].mapValue && dh[day].mapValue.fields;
+      if (ef && Math.floor(fsNum(ef.a)) > 0) out.activeDays[day] = 1;   // Math.floor = 대시보드 heatInt(trunc) 와 완전 동치(소수 a 경계까지)
+    }
+  }
+  return out;
+}
+// ★ 랭킹 연속 = 대시보드 card() 와 '동일한 max 산식':
+//     max( att 걷기(위조불가), 살아있는 자기보고 스칼라, att∪자기보고활동일 합집합 걷기 )
+//   대시보드가 이미 ✓ 없이 표시하는 자기보고를 att 와 합쳐, 두 화면이 같은 숫자를 낸다(사용자 요구).
+//   주 순위 지표 wk 는 여전히 att 상한(위조불가) — 연속은 동점 tiebreak·표시에만 쓰인다.
+function unifiedStreak(attMap, self, today) {
+  attMap = attMap || {}; self = self || { streak: 0, lastDay: null, activeDays: {} };
+  var y = isoAddDays(today, -1);
+  var aliveScalar = (self.lastDay === today || self.lastDay === y) ? (self.streak || 0) : 0;
+  var srv = streakFromDays(attMap, today);
+  var union = {}, d1, d2, ad = self.activeDays || {};
+  for (d1 in attMap) { if (Object.prototype.hasOwnProperty.call(attMap, d1)) union[d1] = 1; }
+  for (d2 in ad) { if (Object.prototype.hasOwnProperty.call(ad, d2)) union[d2] = 1; }
+  var uni = streakFromDays(union, today);
+  var m = srv; if (aliveScalar > m) m = aliveScalar; if (uni > m) m = uni; return m;
+}
+// 감쇠 anchor: 연속을 '살아있게' 하는 가장 최근 날짜(오늘/어제) — 없으면 null(연속 0).
+//   union(att∪자기보고활동일)·자기보고 lastDay 를 모두 후보로 삼는다 → 프리즈(lastDay=어제, 활동일 없음)
+//   학생도 anchor 를 얻는다. unifiedStreak>0 이면 세 성분 중 하나는 오늘/어제 anchor 를 가지므로 d 는 항상 존재.
+function anchorDay(attMap, self, today) {
+  attMap = attMap || {}; self = self || {};
+  var y = isoAddDays(today, -1), ad = self.activeDays || {};
+  if (attMap[today] || ad[today] || self.lastDay === today) return today;
+  if (attMap[y] || ad[y] || self.lastDay === y) return y;
+  return null;
+}
+// r10 레거시 meta(anchor d 없음) 근사 감쇠: 마지막 보드 기록 시각(at)의 KST 날짜가 오늘/어제가 아니면
+//   그 학생은 그 뒤로 sync 를 안 했다는 뜻 → 연속이 끊겼다고 보고 0 처리(다음 sync 때 d 가 생겨 정밀 치유).
+function staleByAt(atSec, today) {
+  if (typeof atSec !== 'number') return false;   // 알 수 없음 → 무회귀(표시 유지)
+  var atDay = kstToday(atSec * 1000), y = isoAddDays(today, -1);
+  return !(atDay === today || atDay === y);
+}
 // id 가 '유효(실제 단어)'인지: wordIds 가 주어지면 그 집합에 있어야 통과, 없으면(null) 전부 통과.
 //   wordIds=null 은 '읽기 실패 or words 맵 비어있음 → 판정 보류'(가용성 우선; getState 가 빈 words 를 null 로 승격).
 function validId(id, wordIds) { return wordIds ? wordIds.has(id) : true; }
@@ -372,7 +462,9 @@ function sortBoard(a, b) { return (b.wk - a.wk) || (b.streak - a.streak) || (a.n
 //   ⑤ 점수 감소(데이터 리셋 등 예외)는 즉시 기록.
 function boardWriteDue(prev, meta, nowSec, step, flushSec) {
   if (!prev) return true;
-  if (prev.n !== meta.n || prev.s !== meta.s) return true;
+  // 이름·연속(s)·감쇠 anchor(d) 변경 → 기록. (d 만 바뀌는 케이스: 연속이 끊겼다 같은 값으로 재시작하며
+  //   w 도 불변인 복습날 등 — d 를 안 쓰면 남의 행이 낡은 anchor 로 잘못 감쇠. r10→r11 이관도 이 비교로 트리거.)
+  if (prev.n !== meta.n || prev.s !== meta.s || (prev.d || null) !== (meta.d || null)) return true;
   var dw = (meta.w | 0) - (prev.w | 0);
   if (dw === 0) return false;
   if (dw < 0 || dw >= step) return true;
@@ -418,12 +510,14 @@ async function getUserInfo(env, uid, token) {
 //     읽기 실패(null)면 wordIds=null → 판정 보류(가용성). 규칙상 본인 문서라 학생 토큰으로 읽힘.
 async function getState(env, uid, token) {
   const doc = await fsGet(env, 'users/' + uid + '/private/state', token);
-  if (!doc) return { doneByDay: {}, wordIds: null };
+  const today = kstToday(Date.now());
+  if (!doc) return { doneByDay: {}, wordIds: null, self: { streak: 0, lastDay: null, activeDays: {} } };
   const ids = parseWordIds(doc);
   // words 맵이 비어있으면(리셋 직후·부분쓰기 등 이상 상태) 필터 대상이 없다 → all-pass(null)로 승격.
   //   '문서는 있는데 words 없음'이 doneByDay 완료를 전부 탈락시켜 출석/연속을 0으로 만드는 하드제로 비대칭 제거
   //   (읽기 실패 null 과 동일 가용성 취급). 정상 학생(words 보유)은 무변경 · 위조상한은 att 캡이라 완화 무해.
-  return { doneByDay: parseDoneByDay(doc), wordIds: ids.size ? ids : null };
+  //   self = 자기보고 연속 원천(meta.streak/lastDay/dailyHistory) — mask 없이 읽으므로 추가 read 비용 0.
+  return { doneByDay: parseDoneByDay(doc), wordIds: ids.size ? ids : null, self: parseSelfReport(doc, today) };
 }
 async function fsGet(env, docPath, idToken, mask) {
   var url = 'https://firestore.googleapis.com/v1/projects/' + env.PROJECT_ID + '/databases/(default)/documents/' + docPath;
@@ -463,4 +557,4 @@ function json(o, status, cors) {
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, capOf, weekLedgerBound, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countDayDone, countAllDone, validId, weekMondayKST, parseDoneByDay, parseWordIds, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue };
+export const _internals = { validWeek, clampInt, capOf, weekLedgerBound, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countDayDone, countAllDone, validId, weekMondayKST, parseDoneByDay, parseWordIds, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue, fsNum, parseSelfReport, unifiedStreak, anchorDay, staleByAt };

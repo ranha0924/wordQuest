@@ -1447,9 +1447,10 @@ async function renderClassRank(body,C){
   }
   const active=(info.list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!'); return; }
-  // 🔥연속: '내 행'은 앱이 아는 실제 연속(liveStreak)을 서버값과 max 로 표시 → 서버가 아직 관측 못한
-  //   정직한 연속이 랭킹에서 빠지지 않게(홈·대시보드와 일치). 남의 행은 서버값 그대로(다른 클라 신뢰
-  //   불가·위조 방지). 순위 정렬은 서버(sortBoard)가 하므로 표시만 바뀌고 순위엔 영향 없음.
+  // 🔥연속: 서버(워커 r11)가 '대시보드와 동일한 산식(unifiedStreak: att ∪ 자기보고)'으로 남의 행 연속을
+  //   내려주고 오늘/어제가 아니면 감쇠(0)한다 → 랭킹 🔥값 = 대시보드 🔥값. '내 행'은 앱이 아는 실제
+  //   연속(liveStreak)과 서버값의 max 로 표시(서버가 방금 푼 오늘분을 아직 못 본 순간의 정직한 연속 보존).
+  //   순위 정렬은 서버(sortBoard)가 감쇠 후 값으로 하므로 표시만 바뀌고 순위엔 영향 없음.
   const myLive=liveStreak();
   const row=(e,i)=>{ const st=e.me?Math.max(e.streak|0,myLive):(e.streak|0);
     return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
@@ -1470,6 +1471,7 @@ async function renderGlobalRank(body,C){
   const active=(info.list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!'); return; }
   // '내 행'은 실제 연속(liveStreak)을 서버값과 max 로 표시(renderClassRank 와 동일 철학 — 남의 행·정렬 무관).
+  //   남의 행 연속은 서버(워커 r11)가 대시보드와 동일 산식·감쇠로 내려준 값 → 랭킹 🔥 = 대시보드 🔥.
   const myLive=liveStreak();
   const row=(e,i)=>{ const st=e.me?Math.max(e.streak|0,myLive):(e.streak|0);
     return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
@@ -2253,7 +2255,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v114';
+var BUILD='v115';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
