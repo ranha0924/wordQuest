@@ -81,7 +81,8 @@ async function handleFetch(req) {
   }
 }
 
-const REV = 'r7';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r8';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r8: 반 보드 점수 스로틀 완화(RANK_STEP 기본 5→1) → 인게임 반 랭킹이 대시보드만큼 신선(freshness 파리티).
                               //   r7: getState 빈 words→null(all-pass·하드제로 제거) · att 첫출석 write 유실 시 attDegraded 신호.
                               //   r6: 주간점수를 '서버 관측 원장(att)' 으로 상한(일 RANK_DAILY_CAP·주 RANK_WEEK_CAP,
                               //       백데이트 불가) → doneByDay+words 단독 위조 무력화. r5: 위조 id 필터 + 서버 KST 산정.
@@ -121,12 +122,12 @@ async function handleSync(req, env, uid, token, cors) {
   //   실사고(2026-07-16): sync당 최대 5회 put × 전교생 종일 동기화 → 한도 초과 →
   //   put 이 throw → /sync 전체가 500 → 이후 학생들 점수가 안 올라갔다(랭킹 미등재).
   //   대책(boardWriteDue): ①이번 주 키가 없으면 무조건 기록 — '등재'가 최우선(한 주 2회면 됨)
-  //   ②등재 후엔 이름·연속 변경, RANK_STEP(기본 5)단어 이상 진행, 마지막 기록 후
-  //   RANK_FLUSH_MIN(기본 15)분 경과 때만 갱신 — 학습 중 sync 폭주가 put 폭주로 안 이어진다.
+  //   ②등재 후엔 이름·연속 변경, RANK_STEP(기본 1 → 점수 바뀌면 매번 기록: 인게임 반 랭킹을 대시보드와
+  //   동일 신선도로 맞춤. Paid KV 라 안전. 옛 기본 5·RANK_FLUSH_MIN 15분은 무료 한도 보호용이었고 env 로 재설정 가능)
   //   ③put 은 개별 try/catch — 한도가 차도 /sync 는 200 + 점수 반환, 실패는 degraded 로 알린다.
   //   (내 점수 '표시'는 /board 가 KV 와 무관하게 즉석 계산해 병합하므로 put 이 밀려도 안 사라짐)
   const nowSec = Math.floor(Date.now() / 1000);
-  const step = env.RANK_STEP ? clampInt(env.RANK_STEP, 1, 1000) : 5;
+  const step = env.RANK_STEP ? clampInt(env.RANK_STEP, 1, 1000) : 1;  // 기본 1: 점수 바뀌면 매 sync 기록 → 인게임 반 랭킹을 대시보드만큼 신선하게(Paid KV 라 안전). env 로 상향 가능.
   const flushSec = (env.RANK_FLUSH_MIN ? clampInt(env.RANK_FLUSH_MIN, 1, 1440) : 15) * 60;
   let degraded = false;
   if (cid) { if (!(await putBoard(env, 'c:' + week + ':' + cid + ':' + uid, meta, nowSec, step, flushSec))) degraded = true; }
