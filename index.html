@@ -1447,16 +1447,14 @@ async function renderClassRank(body,C){
   }
   const active=(info.list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 친구가 없어요.<br>먼저 단어를 풀어 1등을 차지해요!'); return; }
-  // 🔥연속: 서버(워커 r11)가 '대시보드와 동일한 산식(unifiedStreak: att ∪ 자기보고)'으로 남의 행 연속을
-  //   내려주고 오늘/어제가 아니면 감쇠(0)한다 → 랭킹 🔥값 = 대시보드 🔥값. '내 행'은 앱이 아는 실제
-  //   연속(liveStreak)과 서버값의 max 로 표시(서버가 방금 푼 오늘분을 아직 못 본 순간의 정직한 연속 보존).
-  //   순위 정렬은 서버(sortBoard)가 감쇠 후 값으로 하므로 표시만 바뀌고 순위엔 영향 없음.
-  const myLive=liveStreak();
-  const row=(e,i)=>{ const st=e.me?Math.max(e.streak|0,myLive):(e.streak|0);
+  // 🔥연속: 서버(워커 r12)가 att-only(streakFromDays)로 산정한 값을 모든 행에 내려준다 → 위조 불가.
+  //   대시보드 /teacher 도 같은 att 값이라 랭킹 🔥 = 대시보드 🔥. '내 행'도 서버가 '오늘 live att 보정' 후
+  //   산정하므로 방금 푼 오늘분이 반영된다(과거의 클라 liveStreak max 주입은 자기보고라 제거 — 본인 연속 위조 차단).
+  const row=(e,i)=>{ const st=e.streak|0;
     return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
   let html=active.map(row).join('');   // 반 전원 다 표시(이번 주 푼 반 애들 전부) — 상한 없음
   const mi=active.findIndex(e=>e.me);
-  if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span>'+(myLive>0?'<span class="rkst">🔥'+myLive+'</span>':'')+'</div>';
+  if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
   body.innerHTML=html+_rkDegradedNote(C);
 }
 // 전체 랭킹: 이번 주 완료 단어 수 순(로그인 사용자 전체) — 반 랭킹과 동일 기준
@@ -1470,15 +1468,14 @@ async function renderGlobalRank(body,C){
   }
   const active=(info.list||[]).filter(e=>(e.wk|0)>0);
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!'); return; }
-  // '내 행'은 실제 연속(liveStreak)을 서버값과 max 로 표시(renderClassRank 와 동일 철학 — 남의 행·정렬 무관).
-  //   남의 행 연속은 서버(워커 r11)가 대시보드와 동일 산식·감쇠로 내려준 값 → 랭킹 🔥 = 대시보드 🔥.
-  const myLive=liveStreak();
-  const row=(e,i)=>{ const st=e.me?Math.max(e.streak|0,myLive):(e.streak|0);
+  // 연속 = 서버 att 값(위조 불가). 내 행도 서버가 '오늘 live att 보정' 후 산정 → 클라 liveStreak max 주입 제거.
+  //   남의 행 연속은 서버(워커 r12)가 att-only 로 내려준 값 → 랭킹 🔥 = 대시보드 🔥.
+  const row=(e,i)=>{ const st=e.streak|0;
     return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
   let html=active.slice(0,100).map(row).join('');   // 전체 랭킹 상위 100
   const mi=active.findIndex(e=>e.me);
   if(mi>=100) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
-  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span>'+(myLive>0?'<span class="rkst">🔥'+myLive+'</span>':'')+'</div>';
+  else if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
   body.innerHTML=html+_rkDegradedNote(C);
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
@@ -2255,7 +2252,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v115';
+var BUILD='v116';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3670,32 +3667,33 @@ async function renderTeacherStudents(){
   const card=s=>{
     const sm=s.summary||{};
     const v=vb&&vb.byUid[s.uid];   // 이 학생의 서버 검증 지표(없으면 undefined = 아직 서버가 관측 못함)
-    // 오늘 학습·히트맵은 합집합(mergedDaily)으로 — 정직한 학생이 '학습 없음'으로 잘못 뜨는 것 방지.
-    //   연속·학습일 숫자와 ✓ 는 서버 검증값(v)이 있을 때만 그 값을 쓰고, 없으면 자기보고로 폴백한다.
-    //   ★서버가 아직 관측 못했다고 화면을 통째로 비우면 안 된다(워커 배포 직후 전원 공백 사고 방지).
+    // 오늘 학습·히트맵은 합집합(mergedDaily=서버 att ∪ 자기보고)으로 — 정직한 학생이 '학습 없음'으로 잘못 뜨는 것 방지.
+    //   단, 연속·학습일 '숫자'와 ✓ 는 아래에서 서버 att 만 쓴다(위조 차단). 합집합은 히트맵·'오늘 점' 표시 존재감에만 쓴다.
     const verifiedHere=!!v;
     const dailySrc=mergedDaily(s);
     const todayE=dailySrc[t]||null;
     const studied=!!todayE;
     const todayCount=todayE?int(todayE.w!=null?todayE.w:todayE.ok):0;
-    // 🔥연속·📅학습일 = 서버 관측(위조불가) ∪ 자기보고(앱 기록) 의 큰 값 → 정직한데 서버가 아직 못 본
-    //   학생이 0으로 안 빠진다(오늘학습·히트맵과 동일 union 철학). ✓ 는 '서버가 표시값 이상 관측' 일 때만
-    //   붙여 위조 숫자엔 안 붙는다(self 를 부풀려도 srv 가 그만큼 없으면 ✓ 없음 → 선생님이 구분).
-    // ★ 연속·학습일을 '히트맵과 같은 원천'(dailySrc=서버 att ∪ 자기보고)·같은 판정(heatInt(a)>0)에서도 산정
-    //   → '히트맵엔 학습이 보이는데 연속만 0' 이던 불일치를 없앤다. (원인: recordStudy 는 매 문항 daily 맵을
-    //   갱신하지만 스칼라 streak/lastDay 는 'lastDay!==오늘' 일 때만 갱신하고, 리셋·기기간 병합이 meta 를 0으로
-    //   되돌리면 daily 맵은 살아있는데 스칼라·att 만 0 인 학생이 생긴다 → 기존 max(srv,self) 가 둘 다 0.)
-    //   att 값은 항상 ≥1 이라 att 날은 dailySrc 에 다 떠서 mStreak ≥ srvStreak → ✓(srvStreak>=streak)는
-    //   '서버가 표시된 연속 전체를 관측' 일 때만 붙는다(자기보고로 부풀린 분엔 ✓ 안 붙어 선생님이 구분).
-    const _act=d=>heatInt((dailySrc[d]||{}).a)>0;   // 히트맵 색칠 조건과 글자 그대로 동일한 '학습한 날' 판정
-    const mStreak=(()=>{ let cur=t; if(!_act(cur)){ cur=y; if(!_act(cur)) return 0; } let n=0; while(_act(cur)){ n++; cur=addDays(cur,-1); } return n; })();
-    const mStudy=Object.keys(dailySrc).filter(_act).length;
-    const selfStreak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0;   // 앱 liveStreak 스칼라(오늘/어제 생존 시만)
-    const srvStreak=verifiedHere?int(v.streak):0;
-    const streak=Math.max(srvStreak,selfStreak,mStreak), streakVer=srvStreak>0&&srvStreak>=streak;
+    // ★ 연속·학습일 '숫자'와 ✓ 는 서버 관측(att)만 쓴다(위조 불가). 자기보고(summary.streak/daily)는
+    //   숫자·순위에서 제외하고, 서버값보다 클 때만 '미검증' 힌트로 노출(정직한 미관측 학생 투명 표시).
+    //   히트맵·'오늘 학습' 점(dailySrc)만 서버∪자기보고 합집합 유지. (2026-07-17 연속 위조 차단)
+    //   ★핵심: verifiedOn(워커 응답) 분기에선 미관측 학생(v 없음)=헤드라인 0 → 콘솔로 summary.streak 만
+    //     위조한 '미동기화 치터'가 헤드라인 숫자를 못 만든다(자기보고는 라벨 힌트로만).
+    const srvStreak=verifiedHere?int(v.streak):0, srvStudy=verifiedHere?int(v.studyDays):0;
+    const selfStreak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0;   // 앱 자기보고 스칼라(오늘/어제 생존 시만)
     const selfStudy=Object.keys(sm.daily||{}).filter(d=>heatInt((sm.daily[d]||{}).a)>0).length;
-    const srvStudy=verifiedHere?int(v.studyDays):0;
-    const studyDays=Math.max(srvStudy,selfStudy,mStudy), studyVer=srvStudy>0&&srvStudy>=studyDays;
+    let streak,studyDays,streakVer,studyVer,streakHint,studyHint;
+    if(verifiedOn){   // 워커 응답 O → 서버 att 값이 권위. 자기보고는 미검증 힌트로만.
+      streak=srvStreak; studyDays=srvStudy;
+      streakVer=srvStreak>0; studyVer=srvStudy>0;   // ✓ 는 서버가 실제 관측(>0)일 때만(0에 ✓ 안 붙임)
+      streakHint=selfStreak>streak?Math.min(selfStreak,99999):0;   // 자기보고>서버 → '미검증' 힌트(클램프)
+      studyHint=selfStudy>studyDays?Math.min(selfStudy,99999):0;
+    } else {   // 워커 OFF/무응답(vb=null) → 서버 데이터 없음: 자기보고 폴백(배너가 '서버 검증 미적용' 경고). 히트맵 걷기 보강.
+      const _act=d=>heatInt((dailySrc[d]||{}).a)>0;
+      const mStreak=(()=>{ let cur=t; if(!_act(cur)){ cur=y; if(!_act(cur)) return 0; } let n=0; while(_act(cur)){ n++; cur=addDays(cur,-1); } return n; })();
+      streak=Math.max(selfStreak,mStreak); studyDays=Object.keys(dailySrc).filter(_act).length;
+      streakVer=false; studyVer=false; streakHint=0; studyHint=0;
+    }
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';   // 정답률·포획은 앱 기록(서버 검증 대상 아님)
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
     const nm=esc(s.name||s.email||'(이름 없음)');
@@ -3704,6 +3702,7 @@ async function renderTeacherStudents(){
     const detail=dailyBreakdownHTML(dailySrc,verifiedHere);
     const _chk=' <span title="서버가 관측한 값 · 위조 불가" style="color:#5fe06a;font-size:10px;">✓</span>';
     const chkStreak=streakVer?_chk:'', chkStudy=studyVer?_chk:'';   // 지표별로 ✓ 분리(서버가 그 숫자를 뒷받침할 때만)
+    const _hint=n=>n?' <span title="학생 앱이 보고한 값 · 서버 미검증(위조 가능)" style="color:#8a7a5a;font-size:10px;">· 앱 '+n+'일 미검증</span>':'';   // 자기보고>서버 일 때만
     return '<div class="tccard" data-uid="'+esc(s.uid)+'" title="눌러서 매일 학습량 보기" style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
         +'<div style="font-size:14px;font-weight:700;color:#e8e8f0;">'+dot+nm+'</div>'
@@ -3714,8 +3713,8 @@ async function renderTeacherStudents(){
         +'</div>'
       +'</div>'
       +'<div style="display:flex;gap:14px;font-size:12px;color:#b7b7d8;margin-bottom:8px;flex-wrap:wrap;">'
-        +'<span>🔥 연속 <b style="color:#f0881c;">'+streak+'일</b>'+chkStreak+'</span>'
-        +'<span>📅 학습일 <b style="color:#8fd0ff;">'+studyDays+'일</b>'+chkStudy+'</span>'
+        +'<span>🔥 연속 <b style="color:#f0881c;">'+streak+'일</b>'+chkStreak+_hint(streakHint)+'</span>'
+        +'<span>📅 학습일 <b style="color:#8fd0ff;">'+studyDays+'일</b>'+chkStudy+_hint(studyHint)+'</span>'
         +'<span>🎯 정답률 <b style="color:#5fe06a;">'+acc+'</b></span>'
         +'<span>⭐ 포획 <b style="color:#ffc63a;">'+cap+' / '+tot+'</b></span>'
       +'</div>'
@@ -3769,7 +3768,7 @@ async function renderTeacherStudents(){
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
   if(verifiedOn)
-    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일 숫자는 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">✓ <b>없는</b> 🔥연속·📅학습일과 오늘 학습·히트맵은 서버 관측값과 학생 앱 기록을 <b>합쳐</b> 보여줘요(서버가 아직 못 본 학생도 0으로 안 빠지게 — 앱 보고값이라 조작 여지는 있어요). 서버 검증값은 학생이 접속·동기화하면서 쌓여 ✓로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
+    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — 🔥연속·📅학습일 <b>숫자는 서버가 관측한 값(att)</b>이라 학생이 못 바꿔요(✓=서버 관측). <span style="color:#8a8ab0;">뒤에 붙는 <b>· 앱 N일 미검증</b>은 학생 앱이 보고한 값(서버가 아직 못 봤거나 조작된 값)이라 <b>참고만</b> 하세요 — 숫자·순위엔 안 들어가요. 오늘 학습·히트맵은 서버 관측 ∪ 앱 기록을 합쳐 표시(정직한 학생이 0으로 안 빠지게). 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
   else
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#ffd27a;">⚠️ <b>서버 검증 미적용</b> — 아래 🔥연속·📅학습일·히트맵은 <b>학생 앱이 보고한 값</b>이라 조작될 수 있어요. rank-worker를 재배포하면 서버 검증값으로 자동 전환됩니다.</div>';
   // 🏆 이번 주 반 랭킹 — 선택한 반의 학생을 이번 주 완료 단어 순으로.
