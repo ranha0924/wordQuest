@@ -2245,7 +2245,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v112';
+var BUILD='v113';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3671,12 +3671,21 @@ async function renderTeacherStudents(){
     // 🔥연속·📅학습일 = 서버 관측(위조불가) ∪ 자기보고(앱 기록) 의 큰 값 → 정직한데 서버가 아직 못 본
     //   학생이 0으로 안 빠진다(오늘학습·히트맵과 동일 union 철학). ✓ 는 '서버가 표시값 이상 관측' 일 때만
     //   붙여 위조 숫자엔 안 붙는다(self 를 부풀려도 srv 가 그만큼 없으면 ✓ 없음 → 선생님이 구분).
-    const selfStreak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0;   // 앱 liveStreak 규칙(오늘/어제 생존 시만)
+    // ★ 연속·학습일을 '히트맵과 같은 원천'(dailySrc=서버 att ∪ 자기보고)·같은 판정(heatInt(a)>0)에서도 산정
+    //   → '히트맵엔 학습이 보이는데 연속만 0' 이던 불일치를 없앤다. (원인: recordStudy 는 매 문항 daily 맵을
+    //   갱신하지만 스칼라 streak/lastDay 는 'lastDay!==오늘' 일 때만 갱신하고, 리셋·기기간 병합이 meta 를 0으로
+    //   되돌리면 daily 맵은 살아있는데 스칼라·att 만 0 인 학생이 생긴다 → 기존 max(srv,self) 가 둘 다 0.)
+    //   att 값은 항상 ≥1 이라 att 날은 dailySrc 에 다 떠서 mStreak ≥ srvStreak → ✓(srvStreak>=streak)는
+    //   '서버가 표시된 연속 전체를 관측' 일 때만 붙는다(자기보고로 부풀린 분엔 ✓ 안 붙어 선생님이 구분).
+    const _act=d=>heatInt((dailySrc[d]||{}).a)>0;   // 히트맵 색칠 조건과 글자 그대로 동일한 '학습한 날' 판정
+    const mStreak=(()=>{ let cur=t; if(!_act(cur)){ cur=y; if(!_act(cur)) return 0; } let n=0; while(_act(cur)){ n++; cur=addDays(cur,-1); } return n; })();
+    const mStudy=Object.keys(dailySrc).filter(_act).length;
+    const selfStreak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0;   // 앱 liveStreak 스칼라(오늘/어제 생존 시만)
     const srvStreak=verifiedHere?int(v.streak):0;
-    const streak=Math.max(srvStreak,selfStreak), streakVer=srvStreak>0&&srvStreak>=selfStreak;
+    const streak=Math.max(srvStreak,selfStreak,mStreak), streakVer=srvStreak>0&&srvStreak>=streak;
     const selfStudy=Object.keys(sm.daily||{}).filter(d=>heatInt((sm.daily[d]||{}).a)>0).length;
     const srvStudy=verifiedHere?int(v.studyDays):0;
-    const studyDays=Math.max(srvStudy,selfStudy), studyVer=srvStudy>0&&srvStudy>=selfStudy;
+    const studyDays=Math.max(srvStudy,selfStudy,mStudy), studyVer=srvStudy>0&&srvStudy>=studyDays;
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';   // 정답률·포획은 앱 기록(서버 검증 대상 아님)
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
     const nm=esc(s.name||s.email||'(이름 없음)');
