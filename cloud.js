@@ -194,7 +194,7 @@
       var d = await r.json(), list = (d && d.list) || [], byUid = {};
       for (var i = 0; i < list.length; i++) {
         var e = list[i]; if (!e || !e.uid) continue;
-        byUid[e.uid] = { streak: e.streak | 0, studyDays: e.studyDays | 0, days: (e.days && typeof e.days === 'object') ? e.days : {} };
+        byUid[e.uid] = { streak: e.streak | 0, studyDays: e.studyDays | 0, days: (e.days && typeof e.days === 'object') ? e.days : {}, weekWords: (typeof e.weekWords === 'number' ? e.weekWords : null) };
       }
       // dailyCap/weekCap: 워커가 내려준 서버 원장 상한 파라미터(대시보드 랭킹이 리더보드와 같은 산식으로
       //   자기보고 weekWords 를 att 로 상한하는 데 씀). 구버전 워커면 없음 → 기본값(워커 기본과 일치)으로 폴백.

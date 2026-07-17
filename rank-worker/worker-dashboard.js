@@ -81,7 +81,8 @@ async function handleFetch(req) {
   }
 }
 
-const REV = 'r8';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r9';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r9: /teacher 가 학생별 반 보드 점수(weekWords) 실어보냄 → 대시보드가 인게임과 '같은 값' 표시(단일 소스·false-0 제거).
                               //   r8: 반 보드 점수 스로틀 완화(RANK_STEP 기본 5→1) → 인게임 반 랭킹이 대시보드만큼 신선(freshness 파리티).
                               //   r7: getState 빈 words→null(all-pass·하드제로 제거) · att 첫출석 write 유실 시 attDegraded 신호.
                               //   r6: 주간점수를 '서버 관측 원장(att)' 으로 상한(일 RANK_DAILY_CAP·주 RANK_WEEK_CAP,
@@ -197,6 +198,7 @@ async function handleTeacher(env, authUser, token, url, cors) {
   if (!ok) return json({ error: 'forbidden' }, 403, cors);
 
   const today = kstToday(Date.now());
+  const week = weekMondayKST(Date.now());   // 반 보드 키(c:주:반:uid) 조회용 — 인게임 랭킹과 같은 주 기준
   const out = [];
   let cursor;
   const prefix = 'mem:' + cid + ':';
@@ -208,7 +210,12 @@ async function handleTeacher(env, authUser, token, url, cors) {
       let att = null;
       try { att = await env.RANK_KV.get('att:' + suid, { type: 'json' }); } catch (e) { /* 없음 */ }
       att = (att && typeof att === 'object') ? att : {};
-      out.push({ uid: suid, name: nm, streak: streakFromDays(att, today), studyDays: Object.keys(att).length, days: att });
+      // ★ 인게임 반 랭킹과 '같은 값'으로 통일: /board 가 쓰는 반 보드 KV(c:주:반:uid)의 점수 w 를 실어 보낸다.
+      //   대시보드가 이 값을 그대로 표시 → 두 화면 100% 일치(자체 att-상한 재계산 폐기 → false-0 제거).
+      //   보드 키 없으면(0단어·미동기화) null → 대시보드가 기존 계산으로 폴백.
+      let weekWords = null;
+      try { const bm = (await env.RANK_KV.getWithMetadata('c:' + week + ':' + cid + ':' + suid)).metadata; if (bm && typeof bm.w === 'number') weekWords = bm.w; } catch (e) { /* 없음 → null */ }
+      out.push({ uid: suid, name: nm, streak: streakFromDays(att, today), studyDays: Object.keys(att).length, days: att, weekWords: weekWords });
     }
     cursor = res.list_complete ? null : res.cursor;
   } while (cursor);

@@ -2245,7 +2245,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v111';
+var BUILD='v112';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3724,6 +3724,12 @@ async function renderTeacherStudents(){
   const DCAP=int(vb&&vb.dailyCap)||60, WCAP=int(vb&&vb.weekCap)||300;
   const weekWordsOf=s=>{
     const sm=s.summary||{};
+    // ★ 인게임 랭킹과 '단일 소스'로 통일: 워커 /teacher 가 준 반 보드 점수(랭킹 창이 쓰는 바로 그 값)가
+    //   있으면 그걸 그대로 표시 → 두 화면이 같은 숫자를 읽어 100% 일치. 자체 att-상한 재계산이 빈 att 로
+    //   honest 학생을 0 으로 깎던 false-0(예: 랭킹 105 / 대시 0)도 사라진다. 없으면(구버전 워커·보드
+    //   미기록) 아래 자기보고+att 상한 폴백(무회귀).
+    const vw=vb&&vb.byUid&&vb.byUid[s.uid]&&vb.byUid[s.uid].weekWords;
+    if(useServerRank && vb && typeof vw==='number') return int(vw);
     // 원값(자기보고/스냅샷): 워커 ON 이면 summary.weekWords(주간 유니크), 아니면 날짜별 합.
     let raw;
     if(useServerRank && sm.weekWords!=null && sm.weekOf===weekMon) raw=int(sm.weekWords);
@@ -3980,7 +3986,7 @@ document.addEventListener('visibilitychange',()=>{
   }
 })();
 </script>
-<script type="module" src="cloud.js?v=111"></script>
+<script type="module" src="cloud.js?v=112"></script>
 <!-- PWA: 서비스 워커 등록 + 설치 버튼(보안 컨텍스트에서만 · file://·미지원 시 조용히 무시) -->
 <script>
 (function(){
