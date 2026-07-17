@@ -65,7 +65,11 @@ export default {
   },
 };
 
-const REV = 'r11';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r12';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r12: 랭킹 연속(🔥)을 att-only(streakFromDays)로 복원 → 자기보고(meta.streak) 위조 차단.
+                              //        r11 이 unifiedStreak 로 자기보고를 max 합산해 학생이 콘솔로 meta.streak=99999 를 써서
+                              //        연속을 위조하던 구멍을 닫음. 대시보드 /teacher 도 streakFromDays(att) 라 두 화면 값 일치 유지.
+                              //        자기보고는 앱 표시 '미검증 힌트'로만(순위·헤드라인 미반영).
                               //   r11: 랭킹 연속(🔥)을 '대시보드와 동일한 max 산식'(unifiedStreak: att ∪ 자기보고 스칼라·활동일)으로 통일 →
                               //        대시보드 표시값과 100% 일치(사용자 요구). 보드 meta 에 감쇠 anchor(d) 저장 → 오늘/어제가 아니면 0 표시
                               //        (끊긴 연속이 랭킹에 잔존하던 역방향 불일치 해소). r10 레거시(d 없음)는 at 로 근사 감쇠 후 다음 sync 에 치유.
@@ -103,24 +107,17 @@ async function handleSync(req, env, uid, token, cors) {
   const dailyCap = capOf(env.RANK_DAILY_CAP, 60), weekCap = capOf(env.RANK_WEEK_CAP, 300);
   const bound = att.ok ? weekLedgerBound(att.map, week, today, dailyCap, weekCap) : rawWk; // 읽기실패→무클립(가용성)
   const wk = rawWk < bound ? rawWk : bound;                     // ★ 서버 원장 상한 적용 최종 점수
-  // ★ 연속(streak)을 att 기반으로 산정 → 대시보드 /teacher(streakFromDays(att)) 와 동일한 서버검증값을
-  //   보드 KV(meta.s)·/sync 응답에 실어, 랭킹 '남의 행'도 그 값을 읽게 한다(취약한 st: 카운터가 끊겨
-  //   0 으로 뜨던 문제 해소). att 는 서버 오늘키에만 기록(백데이트 불가)이라 위조 불가 유지. att 읽기
-  //   실패(인프라 장애·희귀) 시에만 기존 st: 폴백(가용성).
-  //   ★ r11: att 걷기만이 아니라 '자기보고(대시보드가 이미 표시하는 값)까지 합친 unifiedStreak' 로 산정 →
-  //     대시보드 🔥값과 랭킹 🔥값이 같아진다. anchor(d)도 함께 산정해 보드에 저장(감쇠·역방향 불일치 해소).
-  const self = pst.self;
+  // ★ 연속(streak) = 서버 관측 원장(att)만으로 산정(streakFromDays) → 위조 불가(att 는 서버 시계 오늘키에만
+  //   기록·백데이트 불가). 자기보고(meta.streak/lastDay/dailyHistory)는 절대 섞지 않는다(2026-07-17 위조 차단):
+  //   과거 r11 은 unifiedStreak 로 자기보고를 max 합산 → 학생이 meta.streak=99999 로 랭킹 연속을 위조했음.
+  //   att 읽기 실패(인프라 장애·희귀) 시에만 서버관측 st: 카운터로 폴백(학생이 못 쓰는 값·자기보고 미포함).
   let streak, anchor;
   if (att.ok) {
-    streak = unifiedStreak(att.map, self, today);
-    anchor = anchorDay(att.map, self, today);
+    streak = streakFromDays(att.map, today);
+    anchor = anchorDay(att.map, {}, today);        // self={} → att 만으로 anchor(감쇠 기준)
   } else {
-    // att 읽기 실패(인프라 장애·희귀) — 자기보고(att 없음) unified 와 기존 st: 카운터 폴백의 max(가용성).
-    const un = unifiedStreak({}, self, today);
-    const fb = await updateStreak(env, uid, today, activeToday);
-    streak = fb > un ? fb : un;
-    anchor = anchorDay({}, self, today);
-    if (anchor === null && streak > 0) anchor = activeToday ? today : isoAddDays(today, -1);   // st: 폴백이 이긴 경우 anchor 보정
+    streak = await updateStreak(env, uid, today, activeToday);
+    anchor = streak > 0 ? (activeToday ? today : isoAddDays(today, -1)) : null;
   }
   const cid = await getClassId(env, uid, token);             // 반 랭킹 보드 키에만 사용
 
@@ -313,10 +310,10 @@ async function handleBoard(env, uid, token, url, cors) {
       const wkLive = rawLive < bound ? rawLive : bound;
       let st = null;
       try { st = await env.RANK_KV.get('st:' + uid, { type: 'json' }); } catch (e) { /* 없음 */ }
-      // ★ 내 행 연속도 unifiedStreak(att ∪ 자기보고) — 대시보드·남의 행과 동일 산식(오늘 live att 보정 포함).
-      //   unifiedStreak 는 오늘/어제 anchor 가 없으면 0 을 반환하므로 별도 감쇠 불필요(끊긴 내 연속도 0).
-      //   att 읽기 실패 시에만 unified(att 없음)와 기존 st: 폴백의 max(가용성).
-      let stLive = unifiedStreak(attMap, pst.self, sToday);
+      // ★ 내 행 연속도 att 만으로 산정(streakFromDays) — 대시보드·남의 행과 동일 산식(오늘 live att 보정 포함).
+      //   streakFromDays 는 오늘/어제 att 가 없으면 0 → 별도 감쇠 불필요(끊긴 내 연속도 0). 자기보고 미포함(위조 차단).
+      //   att 읽기 실패 시에만 서버관측 st: 카운터 폴백(가용성).
+      let stLive = streakFromDays(attMap, sToday);
       if (!attOk) { const _fb = streakCompute(st, sToday, countDayDone(dbd, sToday, wordIds) > 0).display; if (_fb > stLive) stLive = _fb; }
       const idx = out.findIndex(function (e) { return e.uid === uid; });
       const meRow = { uid: uid, name: info.name || (idx >= 0 ? out[idx].name : '') || '익명', wk: wkLive, streak: stLive, me: true };
@@ -392,9 +389,12 @@ function parseSelfReport(doc, today) {
   }
   return out;
 }
-// ★ 랭킹 연속 = 대시보드 card() 와 '동일한 max 산식':
+// ⚠ 미사용(2026-07-17~ r12): 연속은 att-only(streakFromDays)로만 산정한다 — 자기보고 위조 차단.
+//   이 함수와 parseSelfReport(getState.self)는 프로덕션 streak 경로에서 호출하지 않는다. 삭제하지 않고
+//   보존하는 이유: 히스토리 + 향후 '미검증 힌트'를 서버화할 때 참고용. ★호출부를 부활시키지 말 것.
+// (원래 설명) 랭킹 연속 = 대시보드 card() 와 '동일한 max 산식':
 //     max( att 걷기(위조불가), 살아있는 자기보고 스칼라, att∪자기보고활동일 합집합 걷기 )
-//   대시보드가 이미 ✓ 없이 표시하는 자기보고를 att 와 합쳐, 두 화면이 같은 숫자를 낸다(사용자 요구).
+//   대시보드가 이미 ✓ 없이 표시하는 자기보고를 att 와 합쳐, 두 화면이 같은 숫자를 낸다.
 //   주 순위 지표 wk 는 여전히 att 상한(위조불가) — 연속은 동점 tiebreak·표시에만 쓰인다.
 function unifiedStreak(attMap, self, today) {
   attMap = attMap || {}; self = self || { streak: 0, lastDay: null, activeDays: {} };
