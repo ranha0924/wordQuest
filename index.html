@@ -1342,8 +1342,10 @@ const $=id=>document.getElementById(id);
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 /* ================= dates ================= */
-function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function addDays(ds,n){const p=ds.split('-').map(Number);const d=new Date(p[0],p[1]-1,p[2]+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// ★날짜 키는 KST 고정(서버 워커 kstToday 와 일치) — 기기 시간대/시계가 KST 가 아닌 학생도 서버·자기보고
+//   날짜가 어긋나지 않게. 한국(KST) 기기는 로컬=KST 라 문자열 동일(회귀 0), 비-KST 기기만 서버와 정렬됨.
+function today(){const d=new Date(Date.now()+9*3600*1000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+function addDays(ds,n){const p=ds.split('-').map(Number);const d=new Date(Date.UTC(p[0],p[1]-1,p[2]+n));return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
 
 /* ===== 날짜별 학습 기록(연속·오늘 공부 세세 추적) =====
    meta.dailyHistory[YYYY-MM-DD] = {a:시도수, ok:정답수}. 매 문항마다 갱신. */
@@ -2243,7 +2245,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v102';
+var BUILD='v111';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3666,15 +3668,23 @@ async function renderTeacherStudents(){
     const todayE=dailySrc[t]||null;
     const studied=!!todayE;
     const todayCount=todayE?int(todayE.w!=null?todayE.w:todayE.ok):0;
-    const streak=verifiedHere?int(v.streak):((sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0);
-    const studyDays=verifiedHere?int(v.studyDays):Object.keys(sm.daily||{}).filter(d=>heatInt((sm.daily[d]||{}).a)>0).length;
+    // 🔥연속·📅학습일 = 서버 관측(위조불가) ∪ 자기보고(앱 기록) 의 큰 값 → 정직한데 서버가 아직 못 본
+    //   학생이 0으로 안 빠진다(오늘학습·히트맵과 동일 union 철학). ✓ 는 '서버가 표시값 이상 관측' 일 때만
+    //   붙여 위조 숫자엔 안 붙는다(self 를 부풀려도 srv 가 그만큼 없으면 ✓ 없음 → 선생님이 구분).
+    const selfStreak=(sm.lastDay===t||sm.lastDay===y)?int(sm.streak):0;   // 앱 liveStreak 규칙(오늘/어제 생존 시만)
+    const srvStreak=verifiedHere?int(v.streak):0;
+    const streak=Math.max(srvStreak,selfStreak), streakVer=srvStreak>0&&srvStreak>=selfStreak;
+    const selfStudy=Object.keys(sm.daily||{}).filter(d=>heatInt((sm.daily[d]||{}).a)>0).length;
+    const srvStudy=verifiedHere?int(v.studyDays):0;
+    const studyDays=Math.max(srvStudy,selfStudy), studyVer=srvStudy>0&&srvStudy>=selfStudy;
     const acc=(sm.accuracy!=null)?(int(sm.accuracy)+'%'):'—';   // 정답률·포획은 앱 기록(서버 검증 대상 아님)
     const cap=(sm.captured!=null?int(sm.captured):'—'), tot=(sm.total!=null?int(sm.total):'—');
     const nm=esc(s.name||s.email||'(이름 없음)');
     const heat=heatStripHTML(dailySrc,28);
     const dot='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+(studied?'#5fe06a':'#4a4a66')+';margin-right:5px;"></span>';
     const detail=dailyBreakdownHTML(dailySrc,verifiedHere);
-    const chk=verifiedHere?' <span title="서버가 관측한 값 · 위조 불가" style="color:#5fe06a;font-size:10px;">✓</span>':'';
+    const _chk=' <span title="서버가 관측한 값 · 위조 불가" style="color:#5fe06a;font-size:10px;">✓</span>';
+    const chkStreak=streakVer?_chk:'', chkStudy=studyVer?_chk:'';   // 지표별로 ✓ 분리(서버가 그 숫자를 뒷받침할 때만)
     return '<div class="tccard" data-uid="'+esc(s.uid)+'" title="눌러서 매일 학습량 보기" style="background:#12121f;border:2px solid #2a2a44;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">'
         +'<div style="font-size:14px;font-weight:700;color:#e8e8f0;">'+dot+nm+'</div>'
@@ -3685,8 +3695,8 @@ async function renderTeacherStudents(){
         +'</div>'
       +'</div>'
       +'<div style="display:flex;gap:14px;font-size:12px;color:#b7b7d8;margin-bottom:8px;flex-wrap:wrap;">'
-        +'<span>🔥 연속 <b style="color:#f0881c;">'+streak+'일</b>'+chk+'</span>'
-        +'<span>📅 학습일 <b style="color:#8fd0ff;">'+studyDays+'일</b>'+chk+'</span>'
+        +'<span>🔥 연속 <b style="color:#f0881c;">'+streak+'일</b>'+chkStreak+'</span>'
+        +'<span>📅 학습일 <b style="color:#8fd0ff;">'+studyDays+'일</b>'+chkStudy+'</span>'
         +'<span>🎯 정답률 <b style="color:#5fe06a;">'+acc+'</b></span>'
         +'<span>⭐ 포획 <b style="color:#ffc63a;">'+cap+' / '+tot+'</b></span>'
       +'</div>'
@@ -3734,7 +3744,7 @@ async function renderTeacherStudents(){
   let html='';
   // 서버 검증 상태 안내 — 위조 차단이 실제로 켜졌는지(워커 배포 여부)를 선생님이 알 수 있게.
   if(verifiedOn)
-    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일 숫자는 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">오늘 학습·히트맵은 서버 관측값과 학생 앱 기록을 <b>합쳐</b> 보여줘요(서버가 아직 오늘을 못 본 학생도 빠지지 않게). 서버 검증값은 학생이 접속·동기화하면서 쌓여 ✓로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
+    html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#9fe0a8;">✅ <b>서버 검증 켜짐</b> — ✓ 표시된 🔥연속·📅학습일 숫자는 서버가 관측한 값이라 학생이 못 바꿔요. <span style="color:#8a8ab0;">✓ <b>없는</b> 🔥연속·📅학습일과 오늘 학습·히트맵은 서버 관측값과 학생 앱 기록을 <b>합쳐</b> 보여줘요(서버가 아직 못 본 학생도 0으로 안 빠지게 — 앱 보고값이라 조작 여지는 있어요). 서버 검증값은 학생이 접속·동기화하면서 쌓여 ✓로 바뀝니다. 🎯정답률·⭐포획은 학생 앱 기록.</span></div>';
   else
     html+='<div class="regmsg" style="display:block;font-size:10.5px;line-height:1.6;margin-bottom:8px;color:#ffd27a;">⚠️ <b>서버 검증 미적용</b> — 아래 🔥연속·📅학습일·히트맵은 <b>학생 앱이 보고한 값</b>이라 조작될 수 있어요. rank-worker를 재배포하면 서버 검증값으로 자동 전환됩니다.</div>';
   // 🏆 이번 주 반 랭킹 — 선택한 반의 학생을 이번 주 완료 단어 순으로.

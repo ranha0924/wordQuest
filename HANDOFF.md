@@ -60,6 +60,12 @@
 3. 오답지 무작위 → 철자·품사·뜻유형 유사도 기반 근사치.
 4. 단일 뜻·발음 없음 → 다의어 + 센스별 예문 + TTS.
 
+### 이번 세션(2026-07-17) 추가 — 선생님 대시보드 '연속학습 일수 0' 근본 수정
+
+| 커밋 | 내용 |
+|---|---|
+| (v111) | **선생님 대시보드 '연속학습 일수'가 일부 정직한 학생에게 0으로 뜨는 문제 근본 수정 (앱 v111 + 워커 r7)** — 증상: 공부하는데도 대시보드 🔥연속이 0인 학생 몇 명(선생님 출석 확인용 지표라 누락 불가). 원인(독립검증): 대시보드 연속·학습일이 **서버 출석원장 `att` 에서만** 산정(`streakFromDays`)되는데, `att[날짜]` 는 '학생 로그인 + **그 KST일에** 워커 `/sync` 성공 + 서버가 읽은 `doneByDay` 유효완료>0' 일 때만 기록되고 **과거 소급 불가**(위조 방지 핵심). 이 사슬이 끊긴 날(오프라인 학습·디바운스 전 종료·인앱 hang·**기기 시간대≠KST**·빈 words 필터)은 원장에 영구 결손 → `verifiedHere?int(v.streak):…`(index.html:3669) 이 서버 0 을 그대로 표시(자기보고 폴백 없음). 학생 앱은 자체 `liveStreak()` 로 멀쩡히 보이나 대시보드만 0. **핵심 긴장**: '연속 위조 100% 불가'와 '정직한 학생 100% 누락 없음'은 동시 불가(서버는 못 본 날을 검증 못 함) → 사용자 선택 **둘 다**(표시는 누락 방지, ✓ 검증은 서버값 유지). **수정**: ① **Part A(표시 union·클라)** — `renderTeacherStudents` 연속·학습일 = `Math.max(서버 관측, 자기보고)`, ✓ 는 `srv>0 && srv>=self`(서버가 표시값 이상 관측) 일 때만 → 정직한데 서버 미관측인 학생 **false-0 제거**(오늘학습·히트맵과 동일 union 철학, v104), 위조(self 부풀림)는 ✓ 없이 떠 선생님이 구분. 지표별 `chkStreak`/`chkStudy` 분리·배너 문구 보정. `weekWordsOf`(반 랭킹) 무변경(위조방지 서버캡 유지). ② **B1(KST 날짜 고정)** — 앱 `today()`/`addDays()`(index.html)·`todayStr()`/`addDaysStr()`(cloud.js)를 **KST 고정**(`Date.now()+9h`→getUTC*, addDays 는 `Date.UTC` 순수 달력가산 = 워커 `kstToday`/`isoAddDays` 와 동일). 앱·cloud·워커 3자 KST 정렬 → att 조회·doneByDay 키·`summary.weekOf`·`sm.lastDay↔교사 t` 비교 일치. **KST 기기(한국 학생 대다수)는 문자열 동일=회귀 0**, 비-KST 기기만 서버와 정렬(due 도 1회 자기교정 재정렬·무해). ③ **B2(빈 wordIds 하드제로 제거·워커 쌍둥이)** — `getState` 가 words 맵 비면(리셋직후·부분쓰기) 완료를 전부 탈락시키던 비대칭을 all-pass(null)로 승격(읽기실패와 동일 가용성). 정상 학생 무변경, 위조상한은 att 캡이라 무해. ④ **B3(att 유실 관측성·워커 쌍둥이)** — `recordAttendance` 가 '그날 첫 출석' write 실패 시 `degraded=true`, `/sync` 응답에 `attDegraded` 필드(재시도는 안 함=쓰기증폭 회피, 다음 sync 자기치유). 워커 `REV r6→r7`. **잔여(불가역)**: 한 번도 sync 안 한 완전 로그아웃 학생은 Firestore summary 자체가 없어 대시보드에 안 뜸 → 지렛대는 로그인 유도(v107 `renderSyncWarn`), 서버 견고화 범위 밖. 검증: 순수로직 **93/93**(앱 날짜==워커 kstToday/isoAddDays·**KST 기기 no-op 회귀0**·Part A 매트릭스 false-0제거·✓정직·단조비감소·빈words all-pass·streakFromDays 갭·degraded) + `node --check`(워커2·cloud.js·index.html 메인블록) + 쌍둥이 파리티(변경 3함수 마커 1:1) + Playwright 부팅 스모크 **9/9**(브라우저 today()=KST·liveStreak 정상·홈 렌더·JS예외0). CLAUDE.md 4단계: Plan 독립검수 **78→90 통과**(z 블로커·구조적잔여 반영), 구현 독립검수 진행. 캐시 sw.js v110→**v111**·index.html BUILD v102→v111(정합). `firestore.rules` **무변경**. **⚠️ 적용: 앱(Pages) 배포**(Part A + B1 즉시 적용) **+ rank-worker 재배포**(B2/B3·`v:"r7"` 확인). Part A 만으로 대시보드 누락 즉시 해소(Pages), 워커 재배포는 ✓ 커버리지·비-KST 정합 강화. |
+
 ### 이번 세션(2026-07-16) 추가 — 랭킹 미등재(KV 쓰기 한도) 근본 대응
 
 | 커밋 | 내용 |
