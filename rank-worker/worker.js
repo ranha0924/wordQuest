@@ -65,7 +65,8 @@ export default {
   },
 };
 
-const REV = 'r9';              // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r10';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r10: 랭킹 연속(streak)을 att 기반(streakFromDays)으로 통일 → 대시보드 서버검증값(✓)과 일치. 취약한 st: 러닝카운터 제거. 위조불가 유지(att 는 서버 오늘키만·백데이트 불가).
                               //   r9: /teacher 가 학생별 반 보드 점수(weekWords) 실어보냄 → 대시보드가 인게임과 '같은 값' 표시(단일 소스·false-0 제거).
                               //   r8: 반 보드 점수 스로틀 완화(RANK_STEP 기본 5→1) → 인게임 반 랭킹이 대시보드만큼 신선(freshness 파리티).
                               //   r7: getState 빈 words→null(all-pass·하드제로 제거) · att 첫출석 write 유실 시 attDegraded 신호.
@@ -99,7 +100,11 @@ async function handleSync(req, env, uid, token, cors) {
   const dailyCap = capOf(env.RANK_DAILY_CAP, 60), weekCap = capOf(env.RANK_WEEK_CAP, 300);
   const bound = att.ok ? weekLedgerBound(att.map, week, today, dailyCap, weekCap) : rawWk; // 읽기실패→무클립(가용성)
   const wk = rawWk < bound ? rawWk : bound;                     // ★ 서버 원장 상한 적용 최종 점수
-  const streak = await updateStreak(env, uid, today, activeToday);
+  // ★ 연속(streak)을 att 기반으로 산정 → 대시보드 /teacher(streakFromDays(att)) 와 동일한 서버검증값을
+  //   보드 KV(meta.s)·/sync 응답에 실어, 랭킹 '남의 행'도 그 값을 읽게 한다(취약한 st: 카운터가 끊겨
+  //   0 으로 뜨던 문제 해소). att 는 서버 오늘키에만 기록(백데이트 불가)이라 위조 불가 유지. att 읽기
+  //   실패(인프라 장애·희귀) 시에만 기존 st: 폴백(가용성).
+  const streak = att.ok ? streakFromDays(att.map, today) : await updateStreak(env, uid, today, activeToday);
   const cid = await getClassId(env, uid, token);             // 반 랭킹 보드 키에만 사용
 
   const meta = { n: name, w: wk, s: streak };
@@ -282,7 +287,9 @@ async function handleBoard(env, uid, token, url, cors) {
       const wkLive = rawLive < bound ? rawLive : bound;
       let st = null;
       try { st = await env.RANK_KV.get('st:' + uid, { type: 'json' }); } catch (e) { /* 없음 */ }
-      const stLive = streakCompute(st, sToday, countDayDone(dbd, sToday, wordIds) > 0).display;
+      // ★ 내 행 연속도 att 기반(attMap 은 위에서 오늘 live 보정됨) → 대시보드·남의 행과 동일 산식.
+      //   att 읽기 실패 시에만 st: 폴백(가용성).
+      const stLive = attOk ? streakFromDays(attMap, sToday) : streakCompute(st, sToday, countDayDone(dbd, sToday, wordIds) > 0).display;
       const idx = out.findIndex(function (e) { return e.uid === uid; });
       const meRow = { uid: uid, name: info.name || (idx >= 0 ? out[idx].name : '') || '익명', wk: wkLive, streak: stLive, me: true };
       if (idx >= 0) out[idx] = meRow;   // 무조건 교체: wkLive 는 지금 계산한 캡 권위값(스로틀 지연·옛 위조 KV 모두 정정)
