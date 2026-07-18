@@ -29,3 +29,14 @@ window.OCR_DAILY_LIMIT = 8;
    "이번 주 완료한 배포 단어 수"를 서버가 세서(콘솔로 점수 위조 불가) 랭킹을 매긴다.
    배포 방법: rank-worker/README.md. 예: "https://wordquest-rank.xxx.workers.dev" */
 window.RANK_ENDPOINT = "https://still-limit-42e2.ranha-park.workers.dev/";
+
+/* ── App Check (선택 · 봇/외부 스크립트 차단 심층방어) ── 셋업: docs/appcheck-setup.md
+   · APPCHECK_SITE_KEY: Firebase App Check 콘솔에서 발급한 reCAPTCHA v3 "사이트키"(공개값).
+     비어 있으면 App Check 는 꺼진 상태 = 기존과 동일 동작(회귀 0).
+   · PROJECT_NUMBER: Firebase "프로젝트 번호"(= messagingSenderId, 공개값). 워커가 App Check
+     JWT 의 aud=projects/<번호> 를 검증하는 데 쓴다(워커 env PROJECT_NUMBER 도 같은 값으로).
+   ★ 두 값 다 공개 식별자라 커밋 안전. QUIZ_SECRET·ANSWER_SALT 같은 '진짜 비밀'은 여기 넣지 말 것. */
+window.APPCHECK_SITE_KEY = "";                 // 예: "6Lxxxxxx…" (콘솔에서 발급 후 기입 → App Check 켜짐)
+window.PROJECT_NUMBER = "363343730753";        // = messagingSenderId (공개). 워커 env 에도 동일값 설정.
+/* 로컬 개발용 App Check 디버그 토큰(배포본엔 비워 둘 것 — 유효 토큰 커밋 금지). */
+window.APPCHECK_DEBUG_TOKEN = "";

@@ -34,6 +34,8 @@
     currentEmail: function () { return null; },
     currentUser: function () { return null; },
     getIdToken: function () { return Promise.resolve(null); },
+    quizStart: function () { return Promise.resolve(null); },
+    quizSubmit: function () { return Promise.resolve(null); },
     getProfile: function () { return null; },
     chooseRole: function () {},
     joinClassByCode: function () { return Promise.resolve({ ok: false }); },
@@ -77,6 +79,18 @@
   }
 
   var app = appMod.initializeApp(cfg);
+  // ── App Check (선택·심층방어) — 사이트키 있을 때만 초기화. ★import 를 '격리'한다:
+  //   기본 Auth/Firestore 로드(Promise.all)에 섞으면 이 모듈만 실패해도 전체가 깨져 로컬 전용으로
+  //   빠질 수 있다(사이트키 미설정 시 회귀). 그래서 사이트키 있을 때만 별도 try 로 로드한다.
+  var acMod = null, appCheck = null;
+  var acSiteKey = String((cfg.appCheckSiteKey || (typeof window !== 'undefined' && window.APPCHECK_SITE_KEY) || '')).trim();
+  if (acSiteKey) {
+    try {
+      if (typeof window !== 'undefined' && window.APPCHECK_DEBUG_TOKEN) self.FIREBASE_APPCHECK_DEBUG_TOKEN = window.APPCHECK_DEBUG_TOKEN;
+      acMod = await import(FBVER + '/firebase-app-check.js');
+      appCheck = acMod.initializeAppCheck(app, { provider: new acMod.ReCaptchaV3Provider(acSiteKey), isTokenAutoRefreshEnabled: true });
+    } catch (e) { console.warn('[cloud] App Check init 실패(무시 — 미강제면 무해)', e); acMod = null; appCheck = null; }
+  }
   var auth = authMod.getAuth(app);
   // Firestore 초기화 — 앱 역사 내내 검증된 기본값(getFirestore).
   //   ★ 이 줄은 함부로 바꾸지 말 것: v94(persistentLocalCache)·v98(experimentalAutoDetectLongPolling)
@@ -209,6 +223,37 @@
       //   자기보고 weekWords 를 att 로 상한하는 데 씀). 구버전 워커면 없음 → 기본값(워커 기본과 일치)으로 폴백.
       return { byUid: byUid, today: (d && d.today) || null,
                dailyCap: (d && +d.dailyCap) || 60, weekCap: (d && +d.weekCap) || 300 };
+    } catch (e) { return null; }
+  }
+
+  // ── 서버 세션 채점(r13): 현재 App Check 토큰(없으면 null). ──
+  async function getAppCheckToken() {
+    if (!acMod || !appCheck) return null;
+    try { var r = await acMod.getToken(appCheck, false); return (r && r.token) || null; } catch (e) { return null; }
+  }
+  // 이번 판 단어 id 를 서버에 알려 서명 세션(sid) 받기. 실패/미지원(404)/오프라인/미로그인 → null(로컬 폴백).
+  async function quizStart(ids) {
+    var ep = rankEndpoint(); if (!ep || !user || !Array.isArray(ids) || !ids.length) return null;
+    try {
+      var tok = await user.getIdToken(); if (!tok) return null;
+      var h = { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' };
+      var ac = await getAppCheckToken(); if (ac) h['X-Firebase-AppCheck'] = ac;
+      var r = await fetch(ep + '/quiz/start', { method: 'POST', headers: h, body: JSON.stringify({ ids: ids.slice(0, 40) }) });
+      if (!r.ok) return null;                      // 404(구버전 워커)·403(appcheck)·429 등 → 로컬 폴백
+      var d = await r.json();
+      return (d && d.sid) ? d : null;
+    } catch (e) { return null; }
+  }
+  // 세션에 정답 배치 제출. 성공 시 서버가 정답 대조·원장 적립 후 점수 반환. 실패 → null(무해·로컬 진도 유지).
+  async function quizSubmit(sid, ans) {
+    var ep = rankEndpoint(); if (!ep || !user || !sid || !Array.isArray(ans) || !ans.length) return null;
+    try {
+      var tok = await user.getIdToken(); if (!tok) return null;
+      var h = { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' };
+      var ac = await getAppCheckToken(); if (ac) h['X-Firebase-AppCheck'] = ac;
+      var r = await fetch(ep + '/quiz/submit', { method: 'POST', headers: h, body: JSON.stringify({ sid: sid, ans: ans.slice(0, 100) }) });
+      if (!r.ok) return null;
+      return await r.json();
     } catch (e) { return null; }
   }
 
@@ -876,6 +921,8 @@
     syncState: function () { return { signedIn: !!user, failing: lastSyncFailAt > lastSyncOkAt, okAt: lastSyncOkAt }; },
     currentUser: function () { return user ? { uid: user.uid, email: user.email, name: user.displayName, photo: user.photoURL } : null; },
     getIdToken: function () { return user ? user.getIdToken() : Promise.resolve(null); }, // OCR 프록시 인증용
+    quizStart: quizStart,     // 서버 세션 채점: 판 시작 시 세션 발급(index.html 전투 훅)
+    quizSubmit: quizSubmit,   // 정답 배치 제출(랭킹 크레딧). 실패/미지원 시 null → 로컬 진도만.
 
     getProfile: function () { return profile; },
     chooseRole: chooseRole,
