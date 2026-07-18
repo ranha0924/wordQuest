@@ -6,7 +6,7 @@
 
 | 데이터 | 규칙(firestore.rules) | 위조 가능? | 영향 | 판정 |
 |---|---|---|---|---|
-| `leaderboards/_global/*`·`/{cid}/*` (wk·streak·days) | `allow write: if false` (176·185) | ❌ 불가 | — | **안전**(워커 KV만 기록) |
+| `leaderboards/_global/*`·`/{cid}/*` (wk·streak·days) | `allow write: if false` (178·187) | ❌ 불가 | — | **안전**(워커 KV만 기록) |
 | 랭킹 점수 원천(`att` 원장·서버 세션 채점) | 워커가 서버시계로만 기록 | ❌ 불가 | — | **안전**(v110/r6·r13) |
 | `users/{uid}.summary.*` (accuracy·captured·total·attempts·todayCount·weekWords·streak) | `validUserDoc`→`validSummary` = **타입만** 검증(값 진위 미검증) | ✅ 가능 | 교사 대시보드 **표시** 왜곡 | **저위험**(표시용·랭킹/비용/가용성 무관) |
 | `users/{uid}/private/state` (doneByDay·words·meta) | 필드 검증 0 (rules:101) — 학습저장 필수라 못 잠금 | ✅ 가능 | 서버가 att/세션으로 재검증 → 랭킹 무영향. 단 **무제한 self-write = 쓰기할당량 벡터**(③b와 연결) | **저위험**(랭킹) / 가용성은 ③-P3로 대응 |

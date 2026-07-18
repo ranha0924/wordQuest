@@ -3,7 +3,7 @@
 > 단어 도감 · WORD QUEST — 영단어 복습을 16비트 JRPG 턴제 전투로 포장한 학습 웹앱.
 > "틀린 단어는 보스가 된다." 대상: 고1(내신·수능 기초 어휘).
 
-최종 업데이트: 2026-07-11 (① 복귀 알림 스캐폴드 + PWA + 부사 46개 + 고1 필수 어휘 팩 224·14주제) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
+최종 업데이트: 2026-07-18 (미해결 백로그 B그룹 4건 — ① 뜻 앞 괄호 표기 정리+firstSense 버그 · ② 도감 상단 나가기 버튼 · ③ 가용성 방어 P1/P2 · ④ 변조 점검+규칙 클램프 · v120/워커 r15) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
 > **정정(2026-07-15)** — 아래 본문 중 일부가 현행과 다르니 이 블록을 우선한다.
 > - **배포**: Vercel 아님 → **GitHub Pages**(`.github/workflows/deploy-pages.yml`, main push 시 자동). 배포 URL은 `https://ranha0924.github.io/wordQuest/`.
@@ -64,6 +64,7 @@
 
 | 커밋 | 내용 |
 |---|---|
+| (v120 / 워커 r15) | **미해결 백로그 B그룹 4건 일괄 처리** — HANDOFF "미해결 백로그(2026-07-16 이후)"의 손 안 댄 4건 + 가용성 방어를 CLAUDE.md 4단계(**플랜 독립검수 89 · 구현 독립검수 95** 통과)로 처리. **① 뜻 앞 문맥 괄호 16개 '깨짐' 근본 수정** — 진짜 원인은 `firstSense`(`split(/[;,/·]/)`)가 **괄호 안 `·`에서도 잘라** 4개(spend/adopt/blade/considerable)가 `(돈`·`(방법`처럼 닫히지 않은 조각으로 표시된 것(§8 백로그의 "firstSense가 괄호를 안 끊는다"는 **오기**로 판명). 수정: `firstSense`를 **괄호 깊이 인식**(depth==0에서만 분리)으로 견고화 + `koType`가 끝의 `(...)`를 떼고 품사 판정(뒤로 이동한 뜻 오분류 방지) + 16개 데이터 `(문맥) 뜻`→`뜻 (문맥)`(예 `(생물) 종`→`종 (생물)`; pack-hs1/hs2/hs3/confuse/vacation). 명시 `pos` 우선이라 오답지 무영향, ex/발음/cloze 불변. 검증: firstSense/koType 순수유닛 **59/59** + 브라우저 부팅 스모크 **9/9**(라이브 함수·로드팩 앞머리괄호 0·상단버튼). **② 도감 상단 나가기 버튼** — `scr-dex` 최상단(scr-head 앞)에 compact `navbtn[data-go=home]` 추가(기존 배선 재사용·신규 JS 0), 하단 버튼 유지 → 긴 도감에서 스크롤 없이 마을 복귀. **③ DDoS/남용 가용성 방어(P1·P2 · 워커 트윈 r14→r15)** — `/sync`(요청당 Firestore 2읽기)·`/board`에 `rlHit` uid·분당 상한(**P1**, 기본 `RL_SYNC_PER_MIN=10`·`RL_BOARD_PER_MIN=30`, env튜닝) → 브라우저 루프의 무료 할당량 소진 차단. `verifyFirebase` 결과를 토큰해시 키로 KV 캐시(**P2**, `AUTH_CACHE_SEC=300`) → `accounts:lookup` 증폭 제거. 기존 `rlHit`/`sha256hex` 재사용, r13/r14 quiz·AppCheck·att 로직 **무변경**, 음성 미캐시·읽기실패 폴백. 검증: verifyFirebaseCached(히트/미스/읽기실패/무효/빈토큰)+rlHit 유닛 **15/15**, 트윈 파리티(추가 로직 정규화 동일), `node --check` ×2. **④ JSON 변조 잔여 점검 + 저비용 클램프** — 랭킹계열(wk·streak·days)은 서버검증(att·세션·`leaderboards` 쓰기 false)으로 안전, `summary.*`는 표시용 자기보고라 위조가능하나 랭킹/비용/가용성 무관=**저위험**. `firestore.rules validSummary`에 값범위 클램프(accuracy 0~100·streak 0~4000·카운트 0~1e7) 추가해 극단값 대시보드 붕괴만 차단(심층방어). 감사서 `docs/json-tamper-audit-2026-07-18.md`. 캐시 sw.js v119→**v120**·index BUILD v119→v120. **⚠️ 적용**: **①②는 앱(Pages) 배포만**. **③은 rank-worker 재배포**(`v:"r15"` 확인)+선택 env, 근본책 **P3**(Firebase 콘솔 App Check — **Firestore enforce**가 ③b 무제한 self-write 차단 · 워커 `APPCHECK_ENFORCE`와 별개)·**P4**(`ALLOW_ORIGIN`·apiKey referrer)는 콘솔. **④ 규칙은 Firebase 콘솔 수동 게시**(미게시여도 클라 표시 방어라 무해). 상세: `rank-worker/README.md`(§가용성 방어). |
 | (v119) | **랭킹 모달 연속 0일도 표시** — 인게임 랭킹(반·전체)의 행이 연속(streak) 0일인 학생은 🔥 표시를 통째로 생략(`st>0` 조건)해 '왜 나만 연속이 없지' 혼란을 줬다(사용자 요청: 숨기지 말고 연속 0일로 표시). 수정: 두 행 렌더러(`renderClassRank`/`renderGlobalRank`)가 항상 `🔥N`을 렌더하되 0일은 회색(`.rkst.zero`, 앱 표준 muted `#8a8ab0`)으로 표시해 살아있는 연속(주황)과 구분. 다른 표시 위치(홈 스탯 `0일`, 대시보드 카드 `🔥 연속 0일`)는 이미 0을 표시해 무변경. 합성 '내 행'(이번 주 0단어 자리표시자)은 서버 streak 값이 랭킹 목록에 없어 그대로(범위 밖). 검증: row 템플릿 노드 추출 평가(0/양수/누락/소수·XSS 무해 — 음수는 원천 차단: 워커 streakFromDays ≥0·cloud.js numOr0) + 페이지 부팅·랭킹 렌더 스모크. 캐시 sw.js v118→**v119**·index.html BUILD v118→v119. `firestore.rules`·워커 **무변경** — **앱(Pages)만 배포하면 적용**. |
 
 ### 이번 세션(2026-07-17) 추가 — 선생님 대시보드 '연속학습 일수 0' 근본 수정
@@ -346,7 +347,9 @@
 - ✅ **완료**: 기기 간 클라우드 동기화 ②(§4.9), 몬스터 로스터·에셋 로컬화, **① 복귀 알림 스캐폴드(§4.10) — 활성화만 남음**, **PWA 설치형·오프라인 셸(§4.11)**.
 
 ### 미해결 백로그 (2026-07-16 세션 이후)
-이 세션은 랭킹/대시보드 표시·동기화 사고 대응에 집중했다(전부 해결·배포 완료 — v100~v102, Cloudflare Workers Paid 전환으로 KV 한도 해소, 저장소 Private 전환으로 죽었던 Pages는 Public 복귀+Source=GitHub Actions 재설정으로 복구, 워크플로에 `enablement: true` 자동복구 추가). 아래는 **손 안 댄 4건 + 미배포 1건**.
+이 세션은 랭킹/대시보드 표시·동기화 사고 대응에 집중했다(전부 해결·배포 완료 — v100~v102, Cloudflare Workers Paid 전환으로 KV 한도 해소, 저장소 Private 전환으로 죽었던 Pages는 Public 복귀+Source=GitHub Actions 재설정으로 복구, 워크플로에 `enablement: true` 자동복구 추가). 아래는 **손 안 댄 4건 + 미배포 1건**이었다.
+
+> **[✅ 2026-07-18 처리 완료 — v120 / 워커 r15]** 아래 4건 전부 코드 처리(상단 `2026-07-18` 표 v120 행 참고). **①** 괄호 16개 `뜻 (문맥)`으로 이동 + `firstSense`(괄호깊이 인식)·`koType`(끝괄호 제거) 수정 — ★아래 ①의 "`firstSense`가 괄호를 끊지는 않음"은 **오기**였고, 괄호 안 `·`에서 4개(spend/adopt/blade/considerable)가 `(돈`처럼 잘리던 게 실제 "깨짐" 원인이었다. **②** 도감 상단 나가기 버튼 추가. **③** P1(`/sync`·`/board` rate-limit)·P2(`verifyFirebase` KV 캐시) 적용 → **P3(Firestore App Check enforce)·P4(origin/referrer)는 콘솔 잔여**. **④** 점검 완료(자기보고=저위험 수용) + `validSummary` 값 클램프(심층방어) + 감사서 `docs/json-tamper-audit-2026-07-18.md`. **+ rank-worker 미배포분**은 r15로 통합(재배포 시 `v:"r15"` 확인). **잔여 = 배포/콘솔뿐**: ①② 앱 배포 · ③ 워커 재배포+콘솔(P3·P4) · ④ 규칙 콘솔 게시.
 
 - **① 한글 뜻 앞 `(` 단어 (16개)** — `pack-hs1.js`(1)·`pack-hs2.js`(1)·`pack-hs3.js`(3)·`pack-confuse.js`(8)·`pack-vacation.js`(3). 예: `(생물) 종`, `(짧은) 여행`, `(돈·시간을) 쓰다`. **전수 괄호 균형 검사 → 불균형 0개**: 전부 닫는 괄호가 있는 정상 사전식 문맥 표기다. 사용자가 "깨져 보인다"고 지적 → **표기 정책 결정 필요**(그대로 둘지 / 선행 괄호를 떼거나 뒤로 옮길지). `firstSense()`(index.html:1198, `[;,/·]`로 첫 뜻만 자름)가 괄호를 끊지는 않음(별개 확인).
 - **② 도감 나가기 버튼(상단)** — `scr-dex`(index.html:852)의 '◀ 마을로 돌아가기'가 `dexgrid`(867) **아래**(868)에만 있어, 도감이 길면 맨 밑까지 스크롤해야 나감. 화면 상단(스크롤 없이 보이는 위치)에 나가기 버튼/헤더 고정 추가. 안전한 UI 작업.
