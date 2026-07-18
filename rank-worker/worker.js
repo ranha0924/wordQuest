@@ -347,7 +347,7 @@ async function handleBoard(env, uid, token, url, cors) {
       const wkLiveC = await rankWk(env, uid, week, sToday);   // ★ r17: 내 행도 ver_mc(rankWk)만 — 대시보드·남의 행과 동일 산식
       const idx = out.findIndex(function (e) { return e.uid === uid; });
       const meRow = { uid: uid, name: info.name || (idx >= 0 ? out[idx].name : '') || '익명', wk: wkLiveC, streak: stLive, me: true };
-      if (idx >= 0) out[idx] = meRow;   // 무조건 교체: wkLive 는 지금 계산한 캡 권위값(스로틀 지연·옛 위조 KV 모두 정정)
+      if (idx >= 0) out[idx] = meRow;   // 무조건 교체: wkLiveC(rankWk·ver_mc)는 지금 계산한 권위값(스로틀 지연·옛 위조 KV 모두 정정)
       else out.push(meRow);
     }
   } catch (e) { /* 상태문서 읽기 실패 — KV 행이라도 그대로 응답 */ }
