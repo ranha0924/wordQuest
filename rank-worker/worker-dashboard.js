@@ -30,6 +30,9 @@
      MASTER_EMAIL       (선택)      — 마스터 이메일 재정의
      RANK_STEP          (선택)      — 보드 키 갱신 최소 진행 단어수(기본 5)
      RANK_FLUSH_MIN     (선택)      — 잔여분 플러시 간격 분(기본 15)
+     RL_SYNC_PER_MIN    (선택)      — /sync uid·분당 상한(기본 10, P1 가용성 방어)
+     RL_BOARD_PER_MIN   (선택)      — /board uid·분당 상한(기본 30, P1)
+     AUTH_CACHE_SEC     (선택)      — verifyFirebase 결과 KV 캐시 TTL초(기본 300, P2)
    ============================================================================ */
 'use strict';
 
@@ -81,13 +84,13 @@ async function handleFetch(req) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/\/+$/, '') || '/';
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-  const authUser = await verifyFirebase(token, env.FIREBASE_API_KEY);
+  const authUser = await verifyFirebaseCached(env, token);
   if (!authUser || !authUser.uid) return json({ error: 'unauthorized' }, 401, cors);
   const uid = authUser.uid;
 
   try {
-    if (req.method === 'POST' && path.endsWith('/sync')) return await handleSync(req, env, uid, token, cors);
-    if (req.method === 'GET' && path.endsWith('/board')) return await handleBoard(env, uid, token, url, cors);
+    if (req.method === 'POST' && path.endsWith('/sync')) { const rl = await rlHit(env, 'rlsync:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_SYNC_PER_MIN, 10), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); return await handleSync(req, env, uid, token, cors); }
+    if (req.method === 'GET' && path.endsWith('/board')) { const rl = await rlHit(env, 'rlboard:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_BOARD_PER_MIN, 30), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); return await handleBoard(env, uid, token, url, cors); }
     if (req.method === 'GET' && path.endsWith('/teacher')) return await handleTeacher(env, authUser, token, url, cors);
     // 서버 세션 채점(r13): 랭킹 크레딧을 '서버 발급 세션에서 정답 대조 통과' 로만. App Check 게이트.
     if (req.method === 'POST' && path.endsWith('/quiz/start')) { const ac = await verifyAppCheck(req.headers.get('X-Firebase-AppCheck'), env); if (!ac.ok) return json({ error: 'appcheck', reason: ac.reason }, 403, cors); return await handleQuizStart(req, env, uid, token, cors); }
@@ -98,7 +101,8 @@ async function handleFetch(req) {
   }
 }
 
-const REV = 'r14';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r15';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+//   r15: 가용성 방어 — /sync·/board 에 uid·분당 rate-limit(P1), verifyFirebase 결과 KV 캐시(P2, accounts:lookup 증폭 제거).
                               //   r14: 이상 탐지 — /quiz/submit 이 비인간적 제출속도(클라 t 중앙간격)·일 버스트 초과를
                               //        flag:{uid} 에 누적, /teacher 가 학생별 반환 → 대시보드 ⚠️. 완전차단 불가(C1)의 실용 대안(탐지+교사 실격).
                               //   r13: 서버 세션 채점 — /quiz/start·/quiz/submit. 랭킹 크레딧을 '서버 발급 세션에서 정답 대조
@@ -739,6 +743,17 @@ async function verifyFirebase(idToken, apiKey) {
     if (!u || !u.localId) return null;
     return { uid: u.localId, email: u.email || '', emailVerified: u.emailVerified === true };
   } catch (e) { return null; }
+}
+// P2(가용성): verifyFirebase 결과를 '토큰 해시' 키로 KV 캐시(TTL AUTH_CACHE_SEC·기본 300s). 같은 토큰의
+//   반복 요청이 Identity Toolkit(accounts:lookup) 을 매번 때리는 증폭을 제거한다(브라우저 루프 방어).
+//   원문 토큰은 저장하지 않는다(sha256 앞 40hex). 폐기/만료 토큰이 최대 TTL 잔존하나 저위험(수용).
+async function verifyFirebaseCached(env, idToken) {
+  if (!idToken) return null;
+  const ck = 'auth:' + (await sha256hex(idToken)).slice(0, 40);
+  try { const c = await env.RANK_KV.get(ck, { type: 'json' }); if (c && c.uid) return c; } catch (e) { /* 캐시 미스/장애 → 정규 검증 */ }
+  const u = await verifyFirebase(idToken, env.FIREBASE_API_KEY);
+  if (u && u.uid) { try { await env.RANK_KV.put(ck, JSON.stringify(u), { expirationTtl: capOf(env.AUTH_CACHE_SEC, 300) }); } catch (e) { /* 무시 */ } }
+  return u;
 }
 // 마스터(운영자) 판정 — firestore.rules 의 isMaster() 와 동일 이메일. env.MASTER_EMAIL 로 재정의 가능.
 function isMasterUser(authUser, env) {

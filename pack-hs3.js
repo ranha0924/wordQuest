@@ -108,9 +108,9 @@ window.WORDPACK_HS3 = [
   {w:'resolve',pos:'v',m:'해결하다; 결심하다',ex:'They resolved the conflict calmly.',th:'문제·해결'},
   {w:'overcome',pos:'v',m:'극복하다',ex:'She overcame many difficulties.',th:'문제·해결'},
   {w:'remedy',pos:'n',m:'해결책; 치료법',ex:'There is no easy remedy.',th:'문제·해결'},
-  {w:'tackle',pos:'v',m:'(문제에) 달려들다',ex:'We must tackle the issue now.',th:'문제·해결'},
-  {w:'address',pos:'v',m:'(문제를) 다루다',ex:'The mayor addressed the problem.',th:'문제·해결'},
+  {w:'tackle',pos:'v',m:'달려들다 (문제에)',ex:'We must tackle the issue now.',th:'문제·해결'},
+  {w:'address',pos:'v',m:'다루다 (문제를)',ex:'The mayor addressed the problem.',th:'문제·해결'},
   {w:'ease',pos:'v',m:'완화하다; 덜어주다',ex:'The medicine eased the pain.',th:'문제·해결'},
-  {w:'alleviate',pos:'v',m:'(고통을) 경감하다',ex:'Rest can alleviate stress.',th:'문제·해결'},
+  {w:'alleviate',pos:'v',m:'경감하다 (고통을)',ex:'Rest can alleviate stress.',th:'문제·해결'},
   {w:'confront',pos:'v',m:'직면하다; 맞서다',ex:'We must confront the truth.',th:'문제·해결'}
 ];

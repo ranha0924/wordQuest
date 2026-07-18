@@ -99,7 +99,7 @@ window.WORDPACK_VACATION = [
   {w:'inventory',pos:'n',m:'물품 목록, 재고',ex:'The museum made an inventory of the entire collection.',th:'어근: 이동(mot·vene)'},
   {w:'circumvent',pos:'v',m:'피하다, 회피하다',ex:'They were accused of trying to circumvent the law.',th:'어근: 이동(mot·vene)'},
   {w:'revenue',pos:'n',m:'세입, 수익',ex:'Annual revenue was estimated at five million dollars.',th:'어근: 이동(mot·vene)'},
-  {w:'venue',pos:'n',m:'(행사) 장소, 개최지',ex:'Please note the change of venue for this event.',th:'어근: 이동(mot·vene)'},
+  {w:'venue',pos:'n',m:'장소 (행사), 개최지',ex:'Please note the change of venue for this event.',th:'어근: 이동(mot·vene)'},
 
   // ── 어근: 보냄·발 (mit·ped) ──
   {w:'admit',pos:'v',m:'인정하다; 입장을 허가하다',ex:'He was willing to admit his mistake.',th:'어근: 보냄·발(mit·ped)'},
@@ -124,8 +124,8 @@ window.WORDPACK_VACATION = [
   {w:'current',pos:'a',m:'현재의; 통용하는',ex:'The current situation requires immediate action.',th:'어근: 흐름(cur)'},
   {w:'occur',pos:'v',m:'발생하다; 생각이 나다',ex:'Such accidents often occur during the winter.',th:'어근: 흐름(cur)'},
   {w:'concur',pos:'v',m:'동의하다; 일치하다',ex:'We strongly concur with the recommendations of this report.',th:'어근: 흐름(cur)'},
-  {w:'excursion',pos:'n',m:'(짧은) 여행, 소풍',ex:'They went on a one-day excursion to the Grand Canyon.',th:'어근: 흐름(cur)'},
-  {w:'incur',pos:'v',m:'(좋지 못한 결과를) 초래하다',ex:'Careless spending can incur large debts.',th:'어근: 흐름(cur)'},
+  {w:'excursion',pos:'n',m:'여행 (짧은), 소풍',ex:'They went on a one-day excursion to the Grand Canyon.',th:'어근: 흐름(cur)'},
+  {w:'incur',pos:'v',m:'초래하다 (좋지 못한 결과를)',ex:'Careless spending can incur large debts.',th:'어근: 흐름(cur)'},
   {w:'recur',pos:'v',m:'반복되다, 재발하다',ex:'The same problem may recur if we ignore it.',th:'어근: 흐름(cur)'},
   {w:'precursor',pos:'n',m:'선구자; 전조',ex:'This artist was a precursor of modern jazz.',th:'어근: 흐름(cur)'},
 

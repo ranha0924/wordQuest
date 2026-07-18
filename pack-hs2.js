@@ -31,7 +31,7 @@ window.WORDPACK_HS2 = [
   {w:'survive',pos:'v',m:'살아남다',ex:'Few plants survive in the desert.',th:'자연·환경'},
   {w:'climate',pos:'n',m:'기후',ex:'The climate is getting warmer.',th:'자연·환경'},
   {w:'pollution',pos:'n',m:'오염',ex:'Air pollution harms our health.',th:'자연·환경'},
-  {w:'species',pos:'n',m:'(생물) 종',ex:'Many species are in danger.',th:'자연·환경'},
+  {w:'species',pos:'n',m:'종 (생물)',ex:'Many species are in danger.',th:'자연·환경'},
   {w:'protect',pos:'v',m:'보호하다',ex:'National parks protect wild animals.',th:'자연·환경'},
   {w:'energy',pos:'n',m:'에너지',ex:'Solar energy is clean and cheap.',th:'자연·환경'},
   {w:'waste',pos:'v',m:'낭비하다',ex:'Do not waste water when brushing.',th:'자연·환경'},

@@ -853,6 +853,7 @@ html.nosvgframe *{border-image:none!important;}
 
     <!-- 도감 -->
     <div class="screen" id="scr-dex" style="gap:9px;">
+      <button class="navbtn" data-go="home" style="align-self:flex-start;min-height:0;padding:6px 12px;font-size:13px;">◀ 마을로</button>
       <div class="scr-head">
         <div class="scr-head-t">도감</div>
         <div class="scr-head-b">몬스터 도감</div>
@@ -1238,10 +1239,12 @@ function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random
 
 /* ===== 오답지 근사치화용 유사도 ===== */
 function posOf(w){const e=BANK[(w.w||'').toLowerCase()];return e?e.pos:null;}
-function firstSense(m){return (m||'').split(/[;,\/·]/)[0].trim();}
+// 첫 뜻만 반환. 최상위(괄호 밖) 구분자에서만 자른다 — 괄호 안의 ·/,(예: '쓰다 (돈·시간을)')은 보존.
+function firstSense(m){m=(m||'');let d=0,o='';for(let i=0;i<m.length;i++){const c=m[i];if(c==='('){d++;o+=c;continue;}if(c===')'){if(d>0)d--;o+=c;continue;}if(d===0&&(c===';'||c===','||c==='/'||c==='·'))break;o+=c;}return o.trim();}
 // 한국어 뜻 어미로 대략적 품사 유형 추정 (동사~다 / 형용사~ㄴ(은·운·는·한·인, '~적인' 포함) / 그외 명사)
 // '적$'는 뺀다: 이 은행에서 형용사는 모두 '~적인'(인$로 처리)이고, '적$'는 흔적·목적 같은 명사만 형용사로 오분류했다.
-function koType(m){const s=firstSense(m);if(/다$/.test(s))return 'v';if(/[은운는한인]$/.test(s))return 'a';return 'n';}
+// 품사 추정은 뜻 '머리말'의 어미로 한다 → 끝에 붙은 문맥 괄호('종 (생물)')는 떼고 판정.
+function koType(m){const s=firstSense(m).replace(/\s*\([^)]*\)\s*$/,'').trim();if(/다$/.test(s))return 'v';if(/[은운는한인]$/.test(s))return 'a';return 'n';}
 // 정답·오답을 '진짜 품사'로 묶는 키: 단어은행에 있으면 큐레이션된 품사(posOf), 없으면(사용자 커스텀) 어미로 추정(koType).
 // koType만으로는 '뛰어난·예쁜'(형용사)을 명사로, '원인·개인'(명사)을 형용사로 오판 → 은행 품사를 우선해 오출제를 막는다.
 function posKey(w){return (w&&posOf(w))||koType(w&&w.m);}
@@ -2255,7 +2258,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v119';
+var BUILD='v120';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).

@@ -140,7 +140,7 @@ window.WORDPACK_HS1 = [
   {w:'customer',pos:'n',m:'고객',ex:'The customer asked for a refund.',th:'경제·소비'},
   {w:'purchase',pos:'v',m:'구매하다',ex:'You can purchase tickets online.',th:'경제·소비'},
   {w:'afford',pos:'v',m:'~할 여유가 있다',ex:'They cannot afford a new car.',th:'경제·소비'},
-  {w:'spend',pos:'v',m:'(돈·시간을) 쓰다',ex:'Do not spend too much money.',th:'경제·소비'},
+  {w:'spend',pos:'v',m:'쓰다 (돈·시간을)',ex:'Do not spend too much money.',th:'경제·소비'},
   {w:'wealth',pos:'n',m:'부; 재산',ex:'Health matters more than wealth.',th:'경제·소비'},
   {w:'trade',pos:'n',m:'무역; 거래',ex:'The two countries increased trade.',th:'경제·소비'},
   {w:'demand',pos:'n',m:'수요; 요구',ex:'The demand for water rose in summer.',th:'경제·소비'},

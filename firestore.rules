@@ -60,15 +60,17 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/classes/$(cid)).data.ownerUid == request.auth.uid;
     }
 
-    // summary 내부 숫자 필드는 숫자만(위조 문자열이 대시보드에 섞이지 않게 서버단 방어)
+    // summary 내부 숫자 필드는 숫자 + 상식 범위(위조 문자열/극단값이 대시보드 표시를 깨지 않게 서버단 방어).
+    //   ★ 이 값들은 표시용 자기보고(정답률·포획 등)라 '진위'는 검증 못 하나(랭킹은 워커가 별도 서버검증),
+    //     accuracy=99999 같은 극단값으로 교사 대시보드가 붕괴되는 것만 클램프로 막는다(심층방어).
     function validSummary(s) {
-      return (!('streak' in s)     || s.streak is number)
-        && (!('accuracy' in s)     || s.accuracy is number)
-        && (!('captured' in s)     || s.captured is number)
-        && (!('total' in s)        || s.total is number)
-        && (!('attempts' in s)     || s.attempts is number)
-        && (!('todayCount' in s)   || s.todayCount is number)
-        && (!('weekWords' in s)    || s.weekWords is number)
+      return (!('streak' in s)     || (s.streak is number && s.streak >= 0 && s.streak <= 4000))
+        && (!('accuracy' in s)     || (s.accuracy is number && s.accuracy >= 0 && s.accuracy <= 100))
+        && (!('captured' in s)     || (s.captured is number && s.captured >= 0 && s.captured <= 10000000))
+        && (!('total' in s)        || (s.total is number && s.total >= 0 && s.total <= 10000000))
+        && (!('attempts' in s)     || (s.attempts is number && s.attempts >= 0 && s.attempts <= 10000000))
+        && (!('todayCount' in s)   || (s.todayCount is number && s.todayCount >= 0 && s.todayCount <= 10000000))
+        && (!('weekWords' in s)    || (s.weekWords is number && s.weekWords >= 0 && s.weekWords <= 10000000))
         && (!('weekOf' in s)       || s.weekOf is string)
         && (!('daily' in s)        || s.daily is map);
     }
