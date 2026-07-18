@@ -1111,9 +1111,20 @@ html.nosvgframe *{border-image:none!important;}
       <button class="subbtn ranktab on" type="button" data-tab="class" style="flex:1;justify-content:center;">반 랭킹</button>
       <button class="subbtn ranktab" type="button" data-tab="global" style="flex:1;justify-content:center;">전체 랭킹</button>
     </div>
-    <div id="rank-notice" style="font-size:10.5px;color:#c9c9e0;text-align:center;background:rgba(252,188,60,.10);border:1px solid rgba(252,188,60,.32);border-radius:8px;padding:8px 10px;margin:0 0 12px;line-height:1.6;">📢 랭킹 단어 집계가 <b style="color:#fcbc3c;">오늘부터 새로 시작</b>돼요<br>매주 <b style="color:#fcbc3c;">월요일</b>에 초기화됩니다</div>
-    <div id="rank-body" style="max-height:52vh;overflow-y:auto;"></div>
-    <button class="subbtn" id="rank-close" style="width:100%;justify-content:center;margin-top:12px;">닫기</button>
+    <div id="rank-notice" style="font-size:10.5px;color:#c9c9e0;text-align:center;background:rgba(252,188,60,.10);border:1px solid rgba(252,188,60,.32);border-radius:8px;padding:8px 10px;margin:0 0 12px;line-height:1.6;">📢 랭킹 점수는 이제 <b style="color:#fcbc3c;">랭킹 퀴즈(뜻 고르기)</b>로 얻어요<br>아래 버튼으로 풀어 점수를 올려요 · 매주 <b style="color:#fcbc3c;">월요일</b> 초기화</div>
+    <div id="rank-body" style="max-height:46vh;overflow-y:auto;"></div>
+    <button class="goldbox bigbtn" id="rank-quiz-open" style="width:100%;justify-content:center;margin-top:12px;font-size:14px;padding:12px;min-height:0;">🏆 랭킹 퀴즈 풀기 (뜻 고르기)</button>
+    <button class="subbtn" id="rank-close" style="width:100%;justify-content:center;margin-top:8px;">닫기</button>
+  </div>
+</div>
+
+<!-- 랭킹 퀴즈 모달(r17/2단계) — 서버 출제 뜻 4지선다. '고른 번호'만 제출(정답 텍스트 미전송 → id-echo 무효). -->
+<div id="rq-modal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(4,4,10,.9);align-items:center;justify-content:center;padding:24px;">
+  <div style="background:#12121f;border:2px solid #34345a;border-radius:12px;padding:18px 16px;max-width:400px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6);">
+    <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">🏆 랭킹 퀴즈</div>
+    <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">뜻을 맞히면 이번 주 랭킹 점수에 반영돼요</div>
+    <div id="rq-body" style="min-height:190px;"></div>
+    <button class="subbtn" id="rq-close" style="width:100%;justify-content:center;margin-top:12px;">닫기</button>
   </div>
 </div>
 
@@ -1485,6 +1496,69 @@ async function renderGlobalRank(body,C){
   body.innerHTML=html+_rkDegradedNote(C);
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
+
+/* ===== 랭킹 퀴즈(r17/2단계): 서버 출제 뜻 4지선다 · '고른 번호'만 제출 =====
+   서버가 정답 번호를 보관하고 클라엔 보기 4개만 준다 → 답 텍스트를 서버가 안 받으므로 id-echo 무효.
+   후보 = 학습한(seen>0) 팩 단어 우선(서버가 팩만 골라 출제). 오프라인/미로그인/미배포면 조용히 안내. */
+var _rq=null;
+function _rqMsg(t){ return '<div style="text-align:center;color:#c9c9e0;font-size:13px;line-height:1.7;padding:30px 8px;">'+t+'</div>'; }
+function rqCandidates(){
+  const t=today();
+  let studied=S.words.filter(w=>(w.seen||0)>0);
+  studied.sort((a,b)=>((!a.due||a.due<=t)?0:1)-((!b.due||b.due<=t)?0:1)); // due 먼저
+  let ids=studied.map(w=>w.id);
+  if(!ids.length) ids=S.words.map(w=>w.id);
+  return ids.slice(0,40);
+}
+async function openRankQuiz(){
+  const m=$('rq-modal'), body=$('rq-body'); if(!m||!body) return;
+  m.style.display='flex'; _rq=null; body.innerHTML=_rqMsg('문제 준비 중…');
+  const C=window.Cloud;
+  if(!(C&&C.quizStart&&C.quizSubmit)){ body.innerHTML=_rqMsg('로그인하고 클라우드 동기화가 켜져 있어야 랭킹 퀴즈를 풀 수 있어요.'); return; }
+  const ids=rqCandidates();
+  if(!ids.length){ body.innerHTML=_rqMsg('먼저 배틀에서 단어를 학습해 주세요.<br>그다음 여기서 뜻 퀴즈로 랭킹 점수를 얻어요!'); return; }
+  let sess=null; try{ sess=await C.quizStart(ids); }catch(e){}
+  if(!sess||!sess.sid||!Array.isArray(sess.questions)||!sess.questions.length){ body.innerHTML=_rqMsg('지금은 랭킹 퀴즈를 낼 수 없어요.<br><small style="color:#8a8ab0;">(오프라인이거나 아직 배포된 단어가 없을 수 있어요. 잠시 뒤 다시 시도)</small>'); return; }
+  _rq={ sid:sess.sid, qs:sess.questions.slice(0,40), i:0, picks:[] };
+  rqRender();
+}
+function rqRender(){
+  const body=$('rq-body'); if(!_rq||!body) return;
+  if(_rq.i>=_rq.qs.length){ rqSubmit(); return; }
+  const q=_rq.qs[_rq.i], w=byId(q.id), prompt=(w&&w.w)?w.w:q.id;
+  let html='<div style="text-align:center;font-size:11px;color:#8a8ab0;margin-bottom:4px;">'+(_rq.i+1)+' / '+_rq.qs.length+'</div>';
+  html+='<div style="text-align:center;font-size:23px;font-weight:800;color:#fff;letter-spacing:.5px;margin:8px 0 4px;">'+esc(prompt)+'</div>';
+  html+='<div style="text-align:center;font-size:11px;color:#8a8ab0;margin-bottom:12px;">알맞은 뜻은?</div>';
+  html+='<div style="display:flex;flex-direction:column;gap:8px;">';
+  for(let k=0;k<q.opts.length;k++) html+='<button class="subbtn rq-opt" type="button" data-i="'+k+'" style="width:100%;justify-content:center;text-align:center;padding:12px;font-size:14px;line-height:1.4;">'+esc(String(q.opts[k]))+'</button>';
+  html+='</div>';
+  body.innerHTML=html;
+  body.querySelectorAll('.rq-opt').forEach(b=>b.addEventListener('click',()=>{
+    if(!_rq) return;
+    _rq.picks.push({ id:q.id, pick:parseInt(b.getAttribute('data-i'),10), t:Date.now() });
+    sfx('select'); _rq.i++; rqRender();
+  }));
+}
+async function rqSubmit(){
+  const body=$('rq-body'), C=window.Cloud; if(!body) return;
+  body.innerHTML=_rqMsg('채점 중…');
+  let res=null; try{ res=await C.quizSubmit(_rq.sid,_rq.picks); }catch(e){}
+  const n=(res&&Array.isArray(res.accepted))?res.accepted.length:0;
+  const wk=(res&&typeof res.wk==='number')?res.wk:null;
+  let html='<div style="text-align:center;padding:22px 8px;">';
+  if(res){
+    html+='<div style="font-size:36px;margin-bottom:8px;">'+(n>0?'🎉':'💪')+'</div>';
+    html+='<div style="font-size:16px;color:#ffe08a;font-weight:700;">이번 퀴즈에서 <b style="color:#fcbc3c;">'+n+'</b>단어 반영!</div>';
+    if(wk!=null) html+='<div style="font-size:12px;color:#c9c9e0;margin-top:8px;">이번 주 랭킹 점수: <b style="color:#fff;">'+wk+'</b>단어</div>';
+    html+='<div style="font-size:11px;color:#8a8ab0;margin-top:10px;">랭킹 목록 반영엔 잠시 걸릴 수 있어요.</div>';
+  } else {
+    html+='<div style="font-size:34px;margin-bottom:8px;">📴</div><div style="font-size:14px;color:#c9c9e0;">채점 결과를 받지 못했어요(오프라인일 수 있어요).<br>학습 진도는 그대로 저장돼 있어요.</div>';
+  }
+  html+='</div>';
+  body.innerHTML=html; _rq=null;
+  try{ if(typeof renderHome==='function') renderHome(); }catch(e){}
+}
+function closeRankQuiz(){ const m=$('rq-modal'); if(m)m.style.display='none'; _rq=null; }
 // 최근 weeks*7일 히트맵 SVG-less 그리드 HTML. dh: dailyHistory 맵.
 function heatmapHTML(dh,weeks){
   dh=dh||{}; weeks=weeks||5;
@@ -2258,7 +2332,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v121';
+var BUILD='v122';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2470,6 +2544,10 @@ $('unit-home-btn').addEventListener('click',()=>{ sfx('select'); show('reg'); se
 $('rank-close').addEventListener('click',closeRank);
 $('rank-modal').addEventListener('click',e=>{ if(e.target&&e.target.id==='rank-modal') closeRank(); });
 document.querySelectorAll('.ranktab').forEach(b=>b.addEventListener('click',()=>{ sfx('select'); openRank(b.getAttribute('data-tab')); }));
+// 랭킹 퀴즈(서버 출제 뜻 4지선다) 열기/닫기
+$('rank-quiz-open').addEventListener('click',()=>{ sfx('select'); openRankQuiz(); });
+$('rq-close').addEventListener('click',closeRankQuiz);
+$('rq-modal').addEventListener('click',e=>{ if(e.target&&e.target.id==='rq-modal') closeRankQuiz(); });
 $('ult-blast').addEventListener('click',useBlast);
 $('ult-heal').addEventListener('click',useHeal);
 window.addEventListener('keydown',e=>{
@@ -2869,25 +2947,8 @@ function submitSpell(){
   resolveAnswer(correct);
 }
 // 정답 여부 확정 후 공통 처리: 정답률·SRS·연출·다음 몬스터
-// ── 서버 세션 채점(r13) 클라 훅 — 정답 완료를 배치로 워커에 제출(랭킹 크레딧). ──
-//   버퍼→플러시(배치당 1세션: quizStart→quizSubmit). 실패/미지원/오프라인/미로그인이면 조용히 로컬만
-//   (학습·SRS 불변·회귀0). 소탕/군집매치는 답을 '생산'하지 않으므로 버퍼 안 함(랭킹 미반영=올바른 보안).
-var wqAnsBuf=[];
-function wqQuizBuffer(id,a,mode){
-  try{ if(!(window.Cloud&&Cloud.quizStart))return; }catch(e){return;}
-  wqAnsBuf.push({id:String(id).toLowerCase(),a:String(a==null?'':a),mode:mode,t:Date.now()});
-  if(wqAnsBuf.length>=10) wqQuizFlush();
-}
-async function wqQuizFlush(){
-  if(!wqAnsBuf.length)return;
-  var C; try{ C=window.Cloud; }catch(e){ wqAnsBuf=[]; return; }
-  if(!(C&&C.quizStart&&C.quizSubmit)){ wqAnsBuf=[]; return; }
-  var batch=wqAnsBuf.splice(0);          // 즉시 비워 재진입 방지
-  try{
-    var sess=await C.quizStart(batch.map(function(x){return x.id;}));
-    if(sess&&sess.sid) await C.quizSubmit(sess.sid,batch);   // 실패해도 무해(로컬 진도 이미 반영)
-  }catch(e){}
-}
+// r17(2단계): 배틀 중 '답 텍스트'를 서버에 보내던 옛 훅(wqQuizBuffer/Flush)을 제거했다 — 답=단어라 id-echo 취약.
+//   랭킹 크레딧은 이제 '랭킹 퀴즈' 모달(서버 출제 뜻 4지선다·번호 채점)에서만 얻는다. 배틀은 학습(SRS·연출) 전용.
 function resolveAnswer(correct){
   const s=S.session;
   const w=byId(S.curId);
@@ -2911,9 +2972,7 @@ function resolveAnswer(correct){
     const gap=LADDER[w.stage];
     w.due=addDays(t,gap);
     s.q=s.q.slice(1);
-    markDone(w.id); // 하루 완료 단어 집계(중복 제외)
-    // 랭킹 크레딧(서버 세션 채점): 정답을 서버에 제출. e2k 는 뜻(w.m), 나머지는 스펠링(w.w)이 정답.
-    try{ wqQuizBuffer(w.id,(S.mode==='e2k')?w.m:w.w,S.mode); }catch(e){}
+    markDone(w.id); // 하루 완료 단어 집계(중복 제외) — 학습 진도(로컬). 랭킹은 '랭킹 퀴즈'에서만.
     if(!wasCap&&w.stage>=CAPTURE_STAGE){
       // 최초 포획: 도감 등록 (이후에도 복습은 계속 이어진다)
       w.cap=true;w.capAt=t;s.cap++;
@@ -2968,7 +3027,6 @@ function resolveAnswer(correct){
 
 function endBattle(){
   clearWaits(); // 진행 중이던 연출 타이머가 결과 화면을 덮어 재렌더하지 않도록 취소
-  try{ wqQuizFlush(); }catch(e){} // 이 판 남은 정답 배치를 서버에 제출(랭킹 크레딧·fire-and-forget)
   const s=S.session||{win:0,hurt:0,cap:0,best:0,hearts:1,q:[]};
   const t=today();
   const dueLeft=dueIds().length;                                  // 오늘 아직 풀 수 있는 due(이번 판 정답분은 미래로 이동해 제외됨)
