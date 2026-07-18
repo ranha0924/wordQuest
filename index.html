@@ -185,6 +185,7 @@ button:focus-visible,textarea:focus-visible{outline:2px solid var(--gold);outlin
 .rankrow .rkwk{flex:0 0 auto;color:#ffc63a;font-weight:700;}
 .rankrow .rkwk small{color:#8a8ab0;font-weight:400;font-size:9px;margin-left:1px;}
 .rankrow .rkst{flex:0 0 auto;color:#f0881c;font-size:11px;}
+.rankrow .rkst.zero{color:#8a8ab0;} /* 연속 0일: 숨기지 않고 회색 🔥0 으로 표시(살아있는 연속의 주황과 구분) */
 .rankgap{text-align:center;color:#6a6a8a;padding:3px;font-size:14px;}
 
 /* ===== title screen (Famicom style) ===== */
@@ -1450,8 +1451,9 @@ async function renderClassRank(body,C){
   // 🔥연속: 서버(워커 r12)가 att-only(streakFromDays)로 산정한 값을 모든 행에 내려준다 → 위조 불가.
   //   대시보드 /teacher 도 같은 att 값이라 랭킹 🔥 = 대시보드 🔥. '내 행'도 서버가 '오늘 live att 보정' 후
   //   산정하므로 방금 푼 오늘분이 반영된다(과거의 클라 liveStreak max 주입은 자기보고라 제거 — 본인 연속 위조 차단).
+  //   연속 0일도 숨기지 않고 회색 🔥0 으로 표시한다(.rkst.zero) — '왜 나만 🔥가 없지' 혼란 방지(v119).
   const row=(e,i)=>{ const st=e.streak|0;
-    return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
+    return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span><span class="rkst'+(st>0?'':' zero')+'">🔥'+st+'</span></div>'; };
   let html=active.map(row).join('');   // 반 전원 다 표시(이번 주 푼 반 애들 전부) — 상한 없음
   const mi=active.findIndex(e=>e.me);
   if(mi<0) html+='<div class="rankgap">⋯</div><div class="rankrow me"><span class="rkn">–</span><span class="rknm">나 <b>(이번 주 아직 0단어)</b></span><span class="rkwk">0<small>단어</small></span></div>';
@@ -1470,8 +1472,9 @@ async function renderGlobalRank(body,C){
   if(!active.length){ body.innerHTML=_rkMsg('아직 이번 주에 푼 사람이 없어요.<br>먼저 단어를 풀어 전체 1등을 노려봐요!'); return; }
   // 연속 = 서버 att 값(위조 불가). 내 행도 서버가 '오늘 live att 보정' 후 산정 → 클라 liveStreak max 주입 제거.
   //   남의 행 연속은 서버(워커 r12)가 att-only 로 내려준 값 → 랭킹 🔥 = 대시보드 🔥.
+  //   연속 0일도 숨기지 않고 회색 🔥0 으로 표시한다(.rkst.zero) — 반 랭킹과 동일 방침(v119).
   const row=(e,i)=>{ const st=e.streak|0;
-    return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span>'+(st>0?'<span class="rkst">🔥'+st+'</span>':'')+'</div>'; };
+    return '<div class="rankrow'+(e.me?' me':'')+'"><span class="rkn">'+_rkMedal(i)+'</span><span class="rknm">'+esc(e.name||'익명')+(e.me?' <b>(나)</b>':'')+'</span><span class="rkwk">'+(e.wk|0)+'<small>단어</small></span><span class="rkst'+(st>0?'':' zero')+'">🔥'+st+'</span></div>'; };
   let html=active.slice(0,100).map(row).join('');   // 전체 랭킹 상위 100
   const mi=active.findIndex(e=>e.me);
   if(mi>=100) html+='<div class="rankgap">⋯</div>'+row(active[mi],mi);
@@ -2252,7 +2255,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v118';
+var BUILD='v119';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
