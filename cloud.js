@@ -183,8 +183,10 @@
     try {
       var tok = await user.getIdToken(); if (!tok) return false;
       var todayIds = (meta && meta.doneByDay && meta.doneByDay[t]) || [];
+      var h = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok };
+      var ac = await getAppCheckToken(); if (ac) h['X-Firebase-AppCheck'] = ac;   // r16: /sync 도 App Check 게이트 → 설정 시 토큰 동봉. 미설정이면 ac=null→미동봉, 워커 비강제라 도먼트 통과(무회귀).
       var r = await fetch(ep + '/sync', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
+        method: 'POST', headers: h,
         // streak 은 워커가 '오늘 실제 배포단어 완료' 관측으로 산정 → 클라는 보내지 않는다(위조 차단).
         body: JSON.stringify({ week: weekMonday(t), today: t, ids: collectWeekIds(meta, t), todayIds: todayIds.slice(0, 2000), name: name })
       });

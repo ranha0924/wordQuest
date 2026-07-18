@@ -58,7 +58,7 @@ export default {
     const uid = authUser.uid;
 
     try {
-      if (req.method === 'POST' && path.endsWith('/sync')) { const rl = await rlHit(env, 'rlsync:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_SYNC_PER_MIN, 10), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); return await handleSync(req, env, uid, token, cors); }
+      if (req.method === 'POST' && path.endsWith('/sync')) { const rl = await rlHit(env, 'rlsync:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_SYNC_PER_MIN, 10), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); const ac = await verifyAppCheck(req.headers.get('X-Firebase-AppCheck'), env); if (!ac.ok) return json({ error: 'appcheck', reason: ac.reason }, 403, cors); return await handleSync(req, env, uid, token, cors); }  // r16: /sync 도 App Check 게이트(크레딧·att 기록 경로). APPCHECK_ENFORCE 켜기 전엔 도먼트(무해).
       if (req.method === 'GET' && path.endsWith('/board')) { const rl = await rlHit(env, 'rlboard:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_BOARD_PER_MIN, 30), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); return await handleBoard(env, uid, token, url, cors); }
       if (req.method === 'GET' && path.endsWith('/teacher')) return await handleTeacher(env, authUser, token, url, cors);
       // 서버 세션 채점(r13): 랭킹 크레딧을 '서버 발급 세션에서 정답 대조 통과' 로만. App Check 게이트.
@@ -71,7 +71,9 @@ export default {
   },
 };
 
-const REV = 'r15';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r16';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+//   r16: App Check 우선(1단계) — /sync 에도 App Check 게이트(enforce 전 도먼트) + /quiz/submit 무채점 개인단어 크레딧 제거(위조 곁길 봉쇄).
+//        랭킹은 팩 검증분만(개인은 att 관측으로만 반영). 인페이지 위조(팩 id-에코·att 시딩)는 미제거 — App Check enforce 로 '앱 밖'만 차단(정직).
 //   r15: 가용성 방어 — /sync·/board 에 uid·분당 rate-limit(P1), verifyFirebase 결과 KV 캐시(P2, accounts:lookup 증폭 제거).
                               //   r14: 이상 탐지 — /quiz/submit 이 비인간적 제출속도(클라 t 중앙간격)·일 버스트 초과를
                               //        flag:{uid} 에 누적, /teacher 가 학생별 반환 → 대시보드 ⚠️. 완전차단 불가(C1)의 실용 대안(탐지+교사 실격).
@@ -364,12 +366,14 @@ async function handleBoard(env, uid, token, url, cors) {
 /* ── 서버 세션 채점 핸들러 (C4/C5/C6) ── */
 // 점수 결합: ver(세션 검증) 원장 유니크×상한 + (비은퇴 시) att 상한값과 max. 회귀0(ver 비면 attWk).
 async function combinedWk(env, uid, week, today, attWk) {
-  let vpack = null, vpers = null;
+  // r16: 랭킹은 '팩 검증분(ver_pack)'만 반영. 개인단어(무채점 곁길)는 제외 → att 관측(doneByDay)으로만 반영.
+  //   ver_pers 읽기/합산 삭제(불필요 read 제거). att 미포화 학생은 attWk 가 개인 포함 전부 세므로 표시값 불변,
+  //   att 상한(주 300·일 60) 초과 정직 헤비 개인학습자는 상한 초과분만 감소(개인은 채점불가라 위조와 분리 불가 · 트레이드오프).
+  let vpack = null;
   try { vpack = await env.RANK_KV.get('ver_pack:' + uid, { type: 'json' }); } catch (e) { /* */ }
-  try { vpers = await env.RANK_KV.get('ver_pers:' + uid, { type: 'json' }); } catch (e) { /* */ }
-  const pcap = capOf(env.PACK_WEEK_CAP, 2000), scap = capOf(env.PERSONAL_WEEK_CAP, 500);
-  const packU = verWeekUnique(vpack || {}, week, today).size, persU = verWeekUnique(vpers || {}, week, today).size;
-  const verWk = (packU < pcap ? packU : pcap) + (persU < scap ? persU : scap);
+  const pcap = capOf(env.PACK_WEEK_CAP, 2000);
+  const packU = verWeekUnique(vpack || {}, week, today).size;
+  const verWk = (packU < pcap ? packU : pcap);
   const retired = String(env.ATT_RETIRED || '') === 'true';
   return retired ? verWk : Math.max(attWk | 0, verWk);
 }
@@ -419,10 +423,9 @@ async function handleQuizSubmit(req, env, uid, token, cors) {
   const salt = env.ANSWER_SALT || '';
   const cid = await getClassId(env, uid, token);
   const dyn = cid ? await getClassPackAnswers(env, cid, token) : { ids: new Set(), ans: {} };
-  let vpack = null, vpers = null;
+  let vpack = null;
   try { vpack = await env.RANK_KV.get('ver_pack:' + uid, { type: 'json' }); } catch (e) { /* */ }
-  try { vpers = await env.RANK_KV.get('ver_pers:' + uid, { type: 'json' }); } catch (e) { /* */ }
-  vpack = (vpack && typeof vpack === 'object') ? vpack : {}; vpers = (vpers && typeof vpers === 'object') ? vpers : {};
+  vpack = (vpack && typeof vpack === 'object') ? vpack : {};
   const burst = capOf(env.PACK_DAILY_BURST, 350);
   const priorWeek = verWeekUnique(vpack, week, yesterday);   // 이번 주 어제까지 검증된 팩(신규 판정)
   let newPackToday = newThisWeekCount(vpack, week, today);   // 오늘 이미 센 '이번주 신규' 팩 수
@@ -430,25 +433,20 @@ async function handleQuizSubmit(req, env, uid, token, cors) {
   for (const a of ans) {
     const id = String((a && a.id) || '').toLowerCase(); if (!id) continue;
     const kind = sess.ids[id]; if (kind === undefined) continue;       // 세션 대상 아님
-    const already = (Array.isArray(vpack[today]) && vpack[today].indexOf(id) >= 0)
-      || (Array.isArray(vpers[today]) && vpers[today].indexOf(id) >= 0);
-    if (kind === 1) {                                                  // pack — 정답 대조
-      if (!(await packAnswerOk(id, String((a && a.a) == null ? '' : a.a), salt, dyn.ans))) continue;  // 오답 미집계
-      const isNew = !priorWeek.has(id) && !(Array.isArray(vpack[today]) && vpack[today].indexOf(id) >= 0);
-      if (isNew && newPackToday >= burst) { capped = true; continue; } // 버스트 초과 드롭
-      verAddDay(vpack, today, id);
-      if (isNew) newPackToday++;
-      if (!already) accepted.push(id);
-    } else {                                                          // personal — 서버 정답 모름(App Check+세션정합)
-      verAddDay(vpers, today, id);
-      if (!already) accepted.push(id);
-    }
+    if (kind !== 1) continue;                                         // r16: personal(무채점)은 랭킹 크레딧 제거 — 위조 곁길 봉쇄. 개인단어는 att 관측(doneByDay)으로만 반영.
+    // pack — 정답 대조
+    const already = Array.isArray(vpack[today]) && vpack[today].indexOf(id) >= 0;
+    if (!(await packAnswerOk(id, String((a && a.a) == null ? '' : a.a), salt, dyn.ans))) continue;  // 오답 미집계
+    const isNew = !priorWeek.has(id) && !already;
+    if (isNew && newPackToday >= burst) { capped = true; continue; }  // 버스트 초과 드롭
+    verAddDay(vpack, today, id);
+    if (isNew) newPackToday++;
+    if (!already) accepted.push(id);
   }
   try { await env.RANK_KV.put('ver_pack:' + uid, JSON.stringify(vpack), { expirationTtl: TTL }); } catch (e) { /* */ }
-  try { await env.RANK_KV.put('ver_pers:' + uid, JSON.stringify(vpers), { expirationTtl: TTL }); } catch (e) { /* */ }
-  const pcap = capOf(env.PACK_WEEK_CAP, 2000), scap = capOf(env.PERSONAL_WEEK_CAP, 500);
-  const packU = verWeekUnique(vpack, week, today).size, persU = verWeekUnique(vpers, week, today).size;
-  const packWk = packU < pcap ? packU : pcap, personalWk = persU < scap ? persU : scap, verWk = packWk + personalWk;
+  const pcap = capOf(env.PACK_WEEK_CAP, 2000);
+  const packU = verWeekUnique(vpack, week, today).size;
+  const packWk = packU < pcap ? packU : pcap, verWk = packWk;   // r16: 개인 무채점 크레딧 제외 → 랭킹은 팩 검증분만
   const retired = String(env.ATT_RETIRED || '') === 'true';
   const wk = await updateQuizBoard(env, uid, cid, week, verWk, retired);
   // ── 이상 탐지(교사 대시보드 ⚠️ 플래그용) ── 완전 차단은 C1 로 불가 → '탐지+교사 실격'이 실용적 최선.
@@ -456,7 +454,7 @@ async function handleQuizSubmit(req, env, uid, token, cors) {
   //   클라 t 는 위조 가능(느린 스크립트는 못 잡음)하나, 게으른 자동화와 상한 어택은 잡아 선생님에게 표시.
   const fastFlag = computeFast(ans, capOf(env.FLAG_FAST_MS, 500));
   if (fastFlag || capped) await recordFlag(env, uid, fastFlag, capped, today);
-  return json({ accepted: accepted, packWk: packWk, personalWk: personalWk, wk: wk, capped: capped }, 200, cors);
+  return json({ accepted: accepted, packWk: packWk, wk: wk, capped: capped }, 200, cors);
 }
 // 보드(c:/g:) 내 키 w 갱신: retired→verWk, 아니면 max(기존 w, verWk)(att 값 보존). 이름/연속(n/s/d)은 유지.
 async function updateQuizBoard(env, uid, cid, week, verWk, retired) {
