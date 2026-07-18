@@ -579,4 +579,108 @@ function isMasterUser(authUser, env) {
 function json(o, status, cors) {
   return new Response(JSON.stringify(Object.assign({ v: REV }, o)), { status, headers: { 'content-type': 'application/json', ...cors } });
 }
+/* ============================================================================
+   서버 세션 채점 — 순수·암호 유틸 (C2) + App Check JWKS 검증 (C3)
+   ★ normEn/normKo 는 scripts/build-pack-answers.mjs 와 '바이트 동일' 이어야 한다
+     (팩 정답 he/hk 대조가 build↔runtime 라운드트립이라 불일치 시 전 팩 검증 실패).
+   ============================================================================ */
+const _te = new TextEncoder();
+function b64urlFromBytes(bytes) { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function bytesFromB64url(str) { str = String(str || '').replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '='; const bin = atob(str); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+// HMAC-SHA256 서명(base64url) — 세션 sid 위조 방지.
+async function hmacSign(secret, msg) {
+  const key = await crypto.subtle.importKey('raw', _te.encode(String(secret)), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, _te.encode(String(msg)));
+  return b64urlFromBytes(new Uint8Array(sig));
+}
+async function hmacVerify(secret, msg, sig) {
+  const expect = await hmacSign(secret, msg);
+  if (typeof sig !== 'string' || sig.length !== expect.length) return false;
+  let diff = 0; for (let i = 0; i < expect.length; i++) diff |= expect.charCodeAt(i) ^ sig.charCodeAt(i); return diff === 0;
+}
+async function sha256hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', _te.encode(String(str)));
+  const b = new Uint8Array(buf); let h = ''; for (let i = 0; i < b.length; i++) h += b[i].toString(16).padStart(2, '0'); return h;
+}
+// ★ scripts/build-pack-answers.mjs 와 동일 정의(변경 시 양쪽 동시).
+function normEn(x) { return String(x == null ? '' : x).toLowerCase().trim().replace(/\s+/g, ' '); }
+function normKo(x) { return String(x == null ? '' : x).trim().replace(/\s+/g, ' '); }
+// 팩/개인 분류: 정적 PACK_IDS(번들) ∪ 동적 배포팩 id.
+function classifyId(id, dynIds) { id = String(id).toLowerCase(); if (typeof PACK_IDS !== 'undefined' && PACK_IDS.has(id)) return 'pack'; if (dynIds && dynIds.has && dynIds.has(id)) return 'pack'; return 'personal'; }
+// rate-limit(KV 카운터·근사·비원자적). 읽기 실패는 통과(가용성 우선).
+async function rlHit(env, key, limit, windowSec) {
+  let n = 0; try { const v = await env.RANK_KV.get(key); n = v ? (parseInt(v, 10) || 0) : 0; } catch (e) { return { ok: true, n: 0 }; }
+  if (n >= limit) return { ok: false, n: n };
+  try { await env.RANK_KV.put(key, String(n + 1), { expirationTtl: windowSec }); } catch (e) { /* 무시 */ }
+  return { ok: true, n: n + 1 };
+}
+// ver 원장 { 'YYYY-MM-DD':[id…] } — (id×날짜) 유니크.
+function verAddDay(map, day, id) { if (!map[day]) map[day] = []; if (map[day].indexOf(id) < 0) map[day].push(id); }
+function verWeekUnique(map, weekMon, today) { const s = new Set(); if (map) for (const d in map) { if (d >= weekMon && d <= today) { const a = map[d]; if (Array.isArray(a)) for (let i = 0; i < a.length; i++) s.add(a[i]); } } return s; }
+// 하루 '이번 주 신규' 팩 id 수(버스트 판정) — 오늘치 중 이번 주 이전 날에 없던 id.
+function newThisWeekCount(map, weekMon, today) {
+  const prior = new Set(); for (const d in map) { if (d >= weekMon && d < today) { const a = map[d]; if (Array.isArray(a)) for (let i = 0; i < a.length; i++) prior.add(a[i]); } }
+  const t = Array.isArray(map[today]) ? map[today] : []; let n = 0; for (let i = 0; i < t.length; i++) if (!prior.has(t[i])) n++; return n;
+}
+// 동적 배포팩 정답(he/hk)+id — classPacks/{cid} 읽어 계산(워커=소유교사 토큰 read·학생 write 불가). 5분 KV 캐시.
+async function getClassPackAnswers(env, cid, token) {
+  if (!cid) return { ids: new Set(), ans: {} };
+  const ck = 'cpa:' + cid;
+  try { const c = await env.RANK_KV.get(ck, { type: 'json' }); if (c && c.ans && Array.isArray(c.ids)) return { ids: new Set(c.ids), ans: c.ans }; } catch (e) { /* 없음 */ }
+  const doc = await fsGet(env, 'classPacks/' + cid, token);
+  const vals = doc && doc.fields && doc.fields.words && doc.fields.words.arrayValue && doc.fields.words.arrayValue.values;
+  const ans = {}, ids = [], salt = env.ANSWER_SALT || '';
+  if (Array.isArray(vals)) for (const wv of vals) {
+    const f = wv && wv.mapValue && wv.mapValue.fields; if (!f) continue;
+    const w = f.w && f.w.stringValue, m = (f.m && f.m.stringValue) || '';
+    if (!w) continue; const id = String(w).toLowerCase();
+    ans[id] = { he: await sha256hex(salt + '|en|' + normEn(w)), hk: await sha256hex(salt + '|ko|' + normKo(m)) };
+    ids.push(id);
+  }
+  try { await env.RANK_KV.put(ck, JSON.stringify({ ids: ids, ans: ans }), { expirationTtl: 300 }); } catch (e) { /* 무시 */ }
+  return { ids: new Set(ids), ans: ans };
+}
+// 팩 정답 대조(정적 PACK_ANSWERS ∪ 동적 dynAns) — 모드 무관: normEn(a)==he 또는 normKo(a)==hk.
+async function packAnswerOk(id, a, salt, dynAns) {
+  id = String(id).toLowerCase();
+  const rec = (typeof PACK_ANSWERS !== 'undefined' && PACK_ANSWERS[id]) || (dynAns && dynAns[id]);
+  if (!rec) return false;
+  if (rec.he && (await sha256hex(salt + '|en|' + normEn(a))) === rec.he) return true;
+  if (rec.hk && (await sha256hex(salt + '|ko|' + normKo(a))) === rec.hk) return true;
+  return false;
+}
+// App Check JWKS 공개키(kid) — Firebase App Check jwks, 1h KV 캐시.
+async function getAppCheckJwk(env, kid) {
+  let jwks = null;
+  try { jwks = await env.RANK_KV.get('acjwks', { type: 'json' }); } catch (e) { /* */ }
+  if (!jwks) { try { const r = await fetch('https://firebaseappcheck.googleapis.com/v1/jwks'); if (r.ok) { jwks = await r.json(); try { await env.RANK_KV.put('acjwks', JSON.stringify(jwks), { expirationTtl: 3600 }); } catch (e) { } } } catch (e) { } }
+  if (!jwks || !Array.isArray(jwks.keys)) return null;
+  for (const k of jwks.keys) if (k.kid === kid) return k;
+  return null;
+}
+// App Check 토큰(JWT, RS256) 검증. PROJECT_NUMBER 미설정→스킵. APPCHECK_ENFORCE!=='true'→실패해도 통과(모니터링).
+async function verifyAppCheck(token, env) {
+  const projNum = env.PROJECT_NUMBER;
+  if (!projNum) return { ok: true, skipped: true };
+  const enforce = String(env.APPCHECK_ENFORCE || '') === 'true';
+  const fail = (reason) => enforce ? { ok: false, reason: reason } : { ok: true, degraded: reason };
+  if (!token) return fail('no_token');
+  try {
+    const parts = String(token).split('.');
+    if (parts.length !== 3) return fail('malformed');
+    const header = JSON.parse(new TextDecoder().decode(bytesFromB64url(parts[0])));
+    const payload = JSON.parse(new TextDecoder().decode(bytesFromB64url(parts[1])));
+    const now = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp < now - 60) return fail('expired');
+    const aud = payload.aud, audArr = Array.isArray(aud) ? aud : [aud];
+    if (!audArr.some((x) => x === 'projects/' + projNum)) return fail('aud');
+    if (payload.iss !== 'https://firebaseappcheck.googleapis.com/' + projNum) return fail('iss');
+    const jwk = await getAppCheckJwk(env, header.kid);
+    if (!jwk) return fail('no_key');
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, bytesFromB64url(parts[2]), _te.encode(parts[0] + '.' + parts[1]));
+    if (!valid) return fail('bad_sig');
+    return { ok: true, sub: payload.sub };
+  } catch (e) { return fail('error'); }
+}
 // (단위 테스트용 export 는 모듈 형식인 worker.js 에만 있다 — 이 파일은 붙여넣기 전용)
