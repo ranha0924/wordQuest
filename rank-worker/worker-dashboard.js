@@ -49,7 +49,20 @@ async function handleFetch(req) {
     RANK_STEP: (typeof RANK_STEP !== 'undefined') ? RANK_STEP : '',
     RANK_FLUSH_MIN: (typeof RANK_FLUSH_MIN !== 'undefined') ? RANK_FLUSH_MIN : '',
     RANK_DAILY_CAP: (typeof RANK_DAILY_CAP !== 'undefined') ? RANK_DAILY_CAP : '',
-    RANK_WEEK_CAP: (typeof RANK_WEEK_CAP !== 'undefined') ? RANK_WEEK_CAP : ''
+    RANK_WEEK_CAP: (typeof RANK_WEEK_CAP !== 'undefined') ? RANK_WEEK_CAP : '',
+    // ── r13 서버 세션 채점 env(★신규 — 모듈 형식과 동일하게 통과시켜야 SW 배포에서도 동작) ──
+    QUIZ_SECRET: (typeof QUIZ_SECRET !== 'undefined') ? QUIZ_SECRET : '',
+    ANSWER_SALT: (typeof ANSWER_SALT !== 'undefined') ? ANSWER_SALT : '',
+    PROJECT_NUMBER: (typeof PROJECT_NUMBER !== 'undefined') ? PROJECT_NUMBER : '',
+    APPCHECK_ENFORCE: (typeof APPCHECK_ENFORCE !== 'undefined') ? APPCHECK_ENFORCE : '',
+    ATT_RETIRED: (typeof ATT_RETIRED !== 'undefined') ? ATT_RETIRED : '',
+    PACK_WEEK_CAP: (typeof PACK_WEEK_CAP !== 'undefined') ? PACK_WEEK_CAP : '',
+    PERSONAL_WEEK_CAP: (typeof PERSONAL_WEEK_CAP !== 'undefined') ? PERSONAL_WEEK_CAP : '',
+    PACK_DAILY_BURST: (typeof PACK_DAILY_BURST !== 'undefined') ? PACK_DAILY_BURST : '',
+    SESSION_MAX: (typeof SESSION_MAX !== 'undefined') ? SESSION_MAX : '',
+    SESSION_TTL: (typeof SESSION_TTL !== 'undefined') ? SESSION_TTL : '',
+    RL_SESS_PER_MIN: (typeof RL_SESS_PER_MIN !== 'undefined') ? RL_SESS_PER_MIN : '',
+    RL_ANS_PER_MIN: (typeof RL_ANS_PER_MIN !== 'undefined') ? RL_ANS_PER_MIN : ''
   };
 
   const allow = env.ALLOW_ORIGIN || '*';
@@ -396,7 +409,7 @@ async function handleQuizStart(req, env, uid, token, cors) {
   const dyn = cid ? (await getClassPackAnswers(env, cid, token)).ids : new Set();
   const kept = [];
   for (const id of ids) {
-    if (wordIds && !wordIds.has(id)) continue;              // 위조 id 탈락(학생 state 에 실재하지 않음)
+    if (!wordIds || !wordIds.has(id)) continue;             // ★랭킹 크레딧 경로: 실재 요구(빈 words→wordIds=null 로 임의 id 청구 차단 M2). 정상 학생은 words 보유라 무영향.
     kept.push({ id: id, pack: classifyId(id, dyn) === 'pack' });
     if (kept.length >= smax) break;
   }

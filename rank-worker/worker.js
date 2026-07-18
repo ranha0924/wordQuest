@@ -380,7 +380,7 @@ async function handleQuizStart(req, env, uid, token, cors) {
   const dyn = cid ? (await getClassPackAnswers(env, cid, token)).ids : new Set();
   const kept = [];
   for (const id of ids) {
-    if (wordIds && !wordIds.has(id)) continue;              // 위조 id 탈락(학생 state 에 실재하지 않음)
+    if (!wordIds || !wordIds.has(id)) continue;             // ★랭킹 크레딧 경로: 실재 요구(빈 words→wordIds=null 로 임의 id 청구 차단 M2). 정상 학생은 words 보유라 무영향.
     kept.push({ id: id, pack: classifyId(id, dyn) === 'pack' });
     if (kept.length >= smax) break;
   }
