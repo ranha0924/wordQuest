@@ -39,7 +39,7 @@ window.RANK_ENDPOINT = "https://still-limit-42e2.ranha-park.workers.dev/";
    ★★ 실효화(둘 다 동시에!): ① 이 site key 를 채우고 배포 → ② 워커 env APPCHECK_ENFORCE=true (+PROJECT_NUMBER).
        한쪽만 켜면 위험: key 없이 워커 enforce=true 면 /sync·/quiz 가 403 → 랭킹·출석·연속 동기화 '전체 중단'.
        즉시 롤백은 워커 변수 APPCHECK_ENFORCE=false (재배포 불요). 강제 전 며칠 모니터링 권장. r16 부터 /sync 도 게이트. */
-window.APPCHECK_SITE_KEY = "";                 // 예: "6Lxxxxxx…" (콘솔에서 발급 후 기입 → App Check 켜짐 · 워커 enforce 와 동시에)
+window.APPCHECK_SITE_KEY = "6Lcl71ktAAAAAMXzd09h99KS61meROqT8Yus0-ka";  // reCAPTCHA v3 사이트키(공개값·커밋안전) → App Check SDK 초기화. ★비밀키는 여기 넣지 말 것(Firebase App Check 콘솔에만). 워커 enforce 는 모니터링 후 별도.
 window.PROJECT_NUMBER = "363343730753";        // = messagingSenderId (공개). 워커 env 에도 동일값 설정.
 /* 로컬 개발용 App Check 디버그 토큰(배포본엔 비워 둘 것 — 유효 토큰 커밋 금지). */
 window.APPCHECK_DEBUG_TOKEN = "";
