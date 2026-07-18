@@ -371,11 +371,7 @@ async function handleBoard(env, uid, token, url, cors) {
       try { attMap = await env.RANK_KV.get('att:' + uid, { type: 'json' }); } catch (e) { attOk = false; }
       attMap = (attMap && typeof attMap === 'object') ? attMap : {};
       const liveToday = countDayDone(dbd, sToday, wordIds);
-      if (liveToday > (attMap[sToday] | 0)) attMap[sToday] = liveToday;   // 오늘만 live 보정(이번 세션 즉시반영)
-      const dailyCap = capOf(env.RANK_DAILY_CAP, 60), weekCap = capOf(env.RANK_WEEK_CAP, 300);
-      const rawLive = countWeekDone(dbd, week, sToday, wordIds);          // 유효 단어만(스냅샷)
-      const bound = attOk ? weekLedgerBound(attMap, week, sToday, dailyCap, weekCap) : rawLive; // 읽기실패→무클립
-      const wkLive = rawLive < bound ? rawLive : bound;
+      if (liveToday > (attMap[sToday] | 0)) attMap[sToday] = liveToday;   // 오늘만 live 보정 → streakFromDays(연속) 오늘분 즉시반영. (r17: 랭킹 wk 는 rankWk(ver_mc)라 att 기반 wkLive 계산 제거)
       let st = null;
       try { st = await env.RANK_KV.get('st:' + uid, { type: 'json' }); } catch (e) { /* 없음 */ }
       // ★ 내 행 연속도 att 만으로 산정(streakFromDays) — 대시보드·남의 행과 동일 산식(오늘 live att 보정 포함).
@@ -469,14 +465,15 @@ async function handleQuizSubmit(req, env, uid, token, cors) {
   const akey = 'amc:' + uid + ':' + week;                    // r17: id별 주간 채점시도 상한(브루트포스 억제)
   let amc = null; try { amc = await env.RANK_KV.get(akey, { type: 'json' }); } catch (e) { /* */ }
   amc = (amc && typeof amc === 'object') ? amc : {};
-  const kmax = capOf(env.MC_ATTEMPTS_PER_ID, 4), burst = capOf(env.PACK_DAILY_BURST, 350);
+  const kmax = capOf(env.MC_ATTEMPTS_PER_ID, 3), burst = capOf(env.PACK_DAILY_BURST, 350);
   const priorWeek = verWeekUnique(vmc, week, yesterday);     // 이번 주 어제까지 검증(신규 판정)
   let newToday = newThisWeekCount(vmc, week, today);         // 오늘 이미 센 '이번주 신규' 수
-  const accepted = []; let capped = false, graded = 0, correct = 0;
+  const accepted = []; let capped = false, graded = 0, correct = 0; const seen = {};
   for (const a of ans) {
     const id = String((a && a.id) || '').toLowerCase(); if (!id) continue;
     const rec = sess.q[id]; if (!rec) continue;                       // 세션 대상 아님
-    if ((amc[id] | 0) >= kmax) continue;                             // r17: 재시도 상한 소진 → 크레딧 불가(브루트포스 억제)
+    if (seen[id]) continue; seen[id] = 1;                             // ★r17-fix: 한 제출 내 같은 id 중복 무시 → 한 번에 pick 0~3 을 나열해 정답을 '찍는' index-나열 공격 차단(제출당 id 최대 1회 채점)
+    if ((amc[id] | 0) >= kmax) continue;                             // 주간 재시도 상한(세션당 1회 × 최대 kmax 세션 → 블라인드 성공률 ≤ 1−0.75^kmax)
     amc[id] = (amc[id] | 0) + 1; graded++;
     if (Number(a && a.pick) !== rec.c) continue;                     // 오답(고른 번호≠정답 번호) 미집계
     correct++;
