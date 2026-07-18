@@ -60,7 +60,7 @@ async function handleFetch(req) {
     APPCHECK_ENFORCE: (typeof APPCHECK_ENFORCE !== 'undefined') ? APPCHECK_ENFORCE : '',
     ATT_RETIRED: (typeof ATT_RETIRED !== 'undefined') ? ATT_RETIRED : '',
     PACK_WEEK_CAP: (typeof PACK_WEEK_CAP !== 'undefined') ? PACK_WEEK_CAP : '',
-    PERSONAL_WEEK_CAP: (typeof PERSONAL_WEEK_CAP !== 'undefined') ? PERSONAL_WEEK_CAP : '',
+    // PERSONAL_WEEK_CAP: r16 에서 개인단어 랭킹 크레딧 제거로 미사용(셔임 패스스루 삭제).
     PACK_DAILY_BURST: (typeof PACK_DAILY_BURST !== 'undefined') ? PACK_DAILY_BURST : '',
     SESSION_MAX: (typeof SESSION_MAX !== 'undefined') ? SESSION_MAX : '',
     SESSION_TTL: (typeof SESSION_TTL !== 'undefined') ? SESSION_TTL : '',
