@@ -3,6 +3,14 @@
 랭킹 점수를 **"서버가 발급한 퀴즈 세션을 통과한 것"** 으로만 인정하도록 바꾼 기능이다.
 워커 세션 엔드포인트 `/quiz/start`·`/quiz/submit` + 정답 해시 번들 + App Check + rate-limit·상한으로 구성된다.
 
+> **⚠️ r16 정정(2026-07-18) — 이 문서의 '개인단어 크레딧(personalWk·ver_pers·PERSONAL_WEEK_CAP)' 서술은
+> 현행과 다르다.** 재침해 대응 "App Check 우선(1단계)"에서 **무채점 개인단어 크레딧을 제거**했다:
+> `/quiz/submit` 의 personal 분기는 미적립, 점수식은 **`wk = max(attWk, packWk)`**(개인 항·`ver_pers` 삭제).
+> 개인단어는 이제 **att 관측(doneByDay)으로만** 랭킹에 반영된다. 또 **`/sync` 도 App Check 게이트**에 포함됐다.
+> 아래 §2 의 `personalWk = min(…, PERSONAL_WEEK_CAP)` / `wk = packWk + personalWk` 및 §「개인」 인정 서술은
+> **r13 원설계 기록용**으로만 본다. id-echo 를 실제로 없애는 '뜻 4지선다 서버출제·index 채점'은 **2단계로 유보**.
+> 현행 위협모델·적용은 `docs/appcheck-setup.md`(§0 r16 자세) · `rank-worker/README.md`(§r16) · `HANDOFF.md`.
+
 > **★정직한 한계(꼭 읽을 것) — '문턱 높이기'이지 '완전 차단'이 아니다.**
 > 정답이 브라우저에 평문으로 있어(C1), 서버는 "학생이 실제로 알고 풀었는지"를 **증명할 수 없다.**
 > 특히 **단어 id = 영어 단어**이고 세션 시작 때 클라가 id 를 서버에 알려주므로, 학생이 그 id 를
