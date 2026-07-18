@@ -62,7 +62,8 @@ async function handleFetch(req) {
     SESSION_MAX: (typeof SESSION_MAX !== 'undefined') ? SESSION_MAX : '',
     SESSION_TTL: (typeof SESSION_TTL !== 'undefined') ? SESSION_TTL : '',
     RL_SESS_PER_MIN: (typeof RL_SESS_PER_MIN !== 'undefined') ? RL_SESS_PER_MIN : '',
-    RL_ANS_PER_MIN: (typeof RL_ANS_PER_MIN !== 'undefined') ? RL_ANS_PER_MIN : ''
+    RL_ANS_PER_MIN: (typeof RL_ANS_PER_MIN !== 'undefined') ? RL_ANS_PER_MIN : '',
+    FLAG_FAST_MS: (typeof FLAG_FAST_MS !== 'undefined') ? FLAG_FAST_MS : ''
   };
 
   const allow = env.ALLOW_ORIGIN || '*';
@@ -97,7 +98,9 @@ async function handleFetch(req) {
   }
 }
 
-const REV = 'r13';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r14';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+                              //   r14: 이상 탐지 — /quiz/submit 이 비인간적 제출속도(클라 t 중앙간격)·일 버스트 초과를
+                              //        flag:{uid} 에 누적, /teacher 가 학생별 반환 → 대시보드 ⚠️. 완전차단 불가(C1)의 실용 대안(탐지+교사 실격).
                               //   r13: 서버 세션 채점 — /quiz/start·/quiz/submit. 랭킹 크레딧을 '서버 발급 세션에서 정답 대조
                               //        통과(팩) 또는 세션정합(개인)' 로만 인정 → 콘솔로 doneByDay 위조해도 무의미(T1 완전 차단).
                               //        팩=무제한(PACK_WEEK_CAP)·개인=상한, 버스트 PACK_DAILY_BURST. App Check(JWKS) 심층방어.
@@ -266,7 +269,8 @@ async function handleTeacher(env, authUser, token, url, cors) {
       //   보드 키 없으면(0단어·미동기화) null → 대시보드가 기존 계산으로 폴백.
       let weekWords = null;
       try { const bm = (await env.RANK_KV.getWithMetadata('c:' + week + ':' + cid + ':' + suid)).metadata; if (bm && typeof bm.w === 'number') weekWords = bm.w; } catch (e) { /* 없음 → null */ }
-      out.push({ uid: suid, name: nm, streak: streakFromDays(att, today), studyDays: Object.keys(att).length, days: att, weekWords: weekWords });
+      const fl = await readFlag(env, suid);   // 이상 탐지 플래그(빠른제출·상한초과) — 대시보드 ⚠️ 표시용
+      out.push({ uid: suid, name: nm, streak: streakFromDays(att, today), studyDays: Object.keys(att).length, days: att, weekWords: weekWords, flag: fl });
     }
     cursor = res.list_complete ? null : res.cursor;
   } while (cursor);
@@ -472,6 +476,11 @@ async function handleQuizSubmit(req, env, uid, token, cors) {
   const packWk = packU < pcap ? packU : pcap, personalWk = persU < scap ? persU : scap, verWk = packWk + personalWk;
   const retired = String(env.ATT_RETIRED || '') === 'true';
   const wk = await updateQuizBoard(env, uid, cid, week, verWk, retired);
+  // ── 이상 탐지(교사 대시보드 ⚠️ 플래그용) ── 완전 차단은 C1 로 불가 → '탐지+교사 실격'이 실용적 최선.
+  //   ① 비인간적 제출 속도(클라 t 중앙 간격이 사람 최소보다 빠름) ② 일 버스트 상한 초과 시도(capped).
+  //   클라 t 는 위조 가능(느린 스크립트는 못 잡음)하나, 게으른 자동화와 상한 어택은 잡아 선생님에게 표시.
+  const fastFlag = computeFast(ans, capOf(env.FLAG_FAST_MS, 500));
+  if (fastFlag || capped) await recordFlag(env, uid, fastFlag, capped, today);
   return json({ accepted: accepted, packWk: packWk, personalWk: personalWk, wk: wk, capped: capped }, 200, cors);
 }
 // 보드(c:/g:) 내 키 w 갱신: retired→verWk, 아니면 max(기존 w, verWk)(att 값 보존). 이름/연속(n/s/d)은 유지.
@@ -490,6 +499,32 @@ async function updateQuizBoard(env, uid, cid, week, verWk, retired) {
     try { await env.RANK_KV.put(key, '', { metadata: meta, expirationTtl: TTL }); } catch (e) { /* */ }
   }
   return shown;
+}
+
+/* ── 이상 탐지(교사 플래그) — 완전차단 불가(C1)의 실용 대안: 탐지+교사 실격 ── */
+// 비인간적 제출 속도: 클라 t(제출시각) 중앙 간격이 thresholdMs 미만이면 true(≥5개일 때만).
+//   클라 t 는 위조 가능이라 '게으른 스크립트'만 잡는 best-effort 신호(선생님 확인용, 자동 차단 아님).
+function computeFast(ans, thresholdMs) {
+  var t = []; for (var i = 0; i < ans.length; i++) { var v = ans[i] && +ans[i].t; if (v > 0) t.push(v); }
+  if (t.length < 5) return false;
+  t.sort(function (a, b) { return a - b; });
+  var gaps = []; for (var i = 1; i < t.length; i++) gaps.push(t[i] - t[i - 1]);
+  gaps.sort(function (a, b) { return a - b; });
+  return gaps[Math.floor(gaps.length / 2)] < thresholdMs;
+}
+// 플래그 누적: flag:{uid} = { f:빠른제출횟수, b:상한초과횟수, at:마지막날 }. 21일 롤링.
+async function recordFlag(env, uid, fast, burst, today) {
+  var key = 'flag:' + uid, cur = null;
+  try { cur = await env.RANK_KV.get(key, { type: 'json' }); } catch (e) { /* */ }
+  cur = (cur && typeof cur === 'object') ? cur : { f: 0, b: 0, at: null };
+  if (fast) cur.f = (cur.f | 0) + 1;
+  if (burst) cur.b = (cur.b | 0) + 1;
+  cur.at = today;
+  try { await env.RANK_KV.put(key, JSON.stringify(cur), { expirationTtl: 60 * 60 * 24 * 21 }); } catch (e) { /* */ }
+}
+async function readFlag(env, uid) {
+  try { var c = await env.RANK_KV.get('flag:' + uid, { type: 'json' }); if (c && typeof c === 'object') return { fast: c.f | 0, burst: c.b | 0, at: c.at || null }; } catch (e) { /* */ }
+  return null;
 }
 
 /* ── 순수 로직(단위 테스트 대상) ── */
