@@ -2252,7 +2252,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v116';
+var BUILD='v117';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2863,6 +2863,25 @@ function submitSpell(){
   resolveAnswer(correct);
 }
 // 정답 여부 확정 후 공통 처리: 정답률·SRS·연출·다음 몬스터
+// ── 서버 세션 채점(r13) 클라 훅 — 정답 완료를 배치로 워커에 제출(랭킹 크레딧). ──
+//   버퍼→플러시(배치당 1세션: quizStart→quizSubmit). 실패/미지원/오프라인/미로그인이면 조용히 로컬만
+//   (학습·SRS 불변·회귀0). 소탕/군집매치는 답을 '생산'하지 않으므로 버퍼 안 함(랭킹 미반영=올바른 보안).
+var wqAnsBuf=[];
+function wqQuizBuffer(id,a,mode){
+  try{ if(!(window.Cloud&&Cloud.quizStart))return; }catch(e){return;}
+  wqAnsBuf.push({id:String(id).toLowerCase(),a:String(a==null?'':a),mode:mode});
+  if(wqAnsBuf.length>=10) wqQuizFlush();
+}
+async function wqQuizFlush(){
+  if(!wqAnsBuf.length)return;
+  var C; try{ C=window.Cloud; }catch(e){ wqAnsBuf=[]; return; }
+  if(!(C&&C.quizStart&&C.quizSubmit)){ wqAnsBuf=[]; return; }
+  var batch=wqAnsBuf.splice(0);          // 즉시 비워 재진입 방지
+  try{
+    var sess=await C.quizStart(batch.map(function(x){return x.id;}));
+    if(sess&&sess.sid) await C.quizSubmit(sess.sid,batch);   // 실패해도 무해(로컬 진도 이미 반영)
+  }catch(e){}
+}
 function resolveAnswer(correct){
   const s=S.session;
   const w=byId(S.curId);
@@ -2887,6 +2906,8 @@ function resolveAnswer(correct){
     w.due=addDays(t,gap);
     s.q=s.q.slice(1);
     markDone(w.id); // 하루 완료 단어 집계(중복 제외)
+    // 랭킹 크레딧(서버 세션 채점): 정답을 서버에 제출. e2k 는 뜻(w.m), 나머지는 스펠링(w.w)이 정답.
+    try{ wqQuizBuffer(w.id,(S.mode==='e2k')?w.m:w.w,S.mode); }catch(e){}
     if(!wasCap&&w.stage>=CAPTURE_STAGE){
       // 최초 포획: 도감 등록 (이후에도 복습은 계속 이어진다)
       w.cap=true;w.capAt=t;s.cap++;
@@ -2941,6 +2962,7 @@ function resolveAnswer(correct){
 
 function endBattle(){
   clearWaits(); // 진행 중이던 연출 타이머가 결과 화면을 덮어 재렌더하지 않도록 취소
+  try{ wqQuizFlush(); }catch(e){} // 이 판 남은 정답 배치를 서버에 제출(랭킹 크레딧·fire-and-forget)
   const s=S.session||{win:0,hurt:0,cap:0,best:0,hearts:1,q:[]};
   const t=today();
   const dueLeft=dueIds().length;                                  // 오늘 아직 풀 수 있는 due(이번 판 정답분은 미래로 이동해 제외됨)
