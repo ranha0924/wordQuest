@@ -2723,6 +2723,7 @@ function burst(color){
 function nextMon(){
   const s=S.session;
   if(!s||!s.q.length||s.hearts<=0){endBattle();return;}
+  S.mcId=null;   // 서버-MC 표식은 매 몬스터 초기화(무리 조우 턴 포함 — 아래 조기 return 전에 리셋해 잔존 방지)
   if(wqMC.session!==s){ wqMC={session:s,sid:null,byId:{},picks:[]}; try{ wqMcPrefetch(); }catch(e){} }  // 새 판이면 서버 MC 사전 요청(1회·fire-and-forget)
   // 가끔 '무리 조우'(짝 맞추기): due 가 충분할 때 확률적으로 등장.
   if(s.q.length>=SWARM_SIZE&&Math.random()<SWARM_P){
