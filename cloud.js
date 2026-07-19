@@ -599,6 +599,7 @@
       if (!cid) return { ok: false, msg: '반 정보를 찾을 수 없어요.' };
       await fsMod.setDoc(userRef(user.uid), {
         schema: 2, role: 'student', classId: cid, className: cname, displayName: name,
+        joinCode: code,               // ★ firestore.rules 가 '코드 지식'으로 반 소속을 검증(자기신고 classId 차단)
         updatedAt: now()
       }, { merge: true });
       if (profile) { profile.role = 'student'; profile.classId = cid; profile.className = cname; profile.displayName = name; }
