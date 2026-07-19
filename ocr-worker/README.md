@@ -21,6 +21,8 @@ API 키를 앱(학생 손)에 노출하지 않으려고 둡니다. **약 10분, 
 | `MODEL` | Variable(선택) | 비우면 `claude-haiku-4-5-20251001` |
 | `ALLOW_ORIGIN` | Variable(선택) | 앱 도메인(예: `https://내앱.web.app`). 모르면 `*` |
 | `ANTHROPIC_BASE` | Variable(선택) | **워커가 `upstream_error`(403 "Request not allowed")로 실패할 때만** 필요. Cloudflare AI Gateway 주소를 넣어 리전 차단을 우회. 아래 §3.5 참고 |
+| `PROJECT_NUMBER` | Variable(선택) | Firebase **프로젝트 번호**(= `firebase-config.js` 의 `messagingSenderId`). App Check(o2) 검증용 |
+| `APPCHECK_ENFORCE` | Variable(선택) | `true` 면 App Check 토큰 필수 = **앱 밖 스크립트의 유료 Claude 호출 차단**(비용·`DAILY_CAP` 소진 공격 방어). `PROJECT_NUMBER` 와 **반드시 함께** 설정(누락 시 misconfig 로 전부 거부 — 페일클로즈드). ⚠️ 앱 v125(App Check 헤더 동봉) 전파 후에만 켤 것 — 구캐시 클라는 403을 받고 기기 내 무료 OCR 로 폴백된다. 순서 런북: `docs/appcheck-setup.md` |
 
 저장 후 우측 상단 **Deploy** 한 번 더.
 
@@ -47,6 +49,9 @@ Cloudflare Worker 에서 나가는 요청을 Anthropic 이 리전 차단하면 `
 ## 동작/폴백
 - 주소가 설정되면: 로그인 학생이 사진 담기 → 워커가 Claude로 인식 → 결과를 앱이 채움.
 - 주소가 없거나 실패하면: 자동으로 **기기 내 무료 OCR(Tesseract)** 로 폴백 → 앱은 안 깨짐.
+- **배포 확인(o2~)**: 워커 주소를 브라우저로 그냥 열면 `{"error":"method_not_allowed","v":"o2"}` —
+  `v` 값이 `worker.js` 상단 `REV` 와 같으면 새 코드가 라이브다(`v` 자체가 없으면 구버전).
+- App Check 강제(`APPCHECK_ENFORCE=true`) 시 403 `appcheck` 응답도 앱(v125+)에선 기기 내 OCR 폴백으로 처리된다.
 
 ## 비용 감각 (Claude Haiku 기준)
 - 사진 1장 ≈ 수천 토큰 → **대략 장당 1원 안팎**. 학생들이 가끔 쓰면 월 몇 백 원~몇 천 원.

@@ -2214,6 +2214,8 @@ async function runOCRApi(file,endpoint){
   if(ocrQuotaLeft()<=0){ ocrStatus('오늘 AI 사진 인식 횟수를 다 썼어요(하루 '+(window.OCR_DAILY_LIMIT||8)+'장). 내일 다시 이용하거나, 아래 칸에 직접 입력해 주세요.'); return true; }
   let token=null; try{ token=await window.Cloud.getIdToken(); }catch(e){}
   if(!token){ _ocrApiFail='LOGIN'; return false; } // 로그인 안 됨 → 폴백
+  // v125: App Check 토큰 동봉(OCR 워커 o2 게이트 대비). 구 cloud.js 캐시(함수 없음)·발급 실패면 null → 미동봉(기존 동작).
+  let acTok=null; try{ if(window.Cloud.getAppCheckToken) acTok=await window.Cloud.getAppCheckToken(); }catch(e){}
   ocrStatus('사진 준비 중…');
   // 사진 변환 실패(HEIC 등 미지원 포맷)는 예외로 끝내지 말고 기기 내 인식으로 폴백.
   let dataUri; try{ dataUri=await fileToJpegDataUri(file,1600,0.82); }
@@ -2221,13 +2223,17 @@ async function runOCRApi(file,endpoint){
   ocrStatus('AI가 사진을 읽는 중… 잠시만요');
   let r;
   try{
-    r=await fetch(endpoint,{ method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body:JSON.stringify({image:dataUri}) });
+    const hh={'Content-Type':'application/json','Authorization':'Bearer '+token}; if(acTok)hh['X-Firebase-AppCheck']=acTok;
+    r=await fetch(endpoint,{ method:'POST', headers:hh, body:JSON.stringify({image:dataUri}) });
   }catch(e){ _ocrApiFail='서버 연결 실패(CORS·네트워크)'; ocrStatus('서버에 연결하지 못했어요. 기기 내 인식으로 대신 시도할게요…'); return false; }
   if(!r.ok){
     let msg='인식 서버 오류', code='', jlim=0, ust=0, udet='';
     try{ const j=await r.json(); code=(j&&j.error)||''; jlim=(j&&j.limit)||0; ust=(j&&j.status)||0; udet=(j&&j.detail)||''; if(code==='daily_cap_reached')msg='오늘 전체 사용량이 많아 잠시 후 다시 시도해 주세요.'; else if(code==='unauthorized')msg='로그인이 필요해요. 로그아웃 후 다시 로그인해 주세요.'; else if(code==='image_too_large')msg='사진이 너무 커요. 다시 시도해 주세요.'; }catch(e){}
     // 계정 기준 하루 한도 초과(서버 강제) — 로컬 카운터도 소진 처리해 표시 일치시키고 안내.
     if(code==='user_daily_cap_reached'){ const lim=jlim||window.OCR_DAILY_LIMIT||8; try{ localStorage.setItem(ocrQuotaKey(),String(lim)); }catch(e){} ocrStatus('오늘 AI 사진 인식 횟수를 다 썼어요(하루 '+lim+'장). 내일 다시 이용하거나, 아래 칸에 직접 입력해 주세요.'); return true; }
+    // v125: App Check 미통과(403 appcheck — OCR 워커 o2 enforce) → 기기 내 무료 OCR 로 강등(플랜검수 P1).
+    //   구캐시 클라(토큰 미동봉)·광고차단기(reCAPTCHA 차단으로 발급 실패) 학생도 기능이 살아 있게 한다.
+    if(code==='appcheck'){ _ocrApiFail='AI 경로 App Check 미통과(새로고침 후에도 반복되면 확장프로그램의 reCAPTCHA 차단 여부 확인)'; ocrStatus('AI 인식 검증을 통과하지 못해 기기 내 인식으로 대신할게요…'); return false; }
     // 서버 설정 미완(500/502) 등은 기기 내 OCR로 폴백. upstream_error 는 워커→Anthropic 호출이
     //   '거부'된 것 → 실제 원인(키/크레딧/모델/한도)을 드러내야 고칠 수 있으므로 status·detail 을 분류해 표시.
     if(r.status>=500 || code==='server_misconfig' || code==='upstream_error'){
@@ -2301,7 +2307,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v124';
+var BUILD='v125';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).

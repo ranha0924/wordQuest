@@ -34,6 +34,7 @@
     currentEmail: function () { return null; },
     currentUser: function () { return null; },
     getIdToken: function () { return Promise.resolve(null); },
+    getAppCheckToken: function () { return Promise.resolve(null); },
     quizStart: function () { return Promise.resolve(null); },
     quizSubmit: function () { return Promise.resolve(null); },
     getProfile: function () { return null; },
@@ -177,6 +178,7 @@
   }
   // 마지막 /sync 서버 응답(내 점수·연속·저장지연 여부) — 보드 조회가 실패해도 '내 점수'는 보여줄 수 있게 보관.
   var lastRank = null; // { wk, streak, degraded, at }
+  var acwWarned = false; // r19 acw(App Check 미검증) 콘솔 경고는 세션당 1회만
   function rankStatus() { return lastRank; }
   async function rankSync(meta, t, name) {
     var ep = rankEndpoint(); if (!ep || !user) return false;
@@ -191,6 +193,9 @@
         body: JSON.stringify({ week: weekMonday(t), today: t, ids: collectWeekIds(meta, t), todayIds: todayIds.slice(0, 2000), name: name })
       });
       var d = null; try { d = await r.json(); } catch (e2) { /* 구버전 워커·비JSON — 무시 */ }
+      // r19 모니터링: 워커가 App Check 토큰을 검증하지 못하면 응답에 acw(사유)가 실린다(성공 시 필드 없음).
+      //   enforce 켜기 전 "토큰이 워커까지 도달·검증되는가" 확인용 — 이 경고가 반복되는 환경은 enforce 시 403 이 된다.
+      if (d && d.acw && !acwWarned) { acwWarned = true; console.warn('[cloud] App Check 미검증(모니터링 — enforce 켜면 403 될 요청) · 사유:', d.acw, '· 점검: docs/appcheck-setup.md'); }
       // degraded=true: 워커가 KV 쓰기 한도(무료 1,000회/일) 등으로 보드 기록을 못 남겼다는 뜻.
       //   점수 계산 자체는 서버가 했으므로(wk) 내 점수 표시용으로 보관한다.
       if (r.ok && d && typeof d.wk === 'number') lastRank = { wk: d.wk | 0, streak: d.streak | 0, degraded: !!d.degraded, at: Date.now() };
@@ -201,7 +206,9 @@
     var ep = rankEndpoint(); if (!ep || !user) return null;
     try {
       var tok = await user.getIdToken(); if (!tok) return null;
-      var r = await fetch(ep + '/board?scope=' + scope + '&week=' + encodeURIComponent(weekMonday(t)), { headers: { 'Authorization': 'Bearer ' + tok } });
+      var h = { 'Authorization': 'Bearer ' + tok };
+      var ac = await getAppCheckToken(); if (ac) h['X-Firebase-AppCheck'] = ac;   // v125: 게이트 없는 GET 이지만 선동봉(무해·향후 게이트 대비). 워커 r19(CORS 허용) 미배포면 프리플라이트 실패 → 기존 폴백(null)과 동일.
+      var r = await fetch(ep + '/board?scope=' + scope + '&week=' + encodeURIComponent(weekMonday(t)), { headers: h });
       if (!r.ok) return null;
       var d = await r.json(), list = (d && d.list) || [];
       return list.map(function (e) { return { uid: e.uid, name: e.name || '익명', wk: e.wk | 0, streak: e.streak | 0, me: !!e.me }; });
@@ -214,7 +221,9 @@
     var ep = rankEndpoint(); if (!ep || !user || !classId) return null;
     try {
       var tok = await user.getIdToken(); if (!tok) return null;
-      var r = await fetch(ep + '/teacher?class=' + encodeURIComponent(classId), { headers: { 'Authorization': 'Bearer ' + tok } });
+      var h = { 'Authorization': 'Bearer ' + tok };
+      var ac = await getAppCheckToken(); if (ac) h['X-Firebase-AppCheck'] = ac;   // v125: /board 와 동일한 선동봉(무해).
+      var r = await fetch(ep + '/teacher?class=' + encodeURIComponent(classId), { headers: h });
       if (!r.ok) return null;
       var d = await r.json(), list = (d && d.list) || [], byUid = {};
       for (var i = 0; i < list.length; i++) {
@@ -924,6 +933,7 @@
     syncState: function () { return { signedIn: !!user, failing: lastSyncFailAt > lastSyncOkAt, okAt: lastSyncOkAt }; },
     currentUser: function () { return user ? { uid: user.uid, email: user.email, name: user.displayName, photo: user.photoURL } : null; },
     getIdToken: function () { return user ? user.getIdToken() : Promise.resolve(null); }, // OCR 프록시 인증용
+    getAppCheckToken: getAppCheckToken, // v125: OCR 프록시 App Check 헤더용(o2 게이트) — 미초기화·실패 시 null
     quizStart: quizStart,     // 서버 세션 채점: 판 시작 시 세션 발급(index.html 전투 훅)
     quizSubmit: quizSubmit,   // 정답 배치 제출(랭킹 크레딧). 실패/미지원 시 null → 로컬 진도만.
 

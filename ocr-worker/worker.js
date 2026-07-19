@@ -18,11 +18,24 @@
      USER_DAILY_LIMIT   (선택)      — 학생 1인당 하루 스캔 상한(기본 8). KV 바인딩 시 강제
      DAILY_CAP          (선택)      — 하루 전체 호출 상한(기본 500). KV 바인딩 시 적용
      ALLOW_ORIGIN       (선택)      — 허용할 앱 도메인(기본 *). 예: https://your-app.web.app
+     PROJECT_NUMBER     (선택)      — Firebase 프로젝트 번호(=firebase-config.js 의 messagingSenderId).
+                                      App Check 토큰(JWT) 의 aud/iss 검증에 사용(o2).
+     APPCHECK_ENFORCE   (선택)      — 'true' 면 App Check 토큰 필수 = 앱 밖 스크립트의 유료 Claude 호출
+                                      (비용·DAILY_CAP 소진 공격) 차단. ★PROJECT_NUMBER 와 함께 설정할 것
+                                      (enforce=true 인데 번호 누락이면 misconfig 로 전부 거부 — 페일클로즈드).
+                                      미설정/false = 기존과 100% 동일(도먼트·무회귀). 롤백 = false (재배포 불요).
+                                      ★켜는 순서: 클라 v125(App Check 헤더 동봉) 전파 후에만. docs/appcheck-setup.md
    ★ KV 네임스페이스 바인딩 이름: OCR_KV  — 카운터 저장용(★필수).
      이 바인딩이 있어야 학생별/전체 하루 상한이 서버에서 "우회 불가"로 강제됩니다.
      ★ 바인딩이 없으면 유료 호출을 아예 거부한다(500) — 과거엔 무제한 과금 fail-open 이었음.
        배포 시 반드시 OCR_KV 를 바인딩할 것.
    ============================================================================ */
+
+const REV = 'o2';   // 코드 리비전(모든 응답 v 필드) — 배포 확인: 워커 주소를 브라우저로 열면
+                    // {"error":"method_not_allowed","v":"o2"} 가 보인다. 로직 바꾸면 올릴 것.
+//   o2: App Check 게이트(도먼트) — PROJECT_NUMBER+APPCHECK_ENFORCE=true 설정 시 앱 밖 스크립트의
+//       유료 Claude 호출 차단. CORS Allow-Headers 에 X-Firebase-AppCheck 추가(클라 v125 부터 동봉).
+//       미설정이면 동작 변화 0. (그 이전 무리비전 코드 = o1 로 간주.)
 
 const PROMPT =
   '이 이미지는 영어 단어 학습 자료(단어장/교재)입니다. ' +
@@ -38,7 +51,7 @@ export default {
     const cors = {
       'Access-Control-Allow-Origin': allow,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Firebase-AppCheck',   // o2: App Check 헤더 허용(없으면 토큰 동봉 브라우저의 프리플라이트가 거부됨)
       'Access-Control-Max-Age': '86400',
     };
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -54,6 +67,12 @@ export default {
       const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
       const uid = await verifyFirebase(token, env.FIREBASE_API_KEY);
       if (!uid) return json({ error: 'unauthorized' }, 401, cors);
+
+      // 1b) App Check 게이트(o2·기본 도먼트) — env PROJECT_NUMBER+APPCHECK_ENFORCE=true 로 켜면
+      //     앱 밖 스크립트(curl 등)의 유료 Claude 호출을 차단. 클라(v125+)는 403 'appcheck' 를 받으면
+      //     기기 내 무료 OCR(Tesseract)로 강등하므로 학생 기능은 살아 있다.
+      const ac = await verifyAppCheck(req.headers.get('X-Firebase-AppCheck'), env);
+      if (!ac.ok) return json({ error: 'appcheck', reason: ac.reason }, 403, cors);
 
       // 2) 이미지 파싱
       const body = await req.json().catch(() => ({}));
@@ -130,8 +149,9 @@ export default {
   },
 };
 
+// 모든 응답에 v(코드 리비전)를 실어 배포 확인을 쉽게 한다(rank-worker 와 동일 패턴).
 function json(o, status, cors) {
-  return new Response(JSON.stringify(o), { status, headers: { 'content-type': 'application/json', ...cors } });
+  return new Response(JSON.stringify(Object.assign({ v: REV }, o)), { status, headers: { 'content-type': 'application/json', ...cors } });
 }
 
 // Firebase ID 토큰 검증: Google Identity Toolkit accounts:lookup 로 확인(간단·정확).
@@ -147,4 +167,44 @@ async function verifyFirebase(idToken, apiKey) {
     const d = await r.json();
     return (d.users && d.users[0] && d.users[0].localId) || null;
   } catch (e) { return null; }
+}
+
+/* ── App Check 검증(o2) — rank-worker r19 의 verifyAppCheck 와 동일 로직(자립 이식본).
+      로직을 고치면 rank-worker/worker.js·worker-dashboard.js 의 쌍둥이도 함께 볼 것. ── */
+const _te = new TextEncoder();
+function bytesFromB64url(str) { str = String(str || '').replace(/-/g, '+').replace(/_/g, '/'); while (str.length % 4) str += '='; const bin = atob(str); const out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out; }
+// App Check JWKS 공개키(kid) — Firebase App Check jwks, OCR_KV 에 1h 캐시(캐시 실패해도 동작).
+async function getAppCheckJwk(env, kid) {
+  let jwks = null;
+  try { jwks = await env.OCR_KV.get('acjwks', { type: 'json' }); } catch (e) { /* */ }
+  if (!jwks) { try { const r = await fetch('https://firebaseappcheck.googleapis.com/v1/jwks'); if (r.ok) { jwks = await r.json(); try { await env.OCR_KV.put('acjwks', JSON.stringify(jwks), { expirationTtl: 3600 }); } catch (e) { } } } catch (e) { } }
+  if (!jwks || !Array.isArray(jwks.keys)) return null;
+  for (const k of jwks.keys) if (k.kid === kid) return k;
+  return null;
+}
+// App Check 토큰(JWT, RS256) 검증. APPCHECK_ENFORCE!=='true'→실패해도 통과(모니터링·degraded 사유만 기록).
+//   페일클로즈드: enforce=true 인데 PROJECT_NUMBER 미설정이면 misconfig 로 거부(조용한 무력화 방지).
+async function verifyAppCheck(token, env) {
+  const projNum = env.PROJECT_NUMBER;
+  const enforce = String(env.APPCHECK_ENFORCE || '') === 'true';
+  if (!projNum) return enforce ? { ok: false, reason: 'misconfig' } : { ok: true, skipped: true };
+  const fail = (reason) => enforce ? { ok: false, reason: reason } : { ok: true, degraded: reason };
+  if (!token) return fail('no_token');
+  try {
+    const parts = String(token).split('.');
+    if (parts.length !== 3) return fail('malformed');
+    const header = JSON.parse(new TextDecoder().decode(bytesFromB64url(parts[0])));
+    const payload = JSON.parse(new TextDecoder().decode(bytesFromB64url(parts[1])));
+    const now = Math.floor(Date.now() / 1000);
+    if (!payload.exp || payload.exp < now - 60) return fail('expired');
+    const aud = payload.aud, audArr = Array.isArray(aud) ? aud : [aud];
+    if (!audArr.some((x) => x === 'projects/' + projNum)) return fail('aud');
+    if (payload.iss !== 'https://firebaseappcheck.googleapis.com/' + projNum) return fail('iss');
+    const jwk = await getAppCheckJwk(env, header.kid);
+    if (!jwk) return fail('no_key');
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, bytesFromB64url(parts[2]), _te.encode(parts[0] + '.' + parts[1]));
+    if (!valid) return fail('bad_sig');
+    return { ok: true, sub: payload.sub };
+  } catch (e) { return fail('error'); }
 }
