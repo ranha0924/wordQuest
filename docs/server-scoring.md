@@ -3,13 +3,20 @@
 랭킹 점수를 **"서버가 발급한 퀴즈 세션을 통과한 것"** 으로만 인정하도록 바꾼 기능이다.
 워커 세션 엔드포인트 `/quiz/start`·`/quiz/submit` + 정답 해시 번들 + App Check + rate-limit·상한으로 구성된다.
 
-> **⚠️ r16 정정(2026-07-18) — 이 문서의 '개인단어 크레딧(personalWk·ver_pers·PERSONAL_WEEK_CAP)' 서술은
-> 현행과 다르다.** 재침해 대응 "App Check 우선(1단계)"에서 **무채점 개인단어 크레딧을 제거**했다:
-> `/quiz/submit` 의 personal 분기는 미적립, 점수식은 **`wk = max(attWk, packWk)`**(개인 항·`ver_pers` 삭제).
-> 개인단어는 이제 **att 관측(doneByDay)으로만** 랭킹에 반영된다. 또 **`/sync` 도 App Check 게이트**에 포함됐다.
-> 아래 §2 의 `personalWk = min(…, PERSONAL_WEEK_CAP)` / `wk = packWk + personalWk` 및 §「개인」 인정 서술은
-> **r13 원설계 기록용**으로만 본다. id-echo 를 실제로 없애는 '뜻 4지선다 서버출제·index 채점'은 **2단계로 유보**.
-> 현행 위협모델·적용은 `docs/appcheck-setup.md`(§0 r16 자세) · `rank-worker/README.md`(§r16) · `HANDOFF.md`.
+> **⚠️ r17 정정(2026-07-18) — 이 문서의 'he/hk 해시 정답대조·개인 크레딧·hybrid 점수' 서술은 폐기됐다.**
+> 이 문서(r13)는 랭킹 크레딧을 **정답 텍스트 해시대조(`packAnswerOk`)**로 판정했는데, 정답이 클라 평문이라
+> **id-echo(답=단어 id)로 통과**하는 근본 구멍이 있었다(아래 §의 "정직한 한계"가 그것). **r16**에서 무채점
+> 개인 크레딧을 제거하고 `/sync`도 App Check 게이트에 넣었고, **r17(2단계)**에서 **채점 방식 자체를 교체**했다:
+> - `/quiz/start` = **서버 출제 뜻 4지선다**(정답 index 는 세션에만), `/quiz/submit` = **'고른 번호'만** 채점
+>   (`pick===정답index`). **정답 텍스트를 서버가 받지 않으므로 id-echo 무효**. `packAnswerOk`·he/hk·SALT 폐기 →
+>   번들은 `PACK_ANSWERS`(해시)가 아니라 **`PACK_MC`(평문 뜻/단어)**.
+> - 점수 `wk` = **서버 MC 검증분(`ver_mc`) 주간 유니크만**(`rankWk`, `MC_WEEK_CAP` 클램프). **att·개인·hash 전부
+>   랭킹에서 은퇴**(§2 의 `wk = packWk + personalWk`·hybrid 서술 무효). att 는 교사 출석·연속 표시용으로만.
+> - 재시도 상한(`MC_ATTEMPTS_PER_ID`)·저정답률 플래그(`FLAG_LOWACC_*`) 추가.
+>
+> **★정직한 한계는 여전히 유효(오히려 이게 핵심)**: 뜻이 공개파일이라 **'공개 뜻을 긁어 번호를 맞추는
+> 인페이지 스크립터(T3)'는 여전히 통과**한다(완전차단 아님). 아래 본문의 he/hk·개인·hybrid 구현 서술은
+> **역사 기록용**으로만 본다. 현행 설계·적용: `rank-worker/README.md`(§r17) · `docs/appcheck-setup.md`(§0 r17) · `HANDOFF.md`.
 
 > **★정직한 한계(꼭 읽을 것) — '문턱 높이기'이지 '완전 차단'이 아니다.**
 > 정답이 브라우저에 평문으로 있어(C1), 서버는 "학생이 실제로 알고 풀었는지"를 **증명할 수 없다.**
