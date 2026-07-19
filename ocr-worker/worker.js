@@ -18,9 +18,10 @@
      USER_DAILY_LIMIT   (선택)      — 학생 1인당 하루 스캔 상한(기본 8). KV 바인딩 시 강제
      DAILY_CAP          (선택)      — 하루 전체 호출 상한(기본 500). KV 바인딩 시 적용
      ALLOW_ORIGIN       (선택)      — 허용할 앱 도메인(기본 *). 예: https://your-app.web.app
-   ★ KV 네임스페이스 바인딩 이름: OCR_KV  — 카운터 저장용.
-     이 바인딩이 있어야 학생별 하루 상한이 서버에서 "우회 불가"로 강제됩니다.
-     (바인딩이 없으면 클라이언트 소프트 제한만 적용 = 우회 가능.)
+   ★ KV 네임스페이스 바인딩 이름: OCR_KV  — 카운터 저장용(★필수).
+     이 바인딩이 있어야 학생별/전체 하루 상한이 서버에서 "우회 불가"로 강제됩니다.
+     ★ 바인딩이 없으면 유료 호출을 아예 거부한다(500) — 과거엔 무제한 과금 fail-open 이었음.
+       배포 시 반드시 OCR_KV 를 바인딩할 것.
    ============================================================================ */
 
 const PROMPT =
@@ -45,6 +46,9 @@ export default {
 
     try {
       if (!env.ANTHROPIC_API_KEY) return json({ error: 'server_misconfig' }, 500, cors);
+      // ★ 비용 방어(fail-closed): KV 미바인딩 = 서버측 상한 0 = 무제한 유료 호출.
+      //   KV 가 없으면 유료 Claude 호출을 아예 막는다(과거엔 여기서 무제한 통과했음). OCR_KV 바인딩 필수.
+      if (!env.OCR_KV) return json({ error: 'server_misconfig', detail: 'ocr_kv_required' }, 500, cors);
 
       // 1) 로그인 토큰 검증 — 이 앱의 로그인 사용자만
       const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');

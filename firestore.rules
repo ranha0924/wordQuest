@@ -82,7 +82,35 @@ service cloud.firestore {
         && (!('classId' in d)     || (d.classId is string && d.classId.size() <= 64))
         && (!('role' in d)        || (d.role is string && (d.role == 'student' || d.role == 'teacher')))
         && (!('profile' in d)     || d.profile is map)
-        && (!('summary' in d)     || (d.summary is map && validSummary(d.summary)));
+        && (!('summary' in d)     || (d.summary is map && validSummary(d.summary)))
+        && (!('joinCode' in d)    || (d.joinCode is string && d.joinCode.size() <= 16));  // 반 코드(소속 증명용) — 크기 제한(방어적)
+    }
+
+    // 반 소속(classId)은 '자기신고'가 아니라 '반 코드 지식'으로만 설정/변경할 수 있다(교차 반 IDOR 차단).
+    //   · classId 를 새로 설정하거나 다른 값으로 바꾸는 쓰기는 joinCode(반 코드)를 함께 제출해야 하고,
+    //     그 코드 문서(classCodes/{joinCode})가 실제로 그 classId 를 가리켜야 통과한다.
+    //   · classId 를 안 건드리는 일상 쓰기(이름·요약·연속 동기화 등 merge)나 classId 를 비우는(탈퇴) 쓰기는 코드 불요.
+    //   · 학생은 classCodes 를 못 만들므로(create=teacherAllowed) 가짜 코드로 임의 반에 못 들어간다.
+    //   ⚠ 규칙 배포 전에 이미 심어진 위조 classId 는 이 규칙만으로는 소급 정리되지 않는다(다음 변경 시에만 코드 요구).
+    //     → 배포 후 users.classId 를 실제 반 명부와 대조해 미검증 값을 1회 정리하는 운영 조치 권장.
+    function classIdUnchanged(next) {
+      return resource != null
+        && ('classId' in resource.data)
+        && ('classId' in next)
+        && next.classId == resource.data.classId;
+    }
+    function joinCodeProves(next) {
+      return ('joinCode' in next)
+        && next.joinCode is string
+        && next.joinCode.matches('^[A-Z0-9]{4,8}$')
+        && exists(/databases/$(database)/documents/classCodes/$(next.joinCode))
+        && get(/databases/$(database)/documents/classCodes/$(next.joinCode)).data.classId == next.classId;
+    }
+    function classMembershipOk(next) {
+      return !('classId' in next)        // classId 미설정 → 허용
+        || next.classId == null          // 탈퇴(비우기) → 허용
+        || classIdUnchanged(next)        // 기존과 동일 → 허용(일상 merge 쓰기)
+        || joinCodeProves(next);         // 새로 설정/변경 → 반 코드 증명 필요
     }
 
     match /users/{uid} {
@@ -93,6 +121,7 @@ service cloud.firestore {
       allow write: if signedIn()
         && request.auth.uid == uid
         && validUserDoc(request.resource.data)
+        && classMembershipOk(request.resource.data)   // ★ 반 소속은 코드 증명 필요(자기신고 classId 로 남의 반 열람 차단)
         && (!('role' in request.resource.data)
             || request.resource.data.role != 'teacher'
             || teacherAllowed());
