@@ -1123,22 +1123,16 @@ html.nosvgframe *{border-image:none!important;}
     <div style="font-size:16px;font-weight:700;color:#ffe08a;text-align:center;">📢 공지사항</div>
     <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">꼭 확인해 주세요</div>
     <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:56vh;overflow-y:auto;">
-      <div style="background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.55);border-radius:9px;padding:12px 13px;margin:0 0 14px;">
-        <div style="font-size:13px;font-weight:700;color:#ff9b9b;margin-bottom:6px;">⚠️ 데이터 유실 안내 · 사과 말씀</div>
-        <div style="font-size:12px;color:#ecdada;line-height:1.75;">
-          <b style="color:#ffd0d0;">7월 16일 6교시부터 오후 5시 30분경</b>까지 학습한 기록이 <b style="color:#ffd0d0;">데이터베이스 장애</b>로 유실되었습니다.<br>
-          해당 시간대 기록은 안타깝게도 복구가 어렵습니다. 큰 불편을 끼쳐 드려 <b style="color:#ffd0d0;">정말 죄송합니다.</b><br>
-          <span style="color:#c8a8a8;">그 시간에 학습한 단어는 번거로우시더라도 다시 풀어 주세요. 현재는 정상적으로 저장되고 있습니다.</span>
+      <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:0 0 10px;">— 이번 업데이트 소식 —</div>
+      <div style="background:rgba(95,224,106,.10);border:1px solid rgba(95,224,106,.45);border-radius:9px;padding:12px 13px;margin:0 0 12px;">
+        <div style="font-size:13px;font-weight:700;color:#9fe0a8;margin-bottom:6px;">🏆 랭킹에 모든 풀이가 반영돼요</div>
+        <div style="font-size:12px;color:#d6e8d8;line-height:1.75;">
+          이제 <b style="color:#c8f0cc;">철자 타이핑·듣고 쓰기·예문 빈칸·한→영 고르기·무리 짝맞추기·추가 소탕</b>도 랭킹 단어수에 들어가요.<br>
+          <b style="color:#c8f0cc;">내가 등록한 개인 단어</b>도 매주 일정 개수까지 반영돼요.<br>
+          <span style="color:#a8c8aa;">랭킹은 서버가 직접 채점한 문제만 인정하니, 배틀로 풀어야 올라가요. (필살기 소탕은 문제를 안 풀어서 제외)</span>
         </div>
       </div>
-      <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:0 0 10px;">— 이번 업데이트 소식 —</div>
-      <div style="margin:0 0 9px;">🆕 <b style="color:#fcbc3c;">'포획하는 법' 안내가 생겼어요</b><br><span style="color:#a8a8c8;font-size:11.5px;">포획은 하루가 아니라 여러 날에 걸쳐 3번! 홈 오른쪽 위 ❓ 아이콘에서 확인하세요</span></div>
-      <div style="margin:0 0 9px;">📸 <b style="color:#fcbc3c;">사진 인식(OCR) 대폭 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">AI 고품질 인식으로 단어·뜻을 훨씬 정확하게 읽어와요</span></div>
-      <div style="margin:0 0 9px;">❤️ <b style="color:#fcbc3c;">하트 충전 후 단어 안 나오던 문제</b> 수정</div>
-      <div style="margin:0 0 9px;">🎯 <b style="color:#fcbc3c;">객관식 보기(선택지) 개선</b><br><span style="color:#a8a8c8;font-size:11.5px;">보기를 같은 품사로 맞춰, 어미(품사)만 보고 답을 찍지 못하게 했어요</span></div>
-      <div style="margin:0 0 9px;">📝 <b style="color:#fcbc3c;">뜻·보기 글자 잘림</b> 수정 <span style="color:#a8a8c8;font-size:11.5px;">— 긴 뜻도 안 잘리고 다 보여요</span></div>
-      <div style="margin:0 0 9px;">🏆 <b style="color:#fcbc3c;">랭킹 오류 수정</b> <span style="color:#a8a8c8;font-size:11.5px;">— 정확하게 집계돼요</span></div>
-      <div style="margin:0;">🔒 <b style="color:#fcbc3c;">해킹·부정접근 위험 차단</b> <span style="color:#a8a8c8;font-size:11.5px;">— 더 안전해졌어요</span></div>
+      <div style="margin:0;">🔒 <b style="color:#fcbc3c;">부정행위 방지 유지</b> <span style="color:#a8a8c8;font-size:11.5px;">— 점수는 계속 서버 검증으로만 올라가요</span></div>
     </div>
     <button class="subbtn" id="news-close" style="width:100%;justify-content:center;margin-top:14px;">확인했어요</button>
   </div>
@@ -1487,11 +1481,20 @@ async function renderGlobalRank(body,C){
 }
 function closeRank(){ const m=$('rank-modal'); if(m)m.style.display='none'; }
 
-/* ===== 랭킹: 배틀에 서버-MC 숨기기 =====
-   배틀의 '뜻 고르기(e2k)' 문항을 서버가 낸 4지선다로 렌더하고 '고른 번호'만 제출 → 서버 채점(id-echo 무효).
-   판 시작 시 이 판 팩 단어로 세션 1개 사전 요청(quizStart), 각 e2k 정답 클릭 시 번호 버퍼, 판 종료 시 배치 제출.
+/* ===== 랭킹: 배틀에 서버 채점 숨기기 =====
+   e2k(뜻 고르기)는 서버가 낸 4지선다로 렌더하고 '고른 번호'만 제출(id-echo 무효).
+   v124(워커 r18): 타이핑(k2e·listen·cloze)·k2e4·무리 짝맞추기도 '정답일 때만' {id,typed:답}으로 제출 →
+   서버가 단어 대조로 채점해 랭킹 반영(추가 소탕도 같은 배틀 루프라 자동 포함. 필살기 소탕은 답이 없어 제외).
+   판 시작 시 이 판 단어로 세션 1개 사전 요청(quizStart), 배틀 중 버퍼, 판 종료 시 배치 제출.
    오프라인/미로그인/미배포워커면 조용히 로컬 학습만(랭킹 0·회귀 없음). */
-var wqMC={session:null,sid:null,byId:{},picks:[]};
+var wqMC={session:null,sid:null,byId:{},tset:null,picks:[]};
+// typed 제출(정답만): tset=신형 워커(r18+)가 준 tids(세션 id 목록). 없으면(구워커 r17) push 안 함 —
+//   구워커는 typed 를 '오답 pick 시도'로 집계해 시도상한(amc)·저정답률 플래그를 오염시키기 때문(무회귀 게이트).
+//   오답은 아예 제출하지 않는다(서버 카운터 무접촉 — 같은 판 재출현 뒤 정답이면 그때 정상 적립).
+function wqTypedPush(id,txt){
+  if(!wqMC.sid||!wqMC.tset||!wqMC.tset[id])return;
+  try{ wqMC.picks.push({id:id,typed:String(txt),t:Date.now()}); }catch(e){}
+}
 async function wqMcPrefetch(){
   var C; try{ C=window.Cloud; }catch(e){ return; }
   if(!(C&&C.quizStart)) return;
@@ -1504,6 +1507,7 @@ async function wqMcPrefetch(){
   if(sess&&sess.sid&&Array.isArray(sess.questions)){
     wqMC.sid=sess.sid;
     for(var j=0;j<sess.questions.length;j++){ var q=sess.questions[j]; if(q&&q.id&&Array.isArray(q.opts)&&q.opts.length===4) wqMC.byId[String(q.id).toLowerCase()]=q.opts; }
+    if(Array.isArray(sess.tids)){ wqMC.tset={}; for(var k=0;k<sess.tids.length;k++){ var ti=sess.tids[k]; if(ti) wqMC.tset[String(ti).toLowerCase()]=1; } } // r18 워커: typed 제출 허용 목록
   }
 }
 async function wqMcFlush(){
@@ -2297,7 +2301,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v123';
+var BUILD='v124';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -2724,7 +2728,7 @@ function nextMon(){
   const s=S.session;
   if(!s||!s.q.length||s.hearts<=0){endBattle();return;}
   S.mcId=null;   // 서버-MC 표식은 매 몬스터 초기화(무리 조우 턴 포함 — 아래 조기 return 전에 리셋해 잔존 방지)
-  if(wqMC.session!==s){ wqMC={session:s,sid:null,byId:{},picks:[]}; try{ wqMcPrefetch(); }catch(e){} }  // 새 판이면 서버 MC 사전 요청(1회·fire-and-forget)
+  if(wqMC.session!==s){ wqMC={session:s,sid:null,byId:{},tset:null,picks:[]}; try{ wqMcPrefetch(); }catch(e){} }  // 새 판이면 서버 MC 사전 요청(1회·fire-and-forget)
   // 가끔 '무리 조우'(짝 맞추기): due 가 충분할 때 확률적으로 등장.
   if(s.q.length>=SWARM_SIZE&&Math.random()<SWARM_P){
     const ws=s.q.slice(0,SWARM_SIZE).map(byId).filter(Boolean);
@@ -2856,6 +2860,7 @@ function matchEval(){
     const w=byId(wid);
     engEl.classList.add('matched');koEl.classList.add('matched');engEl.disabled=true;koEl.disabled=true;
     const cap=matchApplyCorrect(w);
+    wqTypedPush(wid,w.w); // r18: 짝맞추기 정답 → typed 제출(랭킹 반영 — 오답 매칭은 단어 미확정이라 원래 제출 불가)
     sw.matched.add(wid);
     s.combo++;s.best=Math.max(s.best,s.combo);if(s.combo>(S.meta.bestCombo||0))S.meta.bestCombo=s.combo;
     renderSwarmHP(sw.matched.size,sw.total);renderParty();persist();
@@ -2896,8 +2901,9 @@ function answer(i){
   const c=S.choices[i];if(!c)return;
   S.picked=i;
   revealChoices();
-  // 서버-MC(배틀 e2k) 문항이면 '고른 번호'를 랭킹 제출 버퍼에 기록(정답 텍스트 미전송 → id-echo 무효)
+  // 서버-MC(배틀 e2k) 문항이면 '고른 번호'를 랭킹 제출 버퍼에 기록(정답 텍스트 미전송 → id-echo 무효, 오답도 제출=추측 통계)
   if(S.mcId&&wqMC.sid){ try{ wqMC.picks.push({id:S.mcId,pick:i,t:Date.now()}); }catch(e){} }
+  else if(S.mode==='k2e4'&&c.ok)wqTypedPush(S.curId,c.t); // r18: 한→영 4지선다 정답 → 선택한 단어를 typed 로 제출(랭킹 반영)
   resolveAnswer(c.ok);
 }
 // k2e·cloze(타이핑) 철자 응답 — 대소문자·앞뒤 공백 무시, 정확 철자만 정답
@@ -2908,14 +2914,15 @@ function submitSpell(){
   if(!val){inp.focus();return;}
   const w=byId(S.curId);
   const correct=val.toLowerCase()===(w.w||'').toLowerCase();
+  if(correct)wqTypedPush(w.id,val); // r18: 타이핑(k2e·listen·cloze) 정답 → typed 제출(서버 단어 대조·랭킹 반영). 오답은 미제출.
   S.spellVal=val;
   inp.disabled=true;const sb=$('spellsubmit');if(sb)sb.disabled=true;
   inp.classList.add(correct?'ok':'no');
   resolveAnswer(correct);
 }
 // 정답 여부 확정 후 공통 처리: 정답률·SRS·연출·다음 몬스터
-// r17(2단계): 배틀 중 '답 텍스트'를 서버에 보내던 옛 훅(wqQuizBuffer/Flush)을 제거했다 — 답=단어라 id-echo 취약.
-//   랭킹 크레딧은 이제 '랭킹 퀴즈' 모달(서버 출제 뜻 4지선다·번호 채점)에서만 얻는다. 배틀은 학습(SRS·연출) 전용.
+// 랭킹 크레딧(v124/워커 r18): 배틀 중 서버 세션으로 — e2k=서버 4지선다 '번호'(answer 에서 오답 포함 버퍼),
+//   타이핑(k2e·listen·cloze)·k2e4·짝맞추기='정답일 때만' typed(wqTypedPush). 필살기 소탕은 답이 없어 미반영.
 function resolveAnswer(correct){
   const s=S.session;
   const w=byId(S.curId);
@@ -2939,7 +2946,7 @@ function resolveAnswer(correct){
     const gap=LADDER[w.stage];
     w.due=addDays(t,gap);
     s.q=s.q.slice(1);
-    markDone(w.id); // 하루 완료 단어 집계(중복 제외) — 학습 진도(로컬). 랭킹은 '랭킹 퀴즈'에서만.
+    markDone(w.id); // 하루 완료 단어 집계(중복 제외) — 학습 진도(로컬). 랭킹은 배틀 중 서버 세션(pick/typed)으로 별도 적립.
     if(!wasCap&&w.stage>=CAPTURE_STAGE){
       // 최초 포획: 도감 등록 (이후에도 복습은 계속 이어진다)
       w.cap=true;w.capAt=t;s.cap++;
@@ -3335,7 +3342,7 @@ show('home');
 
 /* ================= 업데이트 소식 팝업 (버전당 1회) ================= */
 // NEWS_VER 을 바꾸면 다음 접속 때 모두에게 다시 1회 뜬다. 본 적 있으면(localStorage 일치) 안 뜸.
-var NEWS_VER='20260716d';
+var NEWS_VER='20260719a';
 function closeNews(){ var m=$('news-modal'); if(m)m.style.display='none'; try{localStorage.setItem('wq_news',NEWS_VER);}catch(e){} }
 function maybeShowNews(){
   try{ if(localStorage.getItem('wq_news')===NEWS_VER) return; }catch(e){}
