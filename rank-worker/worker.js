@@ -71,7 +71,12 @@ export default {
   },
 };
 
-const REV = 'r17';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r18';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+//   r18: 검증 레인 확장 — 타이핑(k2e·listen·cloze)·k2e4·무리 짝맞추기를 typed 채점({id,typed}=단어 대조)으로,
+//        개인단어를 '본인 뜻 MC/typed + 별도 원장(ver_ps) + PERSONAL_WEEK_CAP(기본150·0=차단)'으로 랭킹 반영.
+//        typed 는 amc 미소비·lowacc 미산입(정답이 결정적 — 상한은 억제효용 0·정직 학생 잠금 부작용만). 버스트는 두 레인 합산.
+//        ★정직한 한계: typed 의 답은 요청의 id 그 자체 = 스크립터에겐 id-echo 등가(C1 로 MC 도 인페이지 ~100% 인 건 동일).
+//        실효 방어 = App Check(enforce 필요)+레이트리밋+버스트+주캡. 세션 없는 필살기 소탕(무응답 자동처치)은 계속 미반영.
 //   r17: 서버 출제 MC·index 채점(2단계) — /quiz/start 가 뜻 4지선다를 내고 정답 index 는 세션에만, /quiz/submit 은 '고른 번호'만 채점.
 //        → id-echo 원천 무효. 랭킹 = 서버 MC 검증분(ver_mc)만(rankWk) — att·hash 은퇴 = 랭킹 리셋. 재시도상한·저정답률 탐지 추가.
 //        ★정직한 한계: 뜻이 공개파일이라 '뜻 긁는 인페이지 스크립터'는 여전히 통과(App Check enforce=앱 밖 차단·탐지 미탐). PACK_MC 평문 번들 배포 필요.
@@ -365,18 +370,33 @@ async function handleBoard(env, uid, token, url, cors) {
 
 /* ── 서버 세션 채점 핸들러 (C4/C5/C6) ── */
 // 점수 결합: ver(세션 검증) 원장 유니크×상한 + (비은퇴 시) att 상한값과 max. 회귀0(ver 비면 attWk).
-// r17: 랭킹 = 서버 MC 검증분(ver_mc)만. att·옛 hash(ver_pack)는 랭킹에서 은퇴(개인·타이핑·소탕 미반영).
+// r17: 랭킹 = 서버 검증분만(att·옛 hash 은퇴). r18: 검증 레인을 확장 —
+//   점수 = min(팩 유니크(ver_mc), MC_WEEK_CAP) + min(개인 유니크(ver_ps)−팩 겹침, PERSONAL_WEEK_CAP).
+//   개인단어는 '본인 문서의 뜻'으로 채점하는 자기참조 레인이라 별도 원장·낮은 캡(기본 150)·0=차단 킬스위치.
+//   차집합(ps−mc): 주중 동적 배포팩 편입으로 같은 id 가 두 원장에 남는 이중 카운트 방지.
 //   att 원장은 교사 대시보드 출석·연속(streak) 표시용으로만 유지(랭킹 wk 엔 미반영).
 async function rankWk(env, uid, week, today) {
   let vmc = null;
   try { vmc = await env.RANK_KV.get('ver_mc:' + uid, { type: 'json' }); } catch (e) { /* */ }
   const cap = capOf(env.MC_WEEK_CAP, 2000);
-  const u = verWeekUnique(vmc || {}, week, today).size;
-  return u < cap ? u : cap;
+  const mcSet = verWeekUnique(vmc || {}, week, today);
+  const mc = mcSet.size < cap ? mcSet.size : cap;
+  const persCap = cap0Of(env.PERSONAL_WEEK_CAP, 150);
+  if (persCap <= 0) return mc;                              // 킬스위치(0): ver_ps 읽기 자체를 생략
+  let vps = null;
+  try { vps = await env.RANK_KV.get('ver_ps:' + uid, { type: 'json' }); } catch (e) { /* */ }
+  let ps = 0;
+  const psSet = verWeekUnique(vps || {}, week, today);
+  for (const id of psSet) if (!mcSet.has(id)) ps++;
+  if (ps > persCap) ps = persCap;
+  return mc + ps;
 }
 // 세션 발급: 이번 판 due 단어를 서버가 실재·분류 확인 후 서명 세션(sid) 발급.
 // r17: 시작 — due 팩 id 로 '서버 출제 4지선다(뜻)' 생성. 정답 index 는 세션(KV)에만, 클라엔 보기 4개만 반환.
-//   → 답 텍스트를 서버가 받지 않으므로 id-echo 원천 무효. (팩만 랭킹 대상 · 개인/타이핑은 학습 전용.)
+// r18: 확장 — ①개인단어 포함(본인 뜻으로 MC 출제 · PERSONAL_WEEK_CAP=0 이면 r17 처럼 제외)
+//   ②MC 를 못 만드는 id(뜻 미보유 팩·오답풀 부족)는 'typed 전용'(c:null)으로 세션에 넣어 타이핑 채점만 허용
+//   ③응답에 tids(세션 전체 id) — 클라의 typed 제출 허용 목록이자 신형 워커 판별 신호.
+//   세션 rec: { c: 정답index|null, p: 개인?1 } — index 는 여전히 클라 미고지(e2k pick 채점용).
 async function handleQuizStart(req, env, uid, token, cors) {
   const body = await req.json().catch(() => ({}));
   const smax = capOf(env.SESSION_MAX, 40);
@@ -385,7 +405,8 @@ async function handleQuizStart(req, env, uid, token, cors) {
   if (!ids.length) return json({ error: 'no_ids' }, 400, cors);
   const rl = await rlHit(env, 'rls:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_SESS_PER_MIN, 5), 120);
   if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors);
-  const pst = await getState(env, uid, token);
+  const persCap = cap0Of(env.PERSONAL_WEEK_CAP, 150);       // r18: 개인 레인(0=차단 킬스위치)
+  const pst = await getState(env, uid, token, persCap > 0); // 개인 레인 켜짐 → 본인 뜻(meanings)도 같은 read 에서 파싱
   const wordIds = pst.wordIds;                              // Set(실재 판정) 또는 null(읽기실패/빈words → 가용성 통과)
   const cid = await getClassId(env, uid, token);
   const dyn = cid ? await getClassPackMc(env, cid, token) : { ids: new Set(), mc: {} };
@@ -394,23 +415,30 @@ async function handleQuizStart(req, env, uid, token, cors) {
   const questions = [];
   for (const id of ids) {
     if (!wordIds || !wordIds.has(id)) continue;             // ★실재 요구(빈 words→null 로 임의 id 청구 차단). 정상 학생 무영향.
-    if (classifyId(id, dyn.ids) !== 'pack') continue;       // 팩만 랭킹 대상(개인단어 제외)
-    const rec = (typeof PACK_MC !== 'undefined' && PACK_MC[id]) || dyn.mc[id];
-    if (!rec || !rec.m) continue;                           // 뜻 없음 → 스킵
-    const built = mcBuild(String(rec.m), pool);
-    if (!built) continue;                                   // 오답 후보 부족 → 스킵
-    sess.q[id] = { c: built.c };                            // ★정답 index 는 세션에만(클라 미고지)
-    questions.push({ id: id, opts: built.opts });
+    if (classifyId(id, dyn.ids) === 'pack') {
+      const rec = (typeof PACK_MC !== 'undefined' && PACK_MC[id]) || dyn.mc[id];
+      const built = (rec && rec.m) ? mcBuild(String(rec.m), pool) : null;
+      if (built) { sess.q[id] = { c: built.c }; questions.push({ id: id, opts: built.opts }); } // ★정답 index 는 세션에만(클라 미고지)
+      else sess.q[id] = { c: null };                        // r18: 뜻 미보유·풀 부족 팩 id → typed 전용(스킵→포함)
+    } else {                                                // personal — r18: 상한부 랭킹 레인(r16~r17 은 전면 제외였음)
+      if (persCap <= 0) continue;                           // 킬스위치: r17 동작 그대로
+      const m = pst.meanings && pst.meanings[id];
+      if (!m) continue;                                     // 동기화된 문서에 뜻이 선재해야 함(무뜻 minting 차단)
+      const built = mcBuild(String(m), pool);
+      if (built) { sess.q[id] = { c: built.c, p: 1 }; questions.push({ id: id, opts: built.opts }); }
+      else sess.q[id] = { c: null, p: 1 };                  // 풀 부족 → typed 전용
+    }
     if (questions.length >= smax) break;
   }
-  if (!questions.length) return json({ error: 'no_valid_ids' }, 400, cors);
+  const tids = Object.keys(sess.q);
+  if (!tids.length) return json({ error: 'no_valid_ids' }, 400, cors); // r18: 게이트를 세션(sess.q) 기준으로 — typed 전용 세션(questions 0개)도 성립
   const ttl = capOf(env.SESSION_TTL, 1200);
   sess.exp = Math.floor(Date.now() / 1000) + ttl;
   const nonce = b64urlFromBytes(crypto.getRandomValues(new Uint8Array(12)));
   const sid = await hmacSign(env.QUIZ_SECRET || '', uid + '|' + nonce + '|' + sess.exp);
   try { await env.RANK_KV.put('qs:' + uid + ':' + sid, JSON.stringify(sess), { expirationTtl: ttl + 60 }); }
   catch (e) { return json({ error: 'kv' }, 503, cors); }
-  return json({ sid: sid, exp: sess.exp, questions: questions }, 200, cors);
+  return json({ sid: sid, exp: sess.exp, questions: questions, tids: tids }, 200, cors);
 }
 // 제출: 세션 로드·1회성 소비 → 각 답 검증(팩=정답대조·개인=세션정합) → ver 원장 적립(버스트 상한) → 보드 갱신.
 async function handleQuizSubmit(req, env, uid, token, cors) {
@@ -427,30 +455,49 @@ async function handleQuizSubmit(req, env, uid, token, cors) {
   const today = kstToday(Date.now()), week = weekMondayKST(Date.now()), yesterday = isoAddDays(today, -1);
   let vmc = null; try { vmc = await env.RANK_KV.get('ver_mc:' + uid, { type: 'json' }); } catch (e) { /* */ }
   vmc = (vmc && typeof vmc === 'object') ? vmc : {};
-  const akey = 'amc:' + uid + ':' + week;                    // r17: id별 주간 채점시도 상한(브루트포스 억제)
+  const persCap = cap0Of(env.PERSONAL_WEEK_CAP, 150);        // r18: 개인 레인(0=차단 — 세션 발급 후 env 가 바뀌어도 제출에서 재확인)
+  let vps = null; if (persCap > 0) { try { vps = await env.RANK_KV.get('ver_ps:' + uid, { type: 'json' }); } catch (e) { /* */ } }
+  vps = (vps && typeof vps === 'object') ? vps : {};
+  const akey = 'amc:' + uid + ':' + week;                    // r17: id별 주간 채점시도 상한(브루트포스 억제 — MC(pick) 전용)
   let amc = null; try { amc = await env.RANK_KV.get(akey, { type: 'json' }); } catch (e) { /* */ }
   amc = (amc && typeof amc === 'object') ? amc : {};
   const kmax = capOf(env.MC_ATTEMPTS_PER_ID, 3), burst = capOf(env.PACK_DAILY_BURST, 350);
-  const priorWeek = verWeekUnique(vmc, week, yesterday);     // 이번 주 어제까지 검증(신규 판정)
-  let newToday = newThisWeekCount(vmc, week, today);         // 오늘 이미 센 '이번주 신규' 수
+  const priorMc = verWeekUnique(vmc, week, yesterday);       // 이번 주 어제까지 검증(신규 판정 — 레인별)
+  const priorPs = verWeekUnique(vps, week, yesterday);
+  let newToday = newThisWeekCount(vmc, week, today) + newThisWeekCount(vps, week, today); // r18: 일 버스트는 두 레인 합산 총량
   const accepted = []; let capped = false, graded = 0, correct = 0; const seen = {};
+  let mcDirty = false, psDirty = false, amcDirty = false;    // r18: 변경된 원장만 put(쓰기 절약)
   for (const a of ans) {
     const id = String((a && a.id) || '').toLowerCase(); if (!id) continue;
     const rec = sess.q[id]; if (!rec) continue;                       // 세션 대상 아님
-    if (seen[id]) continue; seen[id] = 1;                             // ★r17-fix: 한 제출 내 같은 id 중복 무시 → 한 번에 pick 0~3 을 나열해 정답을 '찍는' index-나열 공격 차단(제출당 id 최대 1회 채점)
-    if ((amc[id] | 0) >= kmax) continue;                             // 주간 재시도 상한(세션당 1회 × 최대 kmax 세션 → 블라인드 성공률 ≤ 1−0.75^kmax)
-    amc[id] = (amc[id] | 0) + 1; graded++;
-    if (Number(a && a.pick) !== rec.c) continue;                     // 오답(고른 번호≠정답 번호) 미집계
-    correct++;
-    const already = Array.isArray(vmc[today]) && vmc[today].indexOf(id) >= 0;
-    const isNew = !priorWeek.has(id) && !already;
-    if (isNew && newToday >= burst) { capped = true; continue; }     // 버스트 초과 드롭
-    verAddDay(vmc, today, id);
+    if (seen[id]) continue; seen[id] = 1;                             // ★r17-fix: 한 제출 내 같은 id 중복 무시(선착 채점) — typed 오답도 점유(정직 클라는 typed 를 정답만 보내므로 무영향)
+    const pers = !!rec.p;
+    if (pers && persCap <= 0) continue;                               // 킬스위치: 발급-제출 사이 env 변경 대비
+    const vmap = pers ? vps : vmc, prior = pers ? priorPs : priorMc;
+    const typed = (a && typeof a.typed === 'string' && a.pick === undefined) ? a.typed : null;
+    if (typed !== null) {
+      // r18 typed 레인(k2e·listen·cloze 타이핑, k2e4 선택 단어, 무리 짝맞추기): 답=단어 그 자체.
+      //   amc 미소비 — typed 는 답이 결정적이라 시도상한의 브루트포스 억제 효용이 0인 반면, 오답 선착이
+      //   정직 학생의 주간 크레딧을 잠그는 부작용만 있음(플랜 검수 반영). lowacc 분모(graded)에도 미산입 —
+      //   저정답률 탐지는 '블라인드 4지선다 25%' 전제라 MC(pick) 전용 통계여야 오탐이 없다.
+      if (typed.length > 64) continue;                                // 쓰레기 입력 가드
+      if (typed.trim().toLowerCase() !== id) continue;                // 오답: 어떤 카운터도 안 건드림(정직 클라는 정답만 제출)
+    } else {
+      if ((amc[id] | 0) >= kmax) continue;                            // 주간 재시도 상한(세션당 1회 × 최대 kmax 세션 → 블라인드 성공률 ≤ 1−0.75^kmax)
+      amc[id] = (amc[id] | 0) + 1; amcDirty = true; graded++;
+      if (Number(a && a.pick) !== rec.c) continue;                    // 오답(고른 번호≠정답 번호) 미집계 · typed 전용 문항(c:null)에 pick 제출도 항상 오답
+      correct++;
+    }
+    const already = Array.isArray(vmap[today]) && vmap[today].indexOf(id) >= 0;
+    const isNew = !prior.has(id) && !already;
+    if (isNew && newToday >= burst) { capped = true; continue; }      // 버스트 초과 드롭(레인 합산)
+    verAddDay(vmap, today, id);
     if (isNew) newToday++;
-    if (!already) accepted.push(id);
+    if (!already) { accepted.push(id); if (pers) psDirty = true; else mcDirty = true; }
   }
-  try { await env.RANK_KV.put('ver_mc:' + uid, JSON.stringify(vmc), { expirationTtl: TTL }); } catch (e) { /* */ }
-  try { await env.RANK_KV.put(akey, JSON.stringify(amc), { expirationTtl: 60 * 60 * 24 * 8 }); } catch (e) { /* */ }
+  if (mcDirty) { try { await env.RANK_KV.put('ver_mc:' + uid, JSON.stringify(vmc), { expirationTtl: TTL }); } catch (e) { /* */ } }
+  if (psDirty) { try { await env.RANK_KV.put('ver_ps:' + uid, JSON.stringify(vps), { expirationTtl: TTL }); } catch (e) { /* */ } }
+  if (amcDirty) { try { await env.RANK_KV.put(akey, JSON.stringify(amc), { expirationTtl: 60 * 60 * 24 * 8 }); } catch (e) { /* */ } }
   const cid = await getClassId(env, uid, token);
   const wk = await updateQuizBoard(env, uid, cid, week);
   // ── 이상 탐지(교사 대시보드 ⚠️ 플래그용) ── C1(공개 뜻)로 완전차단 불가 → '탐지+교사 실격'이 실용적 최선.
@@ -509,6 +556,8 @@ function validWeek(w) { return typeof w === 'string' && /^\d{4}-\d{2}-\d{2}$/.te
 function clampInt(n, lo, hi) { n = parseInt(n, 10); if (!isFinite(n)) n = 0; return n < lo ? lo : (n > hi ? hi : n); }
 // 캡 파라미터 해석: env 값이 있으면 정수 클램프, 없으면 기본값. (RANK_DAILY_CAP/RANK_WEEK_CAP)
 function capOf(v, def) { return (v === undefined || v === null || v === '') ? def : clampInt(v, 1, 1000000); }
+// r18: 0 을 허용하는 캡 파서(킬스위치용 — capOf 는 하한 1이라 '0=차단'을 표현 못 함). PERSONAL_WEEK_CAP 에 사용.
+function cap0Of(v, def) { return (v === undefined || v === null || v === '') ? def : clampInt(v, 0, 1000000); }
 // 서버 관측 원장(att)로 이번 주 점수 상한: Σ_{월≤d≤오늘} min(att[d], dailyCap), 총합은 weekCap 로 컷.
 //   att 는 '서버 오늘' 키에만 기록(recordAttendance)되어 소급 위조 불가 → 클라 스냅샷 단독 위조를 무력화한다.
 function weekLedgerBound(att, weekMonday, today, dailyCap, weekCap) {
@@ -660,6 +709,17 @@ function parseWordIds(doc) {
   if (w) for (const id in w) { if (Object.prototype.hasOwnProperty.call(w, id)) s.add(String(id).toLowerCase()); }
   return s;
 }
+// r18: words 맵에서 id→뜻(m) 평문 추출 — 개인단어 서버-MC 출제용. 문서는 getState 가 이미 읽으므로 추가 read 0.
+function parseWordMeanings(doc) {
+  const w = doc && doc.fields && doc.fields.words && doc.fields.words.mapValue && doc.fields.words.mapValue.fields;
+  const out = {};
+  if (w) for (const id in w) {
+    const f = w[id] && w[id].mapValue && w[id].mapValue.fields;
+    const m = f && f.m && f.m.stringValue;
+    if (m) out[String(id).toLowerCase()] = String(m);
+  }
+  return out;
+}
 
 /* ── 외부 I/O ── */
 async function getClassId(env, uid, token) {
@@ -679,16 +739,17 @@ async function getUserInfo(env, uid, token) {
 // 학생 본인 상태문서(users/{uid}/private/state)를 읽어 { doneByDay, wordIds } 반환.
 //   ★ 위조 필터를 위해 words 맵 키가 필요해 mask 없이 읽는다(과거엔 mask=meta 로 words 를 안 받았음).
 //     읽기 실패(null)면 wordIds=null → 판정 보류(가용성). 규칙상 본인 문서라 학생 토큰으로 읽힘.
-async function getState(env, uid, token) {
+async function getState(env, uid, token, wantMeanings) {
   const doc = await fsGet(env, 'users/' + uid + '/private/state', token);
   const today = kstToday(Date.now());
-  if (!doc) return { doneByDay: {}, wordIds: null, self: { streak: 0, lastDay: null, activeDays: {} } };
+  if (!doc) return { doneByDay: {}, wordIds: null, meanings: wantMeanings ? {} : null, self: { streak: 0, lastDay: null, activeDays: {} } };
   const ids = parseWordIds(doc);
   // words 맵이 비어있으면(리셋 직후·부분쓰기 등 이상 상태) 필터 대상이 없다 → all-pass(null)로 승격.
   //   '문서는 있는데 words 없음'이 doneByDay 완료를 전부 탈락시켜 출석/연속을 0으로 만드는 하드제로 비대칭 제거
   //   (읽기 실패 null 과 동일 가용성 취급). 정상 학생(words 보유)은 무변경 · 위조상한은 att 캡이라 완화 무해.
   //   self = 자기보고 연속 원천(meta.streak/lastDay/dailyHistory) — mask 없이 읽으므로 추가 read 비용 0.
-  return { doneByDay: parseDoneByDay(doc), wordIds: ids.size ? ids : null, self: parseSelfReport(doc, today) };
+  //   meanings 는 요청 시에만 파싱(r18 — /quiz/start 개인 레인 전용. /sync 등 다른 호출부는 비용 0 유지).
+  return { doneByDay: parseDoneByDay(doc), wordIds: ids.size ? ids : null, meanings: wantMeanings ? parseWordMeanings(doc) : null, self: parseSelfReport(doc, today) };
 }
 async function fsGet(env, docPath, idToken, mask) {
   var url = 'https://firestore.googleapis.com/v1/projects/' + env.PROJECT_ID + '/databases/(default)/documents/' + docPath;
@@ -859,4 +920,4 @@ async function verifyAppCheck(token, env) {
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, capOf, weekLedgerBound, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countDayDone, countAllDone, validId, weekMondayKST, parseDoneByDay, parseWordIds, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue, fsNum, parseSelfReport, unifiedStreak, anchorDay, staleByAt, normEn, normKo, classifyId, verAddDay, verWeekUnique, newThisWeekCount, b64urlFromBytes, bytesFromB64url, hmacSign, hmacVerify, sha256hex, rankWk, mcPool, mcBuild, handleQuizStart, handleQuizSubmit, updateQuizBoard, getClassPackMc, verifyAppCheck, rlHit, computeFast, verifyFirebaseCached };
+export const _internals = { validWeek, clampInt, capOf, cap0Of, parseWordMeanings, weekLedgerBound, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countDayDone, countAllDone, validId, weekMondayKST, parseDoneByDay, parseWordIds, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue, fsNum, parseSelfReport, unifiedStreak, anchorDay, staleByAt, normEn, normKo, classifyId, verAddDay, verWeekUnique, newThisWeekCount, b64urlFromBytes, bytesFromB64url, hmacSign, hmacVerify, sha256hex, rankWk, mcPool, mcBuild, handleQuizStart, handleQuizSubmit, updateQuizBoard, getClassPackMc, verifyAppCheck, rlHit, computeFast, verifyFirebaseCached };
