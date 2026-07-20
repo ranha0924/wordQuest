@@ -340,7 +340,7 @@ async function handleBackfill(env, authUser, token, url, cors) {
     for (const k of res.keys) members.push({ uid: k.name.slice(prefix.length), name: (k.metadata && k.metadata.n) || '익명' });
     cursor = res.list_complete ? null : res.cursor;
   } while (cursor);
-  const BF_MAX = 120;   // 학생당 서브리퀘스트 ~8회 → 유료 한도(1,000/요청) 내 안전. 초과분은 next 커서로 이어서.
+  const BF_MAX = 60;    // 학생당 서브리퀘스트 최악 ~12회 → 60명이면 ~730회로 유료 한도(1,000/요청) 내 안전(구현검수 지적 반영). 초과분은 next 커서로 이어서(클라 버튼이 자동 연속 호출).
   const list = []; let totalAdded = 0, skipped = 0, next = null;
   for (const mrec of members) {
     if (after && mrec.uid <= after) continue;                    // mem: 키가 uid 사전순이라 커서 재개 성립
@@ -362,7 +362,11 @@ async function handleBackfill(env, authUser, token, url, cors) {
       if (plan.mc.length) { try { await env.RANK_KV.put('ver_mc:' + suid, JSON.stringify(vmc), { expirationTtl: TTL }); } catch (e) { wrote = false; } }
       if (plan.ps.length) { try { await env.RANK_KV.put('ver_ps:' + suid, JSON.stringify(vps), { expirationTtl: TTL }); } catch (e) { wrote = false; } }
       if (!wrote) { list.push({ uid: suid, name: nm, added: 0, skip: 'kv' }); skipped++; continue; }   // 원장 유실 시 보드 갱신도 보류(다음 실행이 재시도)
-      try { await env.RANK_KV.put('bf:' + week + ':' + suid + ':' + day, JSON.stringify({ n: added, by: authUser.uid, at: Math.floor(Date.now() / 1000) }), { expirationTtl: TTL }); } catch (e) { /* 감사 로그 실패는 비치명 */ }
+      try {   // 감사 로그 — 같은 (주·학생·날) 재실행 시 덮어쓰지 않고 누적(구현검수 지적 반영). 실패는 비치명.
+        const bfKey = 'bf:' + week + ':' + suid + ':' + day;
+        let prevBf = null; try { prevBf = await env.RANK_KV.get(bfKey, { type: 'json' }); } catch (e2) { /* */ }
+        await env.RANK_KV.put(bfKey, JSON.stringify({ n: ((prevBf && prevBf.n) | 0) + added, by: authUser.uid, at: Math.floor(Date.now() / 1000) }), { expirationTtl: TTL });
+      } catch (e) { /* */ }
     }
     // 보드 즉시 갱신(점수 불변이면 put 생략) — 신규 키 이름은 mem 메타로 시드(updateQuizBoard 의 '익명' 시드 회피).
     const newW = rankScore(vmc, vps, week, today, mcCap, persCap);

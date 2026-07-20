@@ -3871,12 +3871,13 @@ async function renderTeacherStudents(){
   if(bf)bf.addEventListener('click',async()=>{
     if(!window.confirm('오늘(서버 기준) 학생들이 완료한 단어를 랭킹에 소급 반영합니다.\n서버 채점이 누락된 날의 복구용이며, 이미 반영된 단어는 중복되지 않아요.\n실행할까요?'))return;
     bf.disabled=true;bf.textContent='반영 중…';
-    let total=0,students=0,skipped=0,after=null,err=null;
+    let total=0,students=0,skipped=0,after=null,err=null,more=false;
     for(let round=0;round<5;round++){
       let r=null; try{ r=await C.teacherBackfill(cid,null,after); }catch(e){}
       if(!r){ err='network'; break; }
       if(!r.ok){ err=r.error||'fail'; break; }
       total+=r.totalAdded;students+=r.count;skipped+=r.skipped;
+      more=!!r.next;
       if(!r.next)break; after=r.next;
     }
     bf.disabled=false;bf.textContent='🛠 오늘 푼 단어 랭킹 반영(보정)';
@@ -3887,7 +3888,7 @@ async function renderTeacherStudents(){
         :'보정에 실패했어요: '+err);
       return;
     }
-    alert('완료! 학생 '+students+'명 처리 · 새로 반영된 단어 '+total+'개'+(skipped?(' · 건너뜀 '+skipped+'명(미동기화 등)'):''));
+    alert('완료! 학생 '+students+'명 처리 · 새로 반영된 단어 '+total+'개'+(skipped?(' · 건너뜀 '+skipped+'명(미동기화 등)'):'')+(more?'\n(반이 매우 커서 일부가 남았어요 — 버튼을 한 번 더 눌러 주세요.)':''));
     renderTeacherStudents();
   });
   // 제외 버튼
