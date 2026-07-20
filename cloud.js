@@ -47,6 +47,7 @@
     unremoveStudent: function () { return Promise.resolve({ ok: false }); },
     listMyClasses: function () { return Promise.resolve([]); },
     listStudents: function () { return Promise.resolve([]); },
+    teacherBackfill: function () { return Promise.resolve(null); },
     setClassPack: function () { return Promise.resolve({ ok: false }); },
     getClassPack: function () { return Promise.resolve(null); },
     isMaster: function () { return false; },
@@ -234,6 +235,23 @@
       //   자기보고 weekWords 를 att 로 상한하는 데 씀). 구버전 워커면 없음 → 기본값(워커 기본과 일치)으로 폴백.
       return { byUid: byUid, today: (d && d.today) || null,
                dailyCap: (d && +d.dailyCap) || 60, weekCap: (d && +d.weekCap) || 300 };
+    } catch (e) { return null; }
+  }
+
+  // r20(v126): 소급 보정(마스터 전용) — 워커가 반 학생들의 doneByDay[day]를 읽어 ver 원장에 반영.
+  //   day 생략 시 서버가 '서버 KST 오늘'을 쓴다(클라 시계 불신). 규칙·한계: rank-worker/README.md r20.
+  //   반환: {ok:true, day, count, skipped, totalAdded, next} | {ok:false, error} | null(네트워크·구워커 등).
+  async function teacherBackfill(classId, day, after) {
+    var ep = rankEndpoint(); if (!ep || !user || !classId) return null;
+    try {
+      var tok = await user.getIdToken(); if (!tok) return null;
+      var h = { 'Authorization': 'Bearer ' + tok };
+      var ac = await getAppCheckToken(); if (ac) h['X-Firebase-AppCheck'] = ac;   // /teacher 와 동일 선동봉(무해)
+      var q = '?class=' + encodeURIComponent(classId) + (day ? ('&day=' + encodeURIComponent(day)) : '') + (after ? ('&after=' + encodeURIComponent(after)) : '');
+      var r = await fetch(ep + '/teacher/backfill' + q, { method: 'POST', headers: h });
+      var d = null; try { d = await r.json(); } catch (e2) { /* 비JSON */ }
+      if (!r.ok) return { ok: false, error: (d && d.error) || ('http_' + r.status) };   // 404=구워커(r20 미배포)
+      return { ok: true, day: (d && d.day) || null, count: (d && d.count) | 0, skipped: (d && d.skipped) | 0, totalAdded: (d && d.totalAdded) | 0, next: (d && d.next) || null };
     } catch (e) { return null; }
   }
 
@@ -948,6 +966,7 @@
     listMyClasses: listMyClasses,
     listStudents: listStudents,
     teacherBoard: teacherBoard,
+    teacherBackfill: teacherBackfill, // r20(v126): 마스터 전용 소급 보정(대시보드 버튼)
     setClassPack: setClassPack,
     getClassPack: getClassPack,
     getRank: getRank,
