@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WordQuest App Check 진단</title>
+<!-- 독립 진단 페이지 — 앱과 완전 분리(어디서도 링크 안 됨·데이터 접근 0).
+     reCAPTCHA v3 부팅 3단계(로더 api.js → 본체 gstatic releases → 토큰 발급)를 순서대로 검사해
+     어느 단계에서 끊기는지 화면에 표시한다. 사이트키는 firebase-config.js 의 공개값을 그대로 사용.
+     사용: /appcheck-diag.html 을 PC·시크릿창·폰(LTE)에서 열고 결과 배너/빨간 줄을 확인. -->
+<style>
+body{font-family:system-ui,sans-serif;background:#0d0d1a;color:#e8e8f0;padding:20px;max-width:640px;margin:auto}
+h1{font-size:18px}
+.row{padding:8px 12px;border-radius:8px;margin:6px 0;background:#1a1a2e;font-size:13.5px;line-height:1.6;word-break:break-all}
+.ok{border-left:4px solid #5fe06a}.bad{border-left:4px solid #e57373}.info{border-left:4px solid #8a8ab0}
+.big{font-size:16px;font-weight:700;padding:14px;border-radius:10px;text-align:center;margin:16px 0}
+.pass{background:#143d1e}.fail{background:#4a1a1a}.wait{background:#22223a}
+code{color:#ffc63a}
+small{color:#8a8ab0}
+</style>
+</head>
+<body>
+<h1>🔍 WordQuest App Check(reCAPTCHA) 진단</h1>
+<div id="out"></div>
+<div id="verdict" class="big wait">진단 중… (최대 10초)</div>
+<p><small>이 화면을 캡처해서 보내주시면 원인을 바로 알 수 있어요. 이 페이지는 학습 데이터에 접근하지 않습니다.</small></p>
+<script src="firebase-config.js"></script>
+<script>
+'use strict';
+var KEY = String(window.APPCHECK_SITE_KEY || '').trim();
+var out = document.getElementById('out'), V = document.getElementById('verdict');
+function row(cls, html){ var d = document.createElement('div'); d.className = 'row ' + cls; d.innerHTML = html; out.appendChild(d); }
+function esc(x){ try { return String((x && x.message) || x).replace(/</g, '&lt;') || '(빈 오류 — 보통 도메인 미허용/키 거부)'; } catch (e) { return '?'; } }
+function fail(why){ V.className = 'big fail'; V.textContent = '❌ 실패 — ' + why; }
+function listRes(){
+  try {
+    var rs = performance.getEntriesByType('resource').filter(function (e) { return /recaptcha|gstatic\.com\/recaptcha/.test(e.name); });
+    row(rs.length ? 'info' : 'bad', '관측된 reCAPTCHA 리소스 ' + rs.length + '개:<br>' + (rs.map(function (e) { return '<code>' + e.name.split('?')[0].replace(/^https?:\/\//, '') + '</code>'; }).join('<br>') || '(없음)'));
+  } catch (e) { /* */ }
+}
+row('info', '접속 주소: <code>' + location.origin + '</code>');
+row('info', '사이트키: <code>' + (KEY ? KEY.slice(0, 12) + '…' : '(비어있음!)') + '</code>');
+row('info', '브라우저: <code>' + navigator.userAgent + '</code>');
+if (!KEY) { row('bad', 'firebase-config.js 에서 사이트키를 못 읽음'); fail('설정 로드 실패'); }
+else {
+  var s = document.createElement('script');
+  s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(KEY);
+  var t0 = Date.now();
+  s.onerror = function () { row('bad', '① 로더(api.js) 로드 <b>실패</b> — google.com 접근이 차단된 환경'); listRes(); fail('로더 차단(네트워크/보안 프로그램)'); };
+  s.onload = function () {
+    row('ok', '① 로더(api.js) 로드 성공 (' + (Date.now() - t0) + 'ms)');
+    if (!(window.grecaptcha && window.grecaptcha.ready)) { row('bad', '② grecaptcha 객체가 없거나 이상 — 확장/보안 프로그램의 가짜 스텁 의심'); listRes(); fail('grecaptcha 스텁'); return; }
+    var readyFired = false, done = false;
+    setTimeout(function () {
+      if (!readyFired && !done) { done = true; row('bad', '② grecaptcha.ready 가 7초 내 미발화 — 본체 스크립트(gstatic releases)가 로드되지 않음(차단/필터)'); listRes(); fail('본체 스크립트 차단'); }
+    }, 7000);
+    window.grecaptcha.ready(function () {
+      if (done) return;
+      readyFired = true;
+      row('ok', '② grecaptcha.ready 발화 — 본체 로드 정상');
+      window.grecaptcha.execute(KEY, { action: 'diagnose' }).then(function (tok) {
+        if (done) return; done = true;
+        row('ok', '③ 토큰 발급 <b>성공</b> — <code>' + String(tok).slice(0, 20) + '…</code>');
+        listRes();
+        V.className = 'big pass'; V.textContent = '✅ 합격 — 이 기기·이 주소에서 reCAPTCHA 정상 작동';
+      }, function (err) {
+        if (done) return; done = true;
+        row('bad', '③ 토큰 발급(execute) 실패: <code>' + esc(err) + '</code>');
+        listRes();
+        fail('execute 거부 — 키 도메인 목록/키 상태 확인 필요');
+      });
+    });
+  };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>
