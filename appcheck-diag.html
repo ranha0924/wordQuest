@@ -21,28 +21,61 @@ small{color:#8a8ab0}
 </head>
 <body>
 <h1>🔍 WordQuest App Check(reCAPTCHA) 진단</h1>
+<div id="mode" class="row info"></div>
 <div id="out"></div>
-<div id="verdict" class="big wait">진단 중… (최대 10초)</div>
+<div id="verdict" class="big wait">진단 중… (최대 15초)</div>
 <p><small>이 화면을 캡처해서 보내주시면 원인을 바로 알 수 있어요. 이 페이지는 학습 데이터에 접근하지 않습니다.</small></p>
 <script src="firebase-config.js"></script>
 <script>
 'use strict';
 var KEY = String(window.APPCHECK_SITE_KEY || '').trim();
+var Q = new URLSearchParams(location.search);
+var SDK_MODE = !!Q.get('sdk');
+var SDK_VER = String(Q.get('v') || '10.12.2').replace(/[^0-9.]/g, '');   // ?v=10.14.1 처럼 버전 즉석 비교용
 var out = document.getElementById('out'), V = document.getElementById('verdict');
+document.getElementById('mode').innerHTML = SDK_MODE
+  ? '모드: <b>B — 앱과 동일한 Firebase SDK(' + SDK_VER + ') 방식</b> · <a style="color:#8fd0ff" href="?">A(원본 방식)로 전환</a>'
+  : '모드: <b>A — 구글 원본(execute) 방식</b> · <a style="color:#8fd0ff" href="?sdk=1">B(앱 SDK 방식)로 전환</a>';
 function row(cls, html){ var d = document.createElement('div'); d.className = 'row ' + cls; d.innerHTML = html; out.appendChild(d); }
 function esc(x){ try { return String((x && x.message) || x).replace(/</g, '&lt;') || '(빈 오류 — 보통 도메인 미허용/키 거부)'; } catch (e) { return '?'; } }
 function fail(why){ V.className = 'big fail'; V.textContent = '❌ 실패 — ' + why; }
+function pass(msg){ V.className = 'big pass'; V.textContent = '✅ ' + msg; }
 function listRes(){
   try {
-    var rs = performance.getEntriesByType('resource').filter(function (e) { return /recaptcha|gstatic\.com\/recaptcha/.test(e.name); });
+    var rs = performance.getEntriesByType('resource').filter(function (e) { return /recaptcha/.test(e.name); });
     row(rs.length ? 'info' : 'bad', '관측된 reCAPTCHA 리소스 ' + rs.length + '개:<br>' + (rs.map(function (e) { return '<code>' + e.name.split('?')[0].replace(/^https?:\/\//, '') + '</code>'; }).join('<br>') || '(없음)'));
   } catch (e) { /* */ }
 }
 row('info', '접속 주소: <code>' + location.origin + '</code>');
 row('info', '사이트키: <code>' + (KEY ? KEY.slice(0, 12) + '…' : '(비어있음!)') + '</code>');
 row('info', '브라우저: <code>' + navigator.userAgent + '</code>');
-if (!KEY) { row('bad', 'firebase-config.js 에서 사이트키를 못 읽음'); fail('설정 로드 실패'); }
-else {
+
+// ── B 모드: 앱(cloud.js)과 동일 — Firebase SDK 의 ReCaptchaV3Provider 경로 재현 ──
+async function runSdk(){
+  try {
+    var base = 'https://www.gstatic.com/firebasejs/' + SDK_VER;
+    var appMod = await import(base + '/firebase-app.js');
+    var acMod = await import(base + '/firebase-app-check.js');
+    row('ok', '① SDK 모듈 로드 성공 (' + SDK_VER + ')');
+    var app = appMod.initializeApp(window.FIREBASE_CONFIG, 'diag');   // 이름 분리(중복 초기화 회피)
+    var ac = acMod.initializeAppCheck(app, { provider: new acMod.ReCaptchaV3Provider(KEY), isTokenAutoRefreshEnabled: false });
+    row('ok', '② initializeAppCheck 완료 — 토큰 요청 중…');
+    var t = await Promise.race([
+      acMod.getToken(ac, true),
+      new Promise(function (_, rej) { setTimeout(function () { rej(new Error('15초 타임아웃')); }, 15000); })
+    ]);
+    row('ok', '③ SDK 토큰 발급 <b>성공</b> — <code>' + String(t && t.token).slice(0, 20) + '…</code>');
+    listRes();
+    pass('SDK(' + SDK_VER + ') 방식 정상 — 앱과 같은 경로가 이 기기에서 작동');
+  } catch (err) {
+    row('bad', 'SDK 실패: <code>' + esc(err && err.code) + '</code> / <code>' + esc(err) + '</code>');
+    listRes();
+    fail('SDK(' + SDK_VER + ') 방식 실패' + (err && err.code ? ' — ' + err.code : ''));
+  }
+}
+
+// ── A 모드: 구글 원본 v3 방식(로더 → ready → execute) ──
+function runRaw(){
   var s = document.createElement('script');
   s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(KEY);
   var t0 = Date.now();
@@ -62,7 +95,7 @@ else {
         if (done) return; done = true;
         row('ok', '③ 토큰 발급 <b>성공</b> — <code>' + String(tok).slice(0, 20) + '…</code>');
         listRes();
-        V.className = 'big pass'; V.textContent = '✅ 합격 — 이 기기·이 주소에서 reCAPTCHA 정상 작동';
+        pass('합격 — 이 기기·이 주소에서 reCAPTCHA 정상 작동');
       }, function (err) {
         if (done) return; done = true;
         row('bad', '③ 토큰 발급(execute) 실패: <code>' + esc(err) + '</code>');
@@ -73,6 +106,10 @@ else {
   };
   document.head.appendChild(s);
 }
+
+if (!KEY) { row('bad', 'firebase-config.js 에서 사이트키를 못 읽음'); fail('설정 로드 실패'); }
+else if (SDK_MODE) { runSdk(); }
+else { runRaw(); }
 </script>
 </body>
 </html>
