@@ -1164,7 +1164,7 @@ html.nosvgframe *{border-image:none!important;}
 <script src="pack-hs3.js?v=109"></script>
 <script src="pack-confuse.js?v=109"></script>
 <script src="pack-vacation.js?v=109"></script>
-<script src="firebase-config.js?v=109"></script>
+<script src="firebase-config.js?v=127"></script>
 <script>
 'use strict';
 /* ================= state ================= */
@@ -2307,7 +2307,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v126';
+var BUILD='v127';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
