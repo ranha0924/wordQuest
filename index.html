@@ -1124,6 +1124,14 @@ html.nosvgframe *{border-image:none!important;}
     <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:3px 0 12px;">꼭 확인해 주세요</div>
     <div style="font-size:12.5px;color:#d6d6ea;line-height:1.7;max-height:56vh;overflow-y:auto;">
       <div style="font-size:11px;color:#8a8ab0;text-align:center;margin:0 0 10px;">— 이번 업데이트 소식 —</div>
+      <div style="background:rgba(252,188,60,.10);border:1px solid rgba(252,188,60,.5);border-radius:9px;padding:12px 13px;margin:0 0 12px;">
+        <div style="font-size:13px;font-weight:700;color:#ffd27a;margin-bottom:6px;">🛠 랭킹이 안 올라가던 문제를 고쳤어요 (7/20)</div>
+        <div style="font-size:12px;color:#ece2c8;line-height:1.75;">
+          오늘 낮 동안 <b style="color:#ffe08a;">단어를 풀어도 랭킹에 반영되지 않는 문제</b>가 있었어요. 서버를 고쳤고,<br>
+          <b style="color:#ffe08a;">오늘 이미 푼 단어는 전부 랭킹에 넣어 드렸어요.</b> 지금부터 푸는 건 평소처럼 바로 올라가요.<br>
+          <span style="color:#c8b890;">혹시 내 단어 수가 이상하면 선생님께 알려 주세요!</span>
+        </div>
+      </div>
       <div style="background:rgba(95,224,106,.10);border:1px solid rgba(95,224,106,.45);border-radius:9px;padding:12px 13px;margin:0 0 12px;">
         <div style="font-size:13px;font-weight:700;color:#9fe0a8;margin-bottom:6px;">🏆 랭킹에 모든 풀이가 반영돼요</div>
         <div style="font-size:12px;color:#d6e8d8;line-height:1.75;">
@@ -2307,7 +2315,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v127';
+var BUILD='v128';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3348,7 +3356,7 @@ show('home');
 
 /* ================= 업데이트 소식 팝업 (버전당 1회) ================= */
 // NEWS_VER 을 바꾸면 다음 접속 때 모두에게 다시 1회 뜬다. 본 적 있으면(localStorage 일치) 안 뜸.
-var NEWS_VER='20260719a';
+var NEWS_VER='20260720a';
 function closeNews(){ var m=$('news-modal'); if(m)m.style.display='none'; try{localStorage.setItem('wq_news',NEWS_VER);}catch(e){} }
 function maybeShowNews(){
   try{ if(localStorage.getItem('wq_news')===NEWS_VER) return; }catch(e){}
