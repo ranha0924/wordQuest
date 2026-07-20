@@ -61,6 +61,7 @@ export default {
       if (req.method === 'POST' && path.endsWith('/sync')) { const rl = await rlHit(env, 'rlsync:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_SYNC_PER_MIN, 10), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); const ac = await verifyAppCheck(req.headers.get('X-Firebase-AppCheck'), env); if (!ac.ok) return json({ error: 'appcheck', reason: ac.reason }, 403, cors); return await handleSync(req, env, uid, token, cors, ac); }  // r16: /sync 도 App Check 게이트(크레딧·att 기록 경로). APPCHECK_ENFORCE 켜기 전엔 도먼트(무해). r19: ac 전달→응답 acw 로 미검증 사유 가시화.
       if (req.method === 'GET' && path.endsWith('/board')) { const rl = await rlHit(env, 'rlboard:' + uid + ':' + Math.floor(Date.now() / 60000), capOf(env.RL_BOARD_PER_MIN, 30), 120); if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors); return await handleBoard(env, uid, token, url, cors); }
       if (req.method === 'GET' && path.endsWith('/teacher')) return await handleTeacher(env, authUser, token, url, cors);
+      if (req.method === 'POST' && path.endsWith('/teacher/backfill')) return await handleBackfill(env, authUser, token, url, cors); // r20: 소급 보정(마스터 전용)
       // 서버 세션 채점(r13): 랭킹 크레딧을 '서버 발급 세션에서 정답 대조 통과' 로만. App Check 게이트.
       if (req.method === 'POST' && path.endsWith('/quiz/start')) { const ac = await verifyAppCheck(req.headers.get('X-Firebase-AppCheck'), env); if (!ac.ok) return json({ error: 'appcheck', reason: ac.reason }, 403, cors); return await handleQuizStart(req, env, uid, token, cors); }
       if (req.method === 'POST' && path.endsWith('/quiz/submit')) { const ac = await verifyAppCheck(req.headers.get('X-Firebase-AppCheck'), env); if (!ac.ok) return json({ error: 'appcheck', reason: ac.reason }, 403, cors); return await handleQuizSubmit(req, env, uid, token, cors); }
@@ -71,7 +72,11 @@ export default {
   },
 };
 
-const REV = 'r19';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+const REV = 'r20';             // 코드 리비전 — 배포 확인용(모든 응답 v 필드). 로직 바꾸면 올릴 것.
+//   r20: POST /teacher/backfill(마스터 전용) — 채점 레인 장애일(구워커 프로토콜 불일치·CORS·enforce 오발 등)의
+//        학습을 doneByDay 원천으로 소급 반영하는 수동 복구 레버(2026-07-20 월요일 리셋 사고 대응).
+//        verAddDay 적립이라 이후 실채점과 이중 카운트 불가 · 일 버스트 합산 컷 · words fail-closed ·
+//        personal 뜻 선재 · 감사 로그 bf:. rankWk 산식은 rankScore(순수)로 분리(동작 불변).
 //   r19: App Check 실효화(enforce 전 필수 선행) — ① CORS Allow-Headers 에 X-Firebase-AppCheck 추가.
 //        ★치명 수정: v121 클라부터 App Check 토큰을 동봉하는데 허용 목록에 없어 브라우저 프리플라이트가 거부됨
 //        → 정상 학생의 /sync·/quiz/* 가 전부 조용히 실패(로컬 폴백)하고 CORS 를 무시하는 앱 밖 스크립트만
@@ -271,6 +276,107 @@ async function handleTeacher(env, authUser, token, url, cors) {
   return json({ list: out, today: today, dailyCap: dailyCap, weekCap: weekCap }, 200, cors);
 }
 
+// ── r20: 소급 보정(마스터 전용) — 채점 레인 장애로 서버 채점이 죽어 있던 '이번 주의 특정 날' 학습을
+//   운영자가 1클릭으로 랭킹에 반영한다. 원천 = 학생 본인의 동기화된 doneByDay[day](자기보고) →
+//   이것은 '채점'이 아니라 마스터의 수동 승인이다. 통제:
+//     · 마스터 전용(rules 상 학생 private/state 읽기도 마스터만 가능) · 이번 주(월~오늘) day 한정
+//     · words 실재 필터 + words 없으면 그 학생 스킵(fail-closed — 크레딧 경로라 /sync 의 all-pass 와 다름)
+//     · personal 은 킬스위치 + 동기화된 뜻 선재(라이브 quizStart 와 동일 규칙)
+//     · 일 버스트: 기존 원장의 그날 주간신규와 '합산'해 PACK_DAILY_BURST 컷(보정이 라이브 상한을 우회 못 함)
+//     · 감사 로그 bf:{week}:{uid}:{day} · verAddDay 적립 → 재실행·이후 실채점과 이중 카운트 원천 불가.
+async function handleBackfill(env, authUser, token, url, cors) {
+  if (!isMasterUser(authUser, env)) return json({ error: 'forbidden' }, 403, cors);
+  const cid = String(url.searchParams.get('class') || '').slice(0, 64);
+  if (!cid) return json({ error: 'bad_class' }, 400, cors);
+  const rl = await rlHit(env, 'rlbf:' + authUser.uid, 8, 600);   // 8회/10분 — 오폭·연타 방지(다반 연속 보정은 허용)
+  if (!rl.ok) return json({ error: 'rate_limited' }, 429, cors);
+  const today = kstToday(Date.now()), week = weekMondayKST(Date.now());
+  const day = String(url.searchParams.get('day') || today);      // 생략 시 서버 오늘(KST) — 클라 시계를 믿지 않는다
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < week || day > today) return json({ error: 'bad_day' }, 400, cors);
+  const after = String(url.searchParams.get('after') || '');     // 대형 반 이어하기 커서(직전 응답 next)
+  const mcCap = capOf(env.MC_WEEK_CAP, 2000), persCap = cap0Of(env.PERSONAL_WEEK_CAP, 150);
+  const burst = capOf(env.PACK_DAILY_BURST, 350);
+  const dyn = await getClassPackMc(env, cid, token);             // 분류용(반 배포 id) — 마스터는 rules 상 read 가능
+  const members = [];
+  let cursor;
+  const prefix = 'mem:' + cid + ':';
+  do {
+    const res = await env.RANK_KV.list({ prefix: prefix, cursor: cursor, limit: 1000 });
+    for (const k of res.keys) members.push({ uid: k.name.slice(prefix.length), name: (k.metadata && k.metadata.n) || '익명' });
+    cursor = res.list_complete ? null : res.cursor;
+  } while (cursor);
+  const BF_MAX = 120;   // 학생당 서브리퀘스트 ~8회 → 유료 한도(1,000/요청) 내 안전. 초과분은 next 커서로 이어서.
+  const list = []; let totalAdded = 0, skipped = 0, next = null;
+  for (const mrec of members) {
+    if (after && mrec.uid <= after) continue;                    // mem: 키가 uid 사전순이라 커서 재개 성립
+    if (list.length >= BF_MAX) { next = list[list.length - 1].uid; break; }
+    const suid = mrec.uid, nm = mrec.name;
+    const pst = await getState(env, suid, token, persCap > 0);   // 마스터 토큰 — rules(private read: 본인|마스터)로 허용
+    if (!pst.wordIds) { list.push({ uid: suid, name: nm, added: 0, skip: 'no_words' }); skipped++; continue; }
+    let vmc = null, vps = null;
+    try { vmc = await env.RANK_KV.get('ver_mc:' + suid, { type: 'json' }); } catch (e) { /* */ }
+    vmc = (vmc && typeof vmc === 'object') ? vmc : {};
+    if (persCap > 0) { try { vps = await env.RANK_KV.get('ver_ps:' + suid, { type: 'json' }); } catch (e) { /* */ } }
+    vps = (vps && typeof vps === 'object') ? vps : {};
+    const plan = backfillIdsForDay(pst.doneByDay, day, pst.wordIds, dyn.ids, persCap > 0, pst.meanings, burst, vmc, vps, week);
+    const added = plan.mc.length + plan.ps.length;
+    if (added) {
+      for (let i = 0; i < plan.mc.length; i++) verAddDay(vmc, day, plan.mc[i]);
+      for (let i = 0; i < plan.ps.length; i++) verAddDay(vps, day, plan.ps[i]);
+      let wrote = true;
+      if (plan.mc.length) { try { await env.RANK_KV.put('ver_mc:' + suid, JSON.stringify(vmc), { expirationTtl: TTL }); } catch (e) { wrote = false; } }
+      if (plan.ps.length) { try { await env.RANK_KV.put('ver_ps:' + suid, JSON.stringify(vps), { expirationTtl: TTL }); } catch (e) { wrote = false; } }
+      if (!wrote) { list.push({ uid: suid, name: nm, added: 0, skip: 'kv' }); skipped++; continue; }   // 원장 유실 시 보드 갱신도 보류(다음 실행이 재시도)
+      try { await env.RANK_KV.put('bf:' + week + ':' + suid + ':' + day, JSON.stringify({ n: added, by: authUser.uid, at: Math.floor(Date.now() / 1000) }), { expirationTtl: TTL }); } catch (e) { /* 감사 로그 실패는 비치명 */ }
+    }
+    // 보드 즉시 갱신(점수 불변이면 put 생략) — 신규 키 이름은 mem 메타로 시드(updateQuizBoard 의 '익명' 시드 회피).
+    const newW = rankScore(vmc, vps, week, today, mcCap, persCap);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const keys = ['g:' + week + ':' + suid, 'c:' + week + ':' + cid + ':' + suid];
+    for (const key of keys) {
+      let prev = null; try { prev = (await env.RANK_KV.getWithMetadata(key)).metadata; } catch (e) { /* */ }
+      if (prev && prev.w === newW) continue;
+      const meta = prev ? { n: prev.n || nm, w: newW, s: prev.s || 0, d: prev.d || null, at: nowSec }
+        : { n: nm, w: newW, s: 0, d: null, at: nowSec };
+      try { await env.RANK_KV.put(key, '', { metadata: meta, expirationTtl: TTL }); } catch (e) { /* 다음 sync 가 재시도 */ }
+    }
+    totalAdded += added;
+    list.push({ uid: suid, name: nm, added: added, wk: newW });
+  }
+  return json({ day: day, week: week, count: list.length, skipped: skipped, totalAdded: totalAdded, next: next, list: list }, 200, cors);
+}
+// r20 순수 로직: 보정 대상 id 계산 — 라이브 채점과 동일 필터·상한.
+//   ①normIds(소문자·2000컷·중복 제거는 seen) ②실재(wordIds — null 처리는 호출부 fail-closed)
+//   ③classifyId 분기 ④personal: 킬스위치 + 뜻 선재(무뜻 minting 차단)
+//   ⑤이번 주(week~day) 기검증 id 제외 → 멱등·added 정직 집계(주중 타요일 검증분도 미중복)
+//   ⑥일 버스트: 기존 원장의 '그날 주간신규'(newThisWeekCount 두 레인 합산)를 시드로 burst 잔여만 적립.
+function backfillIdsForDay(doneByDay, day, wordIds, dynIds, persOn, meanings, burst, vmc, vps, week) {
+  const out = { mc: [], ps: [] };
+  const raw = normIds(doneByDay && doneByDay[day]);
+  if (!raw.length) return out;
+  const priorMc = verWeekUnique(vmc || {}, week, day);
+  const priorPs = verWeekUnique(vps || {}, week, day);
+  let budget = burst - (newThisWeekCount(vmc || {}, week, day) + newThisWeekCount(vps || {}, week, day));
+  const seen = {};
+  for (let i = 0; i < raw.length; i++) {
+    const id = raw[i];
+    if (!id || seen[id]) continue; seen[id] = 1;
+    if (!validId(id, wordIds)) continue;
+    if (classifyId(id, dynIds) === 'pack') {
+      if (priorMc.has(id)) continue;
+      if (budget <= 0) break;
+      budget--; out.mc.push(id);
+    } else {
+      if (!persOn) continue;
+      if (!(meanings && meanings[id])) continue;
+      if (priorPs.has(id)) continue;
+      if (budget <= 0) break;
+      budget--; out.ps.push(id);
+    }
+  }
+  return out;
+}
+
 const STREAK_TTL = 60 * 60 * 24 * 45; // 45일 무활동 시 기록 만료(어차피 연속은 하루만 빠져도 끊김)
 // 연속일수 순수 전이: rec={last,n} → 오늘 활동 여부로 다음 상태·표시값 계산.
 //   활동한 날만 늘고, 오늘/어제까지 이어질 때만 표시(끊기면 0). 클라가 못 부풀린다(서버 관측일 기준).
@@ -386,12 +492,17 @@ async function rankWk(env, uid, week, today) {
   let vmc = null;
   try { vmc = await env.RANK_KV.get('ver_mc:' + uid, { type: 'json' }); } catch (e) { /* */ }
   const cap = capOf(env.MC_WEEK_CAP, 2000);
-  const mcSet = verWeekUnique(vmc || {}, week, today);
-  const mc = mcSet.size < cap ? mcSet.size : cap;
   const persCap = cap0Of(env.PERSONAL_WEEK_CAP, 150);
-  if (persCap <= 0) return mc;                              // 킬스위치(0): ver_ps 읽기 자체를 생략
+  if (persCap <= 0) return rankScore(vmc, null, week, today, cap, 0);   // 킬스위치(0): ver_ps 읽기 자체를 생략
   let vps = null;
   try { vps = await env.RANK_KV.get('ver_ps:' + uid, { type: 'json' }); } catch (e) { /* */ }
+  return rankScore(vmc, vps, week, today, cap, persCap);
+}
+// r20: 산식의 순수 부분 — rankWk(KV 읽기 포함)와 handleBackfill(이미 읽은 원장 재사용)이 공유. 동작 불변.
+function rankScore(vmc, vps, week, today, mcCap, persCap) {
+  const mcSet = verWeekUnique(vmc || {}, week, today);
+  const mc = mcSet.size < mcCap ? mcSet.size : mcCap;
+  if (persCap <= 0) return mc;
   let ps = 0;
   const psSet = verWeekUnique(vps || {}, week, today);
   for (const id of psSet) if (!mcSet.has(id)) ps++;
@@ -929,4 +1040,4 @@ async function verifyAppCheck(token, env) {
 }
 
 // 단위 테스트용 export(브라우저/워커 런타임엔 영향 없음)
-export const _internals = { validWeek, clampInt, capOf, cap0Of, parseWordMeanings, weekLedgerBound, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countDayDone, countAllDone, validId, weekMondayKST, parseDoneByDay, parseWordIds, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue, fsNum, parseSelfReport, unifiedStreak, anchorDay, staleByAt, normEn, normKo, classifyId, verAddDay, verWeekUnique, newThisWeekCount, b64urlFromBytes, bytesFromB64url, hmacSign, hmacVerify, sha256hex, rankWk, mcPool, mcBuild, handleQuizStart, handleQuizSubmit, updateQuizBoard, getClassPackMc, verifyAppCheck, rlHit, computeFast, verifyFirebaseCached };
+export const _internals = { validWeek, clampInt, capOf, cap0Of, parseWordMeanings, weekLedgerBound, sortBoard, normIds, isoAddDays, streakCompute, countWeekDone, countDayDone, countAllDone, validId, weekMondayKST, parseDoneByDay, parseWordIds, kstToday, pruneDays, streakFromDays, isMasterUser, boardWriteDue, fsNum, parseSelfReport, unifiedStreak, anchorDay, staleByAt, normEn, normKo, classifyId, verAddDay, verWeekUnique, newThisWeekCount, b64urlFromBytes, bytesFromB64url, hmacSign, hmacVerify, sha256hex, rankWk, rankScore, backfillIdsForDay, handleBackfill, mcPool, mcBuild, handleQuizStart, handleQuizSubmit, updateQuizBoard, getClassPackMc, verifyAppCheck, rlHit, computeFast, verifyFirebaseCached };

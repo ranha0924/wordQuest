@@ -2307,7 +2307,7 @@ async function runOCR(file){
   }finally{ _ocrBusy=false; btns.forEach(b=>{ if(b)b.disabled=false; }); }
 }
 // 화면에 현재 빌드 버전 표시(학생/선생님이 최신인지 눈으로 확인). SW VERSION과 함께 올림.
-var BUILD='v125';
+var BUILD='v126';
 try{ var _bv=$('buildver'); if(_bv)_bv.textContent='빌드 '+BUILD; }catch(e){}
 // 주의: 입력창 비우기(value='')는 반드시 runOCR(파일 읽기)이 '끝난 뒤'에 한다.
 // 일부 안드로이드/삼성 크롬은 입력을 즉시 비우면 파일의 content:// 접근 핸들이 해제돼 읽기가 전부 실패한다(fmt=read-fail).
@@ -3854,6 +3854,9 @@ async function renderTeacherStudents(){
         + '<span style="flex:0 0 auto;color:#ffc63a;font-weight:700;">'+r.w+'<span style="font-size:10px;color:#8a8ab0;font-weight:400;margin-left:1px;">단어</span></span>'
       + '</div>').join('')
     + '</div>';
+    // r20(v126): 소급 보정 버튼 — 마스터에게만 노출(워커도 마스터만 허용·403). 채점 레인 장애일 복구용.
+    if(verifiedOn&&C.isMaster&&C.isMaster()&&C.teacherBackfill)
+      html+='<div style="text-align:right;margin:-4px 0 10px;"><button id="tc-backfill" style="background:#1a1a2e;border:1px solid #4a4a72;color:#c9c9e0;border-radius:6px;font-size:11px;padding:5px 10px;cursor:pointer;font-family:inherit;">🛠 오늘 푼 단어 랭킹 반영(보정)</button></div>';
   }
   if(!active.length) html+='<div class="dexempty">'+(removed.length?'활성 학생이 없어요.':'아직 이 반에 참여한 학생이 없어요.')+'</div>';
   else html+=active.map(card).join('');
@@ -3862,6 +3865,31 @@ async function renderTeacherStudents(){
     html+=removed.map(s=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:#0d0d1a;border:2px solid #34345a;border-radius:6px;margin-bottom:6px;font-size:13px;color:#9a9ac0;"><span>'+esc(s.name||s.email||'(이름 없음)')+'</span><button class="tcr" data-uid="'+esc(s.uid)+'" style="background:none;border:1px solid #2a5a3a;color:#6ee08a;border-radius:4px;font-size:10px;padding:3px 9px;cursor:pointer;font-family:inherit;">↩ 복구</button></div>').join('');
   }
   stu.innerHTML=html;
+  // r20(v126): 소급 보정 실행 — 서버가 '서버 KST 오늘'의 doneByDay 를 원장에 반영(이미 반영분은 중복 안 됨).
+  //   대형 반은 next 커서로 자동 이어하기(최대 5라운드). 결과 요약 후 재렌더로 새 점수 표시.
+  const bf=$('tc-backfill');
+  if(bf)bf.addEventListener('click',async()=>{
+    if(!window.confirm('오늘(서버 기준) 학생들이 완료한 단어를 랭킹에 소급 반영합니다.\n서버 채점이 누락된 날의 복구용이며, 이미 반영된 단어는 중복되지 않아요.\n실행할까요?'))return;
+    bf.disabled=true;bf.textContent='반영 중…';
+    let total=0,students=0,skipped=0,after=null,err=null;
+    for(let round=0;round<5;round++){
+      let r=null; try{ r=await C.teacherBackfill(cid,null,after); }catch(e){}
+      if(!r){ err='network'; break; }
+      if(!r.ok){ err=r.error||'fail'; break; }
+      total+=r.totalAdded;students+=r.count;skipped+=r.skipped;
+      if(!r.next)break; after=r.next;
+    }
+    bf.disabled=false;bf.textContent='🛠 오늘 푼 단어 랭킹 반영(보정)';
+    if(err){
+      alert(err==='forbidden'?'마스터 계정으로 로그인해야 실행할 수 있어요.'
+        :err==='rate_limited'?'잠시 후 다시 시도해 주세요(연타 제한).'
+        :err==='not_found'||err==='http_404'?'워커에 r20 배포가 필요해요. rank-worker 재배포 후 다시 시도해 주세요.'
+        :'보정에 실패했어요: '+err);
+      return;
+    }
+    alert('완료! 학생 '+students+'명 처리 · 새로 반영된 단어 '+total+'개'+(skipped?(' · 건너뜀 '+skipped+'명(미동기화 등)'):''));
+    renderTeacherStudents();
+  });
   // 제외 버튼
   Array.from(document.querySelectorAll('#tc-students .tcx')).forEach(btn=>{
     btn.addEventListener('click',async()=>{

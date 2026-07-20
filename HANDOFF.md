@@ -3,7 +3,7 @@
 > 단어 도감 · WORD QUEST — 영단어 복습을 16비트 JRPG 턴제 전투로 포장한 학습 웹앱.
 > "틀린 단어는 보스가 된다." 대상: 고1(내신·수능 기초 어휘).
 
-최종 업데이트: 2026-07-19 (**App Check 실효화 — 워커 CORS 치명결함 수정(Allow-Headers 에 X-Firebase-AppCheck 누락 → 토큰 동봉한 정상 브라우저만 /sync·/quiz 프리플라이트 거부되고 앱 밖 스크립트는 통과하던 역전)·misconfig 페일클로즈드·acw 모니터링·OCR 워커 게이트 · v125/워커 r19/OCR o2 — ★enforce 스위치는 콘솔 잔여(사용자): `docs/appcheck-setup.md` 체크리스트(r19) 순서대로**; 같은 날 앞서: **타이핑·k2e4·무리 짝맞추기·추가 소탕·개인단어(주150 상한·킬스위치)도 랭킹 반영 — typed 레인+ver_ps 레인 · v124/워커 r18**; 그 전 2026-07-18: **랭킹 위조 근본 수정 2단계 — 서버 출제 MC·index 채점으로 id-echo 제거, 랭킹=서버검증분만(리셋)·'랭킹 퀴즈' 모달 신설 · v122/워커 r17**; 그 전 "App Check 우선(1단계)" — /sync App Check 게이트·무채점 개인단어 크레딧 제거 · v121/워커 r16; 그 전 미해결 백로그 B그룹 4건 — ① 뜻 앞 괄호 표기 정리+firstSense 버그 · ② 도감 상단 나가기 버튼 · ③ 가용성 방어 P1/P2 · ④ 변조 점검+규칙 클램프 · v120/워커 r15) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
+최종 업데이트: 2026-07-20 (**월요일 랭킹 리셋 사고 대응 — r20 `/teacher/backfill` 소급 보정(마스터 1클릭) + 클라 v126 대시보드 버튼. 사고 원인 2중: ① 오전 = 구워커·프로토콜 불일치로 채점 레인 침묵(랭킹만 0, att ✓ 정상) ② 11:15경 `APPCHECK_ENFORCE=true` 켠 뒤 = 사이트 전체 `appCheck/recaptcha-error`(토큰 발급 자체 실패)로 전원 403 → enforce 즉시 롤백(false). ★잔여(사용자): reCAPTCHA 키 점검(v3 클래식·도메인 allowlist·Firebase 등록) 후에만 재-enforce · r20 트윈 붙여넣기(`v:"r20"`) · v126 main 병합 · 대시보드 보정 버튼 1클릭. 상세 `rank-worker/README.md` §r20**) · 직전: 2026-07-19 (**App Check 실효화 — 워커 CORS 치명결함 수정(Allow-Headers 에 X-Firebase-AppCheck 누락 → 토큰 동봉한 정상 브라우저만 /sync·/quiz 프리플라이트 거부되고 앱 밖 스크립트는 통과하던 역전)·misconfig 페일클로즈드·acw 모니터링·OCR 워커 게이트 · v125/워커 r19/OCR o2 — ★enforce 스위치는 콘솔 잔여(사용자): `docs/appcheck-setup.md` 체크리스트(r19) 순서대로**; 같은 날 앞서: **타이핑·k2e4·무리 짝맞추기·추가 소탕·개인단어(주150 상한·킬스위치)도 랭킹 반영 — typed 레인+ver_ps 레인 · v124/워커 r18**; 그 전 2026-07-18: **랭킹 위조 근본 수정 2단계 — 서버 출제 MC·index 채점으로 id-echo 제거, 랭킹=서버검증분만(리셋)·'랭킹 퀴즈' 모달 신설 · v122/워커 r17**; 그 전 "App Check 우선(1단계)" — /sync App Check 게이트·무채점 개인단어 크레딧 제거 · v121/워커 r16; 그 전 미해결 백로그 B그룹 4건 — ① 뜻 앞 괄호 표기 정리+firstSense 버그 · ② 도감 상단 나가기 버튼 · ③ 가용성 방어 P1/P2 · ④ 변조 점검+규칙 클램프 · v120/워커 r15) · 저장소: https://github.com/ranha0924/wordQuest (branch `main`)
 
 > **정정(2026-07-15)** — 아래 본문 중 일부가 현행과 다르니 이 블록을 우선한다.
 > - **배포**: Vercel 아님 → **GitHub Pages**(`.github/workflows/deploy-pages.yml`, main push 시 자동). 배포 URL은 `https://ranha0924.github.io/wordQuest/`.
@@ -59,6 +59,12 @@
 2. 재인 편중 → 재인/역방향/문맥/철자생산으로 단계 상승.
 3. 오답지 무작위 → 철자·품사·뜻유형 유사도 기반 근사치.
 4. 단일 뜻·발음 없음 → 다의어 + 센스별 예문 + TTS.
+
+### 이번 세션(2026-07-20) — 월요일 랭킹 리셋 사고 + 소급 보정
+
+| 커밋 | 내용 |
+|---|---|
+| (v126 / 워커 r20) | **월요일 랭킹 0 사고 진단 + 소급 보정 레버 (CLAUDE.md 4단계: 플랜 독립검수 90 통과)** — 증상: 주간 리셋일(월) 대시보드에 "오늘 114·24단어" 학생들이 랭킹 0/미등재, 선생님 본인 실시간 플레이도 미반영. **진단(2중 원인)**: ① 오전 — 구워커가 라이브라 v12x 클라와 `/quiz` 프로토콜 불일치(questions/tids 부재 → sid 미설정 → 제출 0) = 채점 레인 침묵. att 는 r19 배포 후 첫 sync 에 당일치 소급 관측되어 ✓ 는 정상 → **"✓ 있는데 랭킹 0"**(랭킹은 r17부터 실시간 채점분만이라 소급 불가). 리셋이 고장을 만든 게 아니라 지난주 잔존 점수가 가리던 고장을 드러냄. ② 11:10~11:18 KST — 콘솔 로그로 확정: `APPCHECK_ENFORCE=true` 켠 직후부터 `/sync`·`/quiz/start` 전원 403. 근본은 **사이트 전체 `appCheck/recaptcha-error`**(토큰 발급 자체 실패 — 키 종류/도메인/등록 문제 추정)인데 acw 모니터링 정착 전에 enforce 를 켬 → **즉시 롤백(`APPCHECK_ENFORCE=false`, 완료)**. **r20**: `POST /teacher/backfill?class&day&after`(마스터 전용) — 학생별 `doneByDay[day]` 실제 id 를 `ver_mc`/`ver_ps` 에 `verAddDay` 적립(주간 유니크라 재실행·이후 실채점과 **이중 카운트 원천 불가**) + 보드 즉시 갱신(mem 이름 시드). 통제: words fail-closed·personal 뜻 선재+킬스위치·일 버스트를 기존 원장과 **합산** 컷·8회/10분·감사 `bf:` 키·120명/호출+`next` 커서. `rankWk` 산식을 `rankScore`(순수)로 분리(동작 불변·백필이 재사용해 서브리퀘스트 절약). **v126**: `Cloud.teacherBackfill` + 대시보드 "🛠 오늘 푼 단어 랭킹 반영(보정)" 버튼(마스터에게만 노출·커서 자동 이어하기·결과 요약). 검증: r20 단위·통합 **36/36**(멱등·버스트 합산·킬스위치·no_words 스킵·403/400/429·보드 시드·verAddDay dedup) · `node --check` 워커 트윈+cloud.js · 트윈 파리티(변경 4함수 **바이트 동일**) · index 메인블록 문법 OK. 캐시 sw.js/BUILD **v126**. `firestore.rules` 무변경(마스터 private read 는 기존 131행 활용). **⚠️ 적용(사용자)**: ① reCAPTCHA 키 점검(재-enforce 는 그 후) ② r20 트윈 붙여넣기(`v:"r20"` 확인) ③ v126 main 병합(Pages) ④ 마스터로 대시보드 → 반 선택 → 보정 버튼. |
 
 ### 이번 세션(2026-07-19) 추가
 
